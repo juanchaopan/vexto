@@ -1,15 +1,25 @@
 # Risk tier and human approval of pull requests.
 #   risk       classifies the changed files with the risk rules and the classifier of the target
-#              branch, so a pull request cannot lower its own tier; labels the pull request with
-#              exactly one of risk:low, risk:medium and risk:high; and removes human-reviewed
-#              when new commits arrive, so every approval covers the latest commits.
-#   risk-gate  the required check: passes for low risk, or when the pull request carries
-#              human-reviewed at the time the gate runs.
+#              branch; labels the pull request with exactly one of risk:low, risk:medium and
+#              risk:high; and removes human-reviewed when new commits arrive. When the list of
+#              changed files may be incomplete (the files API lists at most 3000), the pull
+#              request counts as high risk.
+#   risk-gate  the required check: passes for low risk; for medium and high risk only when the
+#              pull request carries human-reviewed and the label was added after its head commit
+#              arrived, so an approval never covers commits pushed after it, even when the run that
+#              should have removed the label was cancelled or failed.
+#
+# The rules and the classifier are read from the target branch, so a pull request's edits to
+# them take effect only once it is merged. This workflow file is not: on pull_request GitHub runs
+# the version in the pull request, so a pull request that edits this file runs its own risk job
+# and its own gate. Such a pull request is always high risk (.github/**), and its reviewer checks
+# the changes to the gate before adding human-reviewed.
+#
 # Adding or removing a label reruns both jobs. Label changes made with the workflow token start
 # no new runs, so the risk job's own labels do not loop.
-# Pull requests from forks get a read-only token: changing labels fails there, so the risk job
-# fails with the API error and the gate fails with it. Such pull requests need a maintainer to
-# bring the commits onto a branch of this repository.
+# Pull requests from forks get a read-only token, so the label changes of this version fail there
+# and the gate fails with them. Such pull requests need a maintainer to bring the commits onto a
+# branch of this repository.
 name: risk
 
 on:
@@ -18,7 +28,9 @@ on:
 
 permissions: {}
 
-# Runs of one pull request take turns, so label changes are applied in event order.
+# Runs of one pull request never overlap: one runs and at most one waits, and a newer event
+# cancels the waiting run. A cancelled synchronize run leaves human-reviewed in place, which is why
+# the gate checks when the label was added instead of trusting its presence.
 concurrency:
   group: risk-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -34,7 +46,8 @@ jobs:
     outputs:
       tier: ${{ steps.classify.outputs.tier }}
     steps:
-      # Only the target branch is checked out; the pull request's own code never runs here.
+      # Only the target branch is checked out, so the steps below never run the pull request's
+      # code.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
@@ -44,23 +57,39 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - name: List the changed files
+        id: files
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          expected=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .changed_files)
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" > "$RUNNER_TEMP/files.json"
           # A renamed file counts under its old path as well as its new one.
-          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" \
-            --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/changed-files.txt"
-          echo "$(wc -l < "$RUNNER_TEMP/changed-files.txt") changed paths."
+          jq -r '.[] | .filename, (.previous_filename // empty)' "$RUNNER_TEMP/files.json" \
+            > "$RUNNER_TEMP/changed-files.txt"
+          listed=$(jq -s '[.[][]] | length' "$RUNNER_TEMP/files.json")
+          echo "$listed of $expected changed files listed."
+          {
+            echo "listed=$listed"
+            echo "expected=$expected"
+          } >> "$GITHUB_OUTPUT"
       - name: Classify the risk
         id: classify
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          LISTED: ${{ steps.files.outputs.listed }}
+          EXPECTED: ${{ steps.files.outputs.expected }}
         run: |
+          # The files API stops at 3000 files, and the pull request may change between the two
+          # calls above; an incomplete list cannot show that no high-risk file is changed.
           # Before the target branch has the rules and the classifier, every pull request counts
           # as high risk.
-          if [ -f .github/risk-rules.txt ] && [ -f scripts/risk-tier.ts ]; then
+          if ! [[ "$LISTED" =~ ^[0-9]+$ && "$EXPECTED" =~ ^[0-9]+$ ]] \
+            || [ "$LISTED" -ge 3000 ] || [ "$LISTED" -ne "$EXPECTED" ]; then
+            echo "The list of changed files may be incomplete, so the pull request counts as high risk."
+            tier=high
+          elif [ -f .github/risk-rules.txt ] && [ -f scripts/risk-tier.ts ]; then
             tier=$(node scripts/risk-tier.ts --rules .github/risk-rules.txt --branch "$HEAD_REF" \
               --files-from "$RUNNER_TEMP/changed-files.txt")
           else
@@ -102,29 +131,95 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      pull-requests: read # reads the current labels of the pull request
+      pull-requests: read # reads the pull request, its labels and its events
+      actions: read # reads the workflow runs of the head commit
     steps:
       - name: Check the approval
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RISK_RESULT: ${{ needs.risk.result }}
           TIER: ${{ needs.risk.outputs.tier }}
         run: |
-          if [ "$RISK_RESULT" != success ] || [ -z "$TIER" ]; then
-            echo "::error::The risk job did not succeed, so the risk tier is unknown."
+          # Every time below is a server-side created_at of a GitHub record, never a commit date,
+          # which the author of a commit chooses. Whatever cannot be read or determined fails
+          # the gate.
+          #   labeled   the latest `labeled` event of human-reviewed in the issue events
+          #   arrived   when the head commit became the head of this pull request: the latest of
+          #             - the pull request's creation,
+          #             - its latest head_ref_force_pushed, head_ref_restored or reopened event,
+          #               the only ways a head can return to a commit it had before, and
+          #             - the earliest pull_request workflow run for the head commit on the head
+          #               branch, cancelled runs included; every push to the pull request starts
+          #               runs, and none exists before the push
+          # The gate passes when human-reviewed is on the pull request and labeled > arrived.
+          fail() {
+            echo "::error::$1"
             exit 1
+          }
+          if [ "$RISK_RESULT" != success ] || [ -z "$TIER" ]; then
+            fail "The risk job did not succeed, so the risk tier is unknown."
           fi
           if [ "$TIER" = low ]; then
             echo "Low risk: no human approval is needed."
             exit 0
           fi
-          # Labels are read now rather than from the event, which may predate the latest change.
-          labels=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
-          if grep --quiet --line-regexp --fixed-strings human-reviewed <<< "$labels"; then
-            echo "Risk $TIER, approved by a person (human-reviewed)."
-          else
-            echo "::error::Risk $TIER: a person must review the pull request and add the human-reviewed label."
-            exit 1
+
+          # The pull request is read now rather than from the event, which may predate the
+          # latest change.
+          pull="$RUNNER_TEMP/pull.json"
+          gh api "repos/$REPO/pulls/$PR_NUMBER" > "$pull" || fail "Reading the pull request failed."
+          head_sha=$(jq -r .head.sha "$pull")
+          head_ref=$(jq -r .head.ref "$pull")
+          if [ "$head_sha" != "$EVENT_HEAD_SHA" ]; then
+            fail "The pull request has moved on to $head_sha; the runs of that commit decide."
           fi
+          # The branch name becomes part of an API query, so only plain branch names are accepted.
+          if ! [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            fail "The head commit or branch of the pull request has an unexpected form."
+          fi
+          if ! jq -e 'any(.labels[]; .name == "human-reviewed")' "$pull" > /dev/null; then
+            fail "Risk $TIER: a person must review the pull request and add the human-reviewed label."
+          fi
+
+          events="$RUNNER_TEMP/events.json"
+          gh api --paginate "repos/$REPO/issues/$PR_NUMBER/events?per_page=100" > "$events" \
+            || fail "Reading the events of the pull request failed."
+          runs="$RUNNER_TEMP/runs.json"
+          gh api --paginate \
+            "repos/$REPO/actions/runs?event=pull_request&branch=$head_ref&head_sha=$head_sha&per_page=100" \
+            > "$runs" || fail "Reading the workflow runs of $head_sha failed."
+
+          labeled_at=$(jq -rs '[.[][]
+            | select(.event == "labeled" and .label.name == "human-reviewed")
+            | .created_at | fromdateiso8601] | max // empty' "$events")
+          created_at=$(jq -r '.created_at | fromdateiso8601' "$pull")
+          moved_at=$(jq -rs '[.[][]
+            | select(.event | IN("head_ref_force_pushed", "head_ref_restored", "reopened"))
+            | .created_at | fromdateiso8601] | max // empty' "$events")
+          first_run_at=$(jq -rs --arg sha "$head_sha" --arg ref "$head_ref" --arg repo "$REPO" \
+            '[.[].workflow_runs[]
+              | select(.head_sha == $sha and .head_branch == $ref
+                and .head_repository.full_name == $repo)
+              | .created_at | fromdateiso8601] | min // empty' "$runs")
+          if [ -z "$labeled_at" ]; then
+            fail "Risk $TIER: when human-reviewed was added cannot be found, so the approval is not counted."
+          fi
+          if [ -z "$first_run_at" ]; then
+            fail "No workflow run of this pull request exists for $head_sha, so when it arrived is unknown."
+          fi
+          arrived_at=$created_at
+          for time in "$moved_at" "$first_run_at"; do
+            if [ -n "$time" ] && [ "$time" -gt "$arrived_at" ]; then
+              arrived_at=$time
+            fi
+          done
+
+          labeled_text=$(date -u -d "@$labeled_at" +%Y-%m-%dT%H:%M:%SZ)
+          arrived_text=$(date -u -d "@$arrived_at" +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$labeled_at" -le "$arrived_at" ]; then
+            fail "Risk $TIER: human-reviewed was added at $labeled_text, not after $head_sha arrived at $arrived_text; review the latest commits and add the label again."
+          fi
+          echo "Risk $TIER, approved by a person: human-reviewed was added at $labeled_text, after $head_sha arrived at $arrived_text."
