@@ -253,7 +253,7 @@ vexto 是公开仓库，GitHub 标准运行机的 CI 分钟不限量。
 
 ## 评审标准和风险规则
 
-AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-review`，不在 CI 里跑，所以不需要 Claude GitHub App 和 API 密钥。
+AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-review`，不在 CI 里跑，所以不需要 Claude GitHub App 和 API 密钥。CodeQL 在 PR 上留下的代码扫描意见也算评审意见，合并前要处理。
 
 `REVIEW.md` 的内容：
 
@@ -266,7 +266,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 - **每个用户只碰自己的数据**：每个查询都按当前用户过滤；访问别人的数据返回 404；每次请求都确认用户仍在允许名单里。
 - **评论语言**：评审评论用中文，标明 [Important]、[Nit] 或 [Pre-existing]。
 
-风险规则写在 `.github/risk-rules.txt`。CI 任务 `risk` 检出目标分支，用目标分支上的规则文件和分级脚本来分级，PR 里改动的规则文件和分级脚本对自己不起作用。以下情况一律算高风险：目标分支上还没有规则文件；PR 改动的文件达到 3000 个（接口最多只返回 3000 个），或者列出的数目和 PR 的改动文件数对不上。工作流 `risk.yml` 本身按 PR 里的版本运行，改了它的 PR 能改掉这道门槛；这类 PR 改的是 `.github/**`，一定是高风险，审批时要专门检查对门槛的改动。
+风险规则写在 `.github/risk-rules.txt`。CI 任务 `risk` 检出目标分支，用目标分支上的规则文件、分级脚本和 `.nvmrc` 来分级，PR 里改动的规则文件和分级脚本对自己不起作用。以下情况一律算高风险：目标分支上缺规则文件、分级脚本或 `.nvmrc`；PR 改动的文件达到 3000 个（接口最多只返回 3000 个），或者列出的数目和 PR 的改动文件数对不上。工作流 `risk.yml` 本身按 PR 里的版本运行，改了它的 PR 能改掉这道门槛；这类 PR 改的是 `.github/**`，一定是高风险，审批时要专门检查对门槛的改动。
 
 - 高风险：
   - `.github/**`、`lefthook.yml`、`.claude/**`、`AGENTS.md`、`CLAUDE.md`、`REVIEW.md`、`Taskfile.yml`；
@@ -311,7 +311,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 
 环境变量和密钥按环境存放，每个值只在一个地方修改：
 
-- **staging 和 production**：以 GitHub 环境 `staging`、`production` 为准，这两个环境各自保存该目标的全部变量和密钥，只允许从 main 部署。应用运行在 Vercel 上，只能读 Vercel 项目里的环境变量，所以部署任务在构建之前，把运行时要用的值从 GitHub 环境经标准输入写进该目标 Vercel 项目的 Production 环境：密钥写成 Sensitive，变量写成普通类型；GitHub 环境里没有值的名字跳过。Vercel 里的值只是副本，每次部署都会覆盖。运行时变量的名字只在 `scripts/lib/runtime-env.ts` 里列一次。
+- **staging 和 production**：以 GitHub 环境 `staging`、`production` 为准，这两个环境各自保存该目标的全部变量和密钥，只允许从 main 部署。应用运行在 Vercel 上，只能读 Vercel 项目里的环境变量，所以部署任务在构建之前，把运行时要用的值从 GitHub 环境经标准输入写进该目标 Vercel 项目的 Production 环境：密钥写成 Sensitive，变量写成普通类型；GitHub 环境里没有值的名字跳过；某个值存成了错误的类型（密钥存成了变量，或者反过来）时停止同步。Vercel 里的值只是副本，每次部署都会覆盖。运行时变量的名字和类型以 `scripts/lib/runtime-env.ts` 为准；部署工作流的同步步骤按名字逐个接收这些值，不接收整个密钥集合，一个单元测试保证工作流里的名字和类型与这份清单完全一致。新加一个运行时值，要同时加进清单和同步步骤。
 - **本机开发**：保存在 Vercel 项目 `vexto-staging` 的 Development 环境，用 `task env-pull` 生成不提交的 `.env.local`。拉取哪个项目和团队写在 `scripts/env-pull.json` 里，可以用环境变量覆盖。本机的 `DATABASE_URL` 指向本机的 PostgreSQL 容器。
 
 | 名称                                       | 用途                       | 类型 | 谁读                 | 值从哪来                                                                            | 由谁设置                     |
