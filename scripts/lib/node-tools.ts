@@ -88,6 +88,32 @@ export async function pnpmOutput(args: readonly string[]) {
   return stdout;
 }
 
+/**
+ * Runs pnpm with the terminal attached to its standard input and error, so a command can ask
+ * the user to log in, and resolves to its standard output, which is kept in memory and not shown.
+ * A failing command rejects with its exit code only: its output may hold a secret.
+ */
+export function pnpmSecretOutput(args: readonly string[]) {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(pnpmCommandLine(args), {
+      cwd: repoRoot,
+      env: process.env,
+      shell: true,
+      stdio: ['inherit', 'pipe', 'inherit'],
+    });
+    const chunks: Buffer[] = [];
+    child.stdout?.on('data', (chunk: Buffer) => chunks.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve(Buffer.concat(chunks).toString('utf8'));
+        return;
+      }
+      reject(new Error(`pnpm ${args[0] ?? ''} exited with ${code ?? signal}.`));
+    });
+  });
+}
+
 /** Reads package.json of the repository, or of an installed package when a name is given. */
 export function readManifest(packageName?: string): PackageManifest {
   const manifestPath = packageName

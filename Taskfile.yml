@@ -7,6 +7,9 @@ vars:
   # The Vercel CLI runs through pnpm dlx at the version the deployment workflow uses.
   # renovate: datasource=npm depName=vercel
   VERCEL_CLI_VERSION: 66.6.0
+  # The Neon CLI runs through pnpm dlx; `task member` uses it to get a target's connection string.
+  # renovate: datasource=npm depName=neonctl
+  NEON_CLI_VERSION: 9.9.3
 
 tasks:
   setup:
@@ -160,3 +163,13 @@ tasks:
     desc: Apply the migration scripts in drizzle/ to the database at DATABASE_URL_UNPOOLED, or DATABASE_URL when it is unset
     cmds:
       - node scripts/migrate.ts {{.CLI_ARGS}}
+
+  # The member list of a target's database. The connection string comes from the Neon CLI, for
+  # the project and branch scripts/neon-targets.json gives the target, and stays inside the
+  # script; the Neon CLI must be logged in first.
+  member:
+    desc: 'Add, revoke or list the members of a target database: task member -- add|revoke <email> --target <target>, task member -- list --target <target>'
+    env:
+      NEON_CLI_VERSION: '{{.NEON_CLI_VERSION}}'
+    cmds:
+      - node scripts/member.ts {{.CLI_ARGS}}

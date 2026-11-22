@@ -30,34 +30,36 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 
 所有命令都通过 Task 运行，在 Windows、macOS 和 Linux 上一样。需要额外参数时写在 `--` 后面，例如 `task test-unit -- src/features/health`。
 
-| 命令                                            | 做什么                                                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `task setup`                                    | 安装依赖、组件测试用的 Chromium 和 WebKit，以及 git hook                                    |
-| `task browsers`                                 | 只安装 Chromium 和 WebKit；CI 加 `--with-deps` 同时装它们的系统库                           |
-| `task env-pull`                                 | 链接 `scripts/env-pull.json` 里写的 Vercel 项目，把它 Development 环境的值拉到 `.env.local` |
-| `task dev`                                      | 启动开发服务器（`next dev`）                                                                |
-| `task format`                                   | 用 Prettier 格式化文件（默认全部）                                                          |
-| `task format-check`                             | 用 Prettier 检查格式（默认全部）                                                            |
-| `task lint`                                     | ESLint，不允许任何警告（默认全部）                                                          |
-| `task docs-lint`                                | markdownlint-cli2 检查 `.docs/` 和根目录的 Markdown                                         |
-| `task typecheck`                                | 生成 Next.js 路由类型后运行 `tsc --noEmit`                                                  |
-| `task build`                                    | 生产构建（`next build`）                                                                    |
-| `task arch`                                     | dependency-cruiser 检查依赖规则（默认 `src`）                                               |
-| `task duplication`                              | jscpd 查重复代码                                                                            |
-| `task licenses`                                 | 检查运行时依赖的许可证                                                                      |
-| `task audit`                                    | `pnpm audit`，有高危或严重漏洞就失败                                                        |
-| `task secrets-scan`                             | gitleaks 扫描整个提交历史里的密钥；传 `--staged` 时只扫暂存的改动                           |
-| `task workflows-lint`                           | actionlint 和 zizmor 检查 GitHub Actions 工作流和仓库里的 action                            |
-| `task commits-check`                            | commitlint 和项目的提交规则，默认检查 `origin/main..HEAD`，可以传 `FROM`、`TO`、`BRANCH`    |
-| `task check`                                    | 依次跑格式、lint、文档格式、类型检查、架构规则、重复代码、许可证、依赖漏洞和密钥扫描        |
-| `task test-unit`                                | Vitest 单元测试（Node）                                                                     |
-| `task test-component`                           | Vitest 浏览器模式的组件测试，Chromium 和 WebKit 各跑一遍                                    |
-| `task test-integration`                         | 集成测试                                                                                    |
-| `task test-security`                            | 安全测试：登录、权限、用户数据隔离、恶意输入                                                |
-| `task test-migration`                           | 迁移测试，每次都跑全部                                                                      |
-| `task test-e2e`                                 | 在固定版本的 Playwright Linux 容器里构建应用并跑端到端测试和截图对比（需要 Docker）         |
-| `task test-smoke -- <地址> [--production-safe]` | 对运行中的应用跑打了 `@smoke` 标签的测试；生产只跑同时打了 `@production-safe` 的            |
-| `task migrate`                                  | 迁移 `DATABASE_URL_UNPOOLED`（没有时用 `DATABASE_URL`）指向的数据库到最新脚本               |
+| 命令                                                | 做什么                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `task setup`                                        | 安装依赖、组件测试用的 Chromium 和 WebKit，以及 git hook                                    |
+| `task browsers`                                     | 只安装 Chromium 和 WebKit；CI 加 `--with-deps` 同时装它们的系统库                           |
+| `task env-pull`                                     | 链接 `scripts/env-pull.json` 里写的 Vercel 项目，把它 Development 环境的值拉到 `.env.local` |
+| `task dev`                                          | 启动开发服务器（`next dev`）                                                                |
+| `task format`                                       | 用 Prettier 格式化文件（默认全部）                                                          |
+| `task format-check`                                 | 用 Prettier 检查格式（默认全部）                                                            |
+| `task lint`                                         | ESLint，不允许任何警告（默认全部）                                                          |
+| `task docs-lint`                                    | markdownlint-cli2 检查 `.docs/` 和根目录的 Markdown                                         |
+| `task typecheck`                                    | 生成 Next.js 路由类型后运行 `tsc --noEmit`                                                  |
+| `task build`                                        | 生产构建（`next build`）                                                                    |
+| `task arch`                                         | dependency-cruiser 检查依赖规则（默认 `src`）                                               |
+| `task duplication`                                  | jscpd 查重复代码                                                                            |
+| `task licenses`                                     | 检查运行时依赖的许可证                                                                      |
+| `task audit`                                        | `pnpm audit`，有高危或严重漏洞就失败                                                        |
+| `task secrets-scan`                                 | gitleaks 扫描整个提交历史里的密钥；传 `--staged` 时只扫暂存的改动                           |
+| `task workflows-lint`                               | actionlint 和 zizmor 检查 GitHub Actions 工作流和仓库里的 action                            |
+| `task commits-check`                                | commitlint 和项目的提交规则，默认检查 `origin/main..HEAD`，可以传 `FROM`、`TO`、`BRANCH`    |
+| `task check`                                        | 依次跑格式、lint、文档格式、类型检查、架构规则、重复代码、许可证、依赖漏洞和密钥扫描        |
+| `task test-unit`                                    | Vitest 单元测试（Node）                                                                     |
+| `task test-component`                               | Vitest 浏览器模式的组件测试，Chromium 和 WebKit 各跑一遍                                    |
+| `task test-integration`                             | 集成测试                                                                                    |
+| `task test-security`                                | 安全测试：登录、权限、用户数据隔离、恶意输入                                                |
+| `task test-migration`                               | 迁移测试，每次都跑全部                                                                      |
+| `task test-e2e`                                     | 在固定版本的 Playwright Linux 容器里构建应用并跑端到端测试和截图对比（需要 Docker）         |
+| `task test-smoke -- <地址> [--production-safe]`     | 对运行中的应用跑打了 `@smoke` 标签的测试；生产只跑同时打了 `@production-safe` 的            |
+| `task migrate`                                      | 迁移 `DATABASE_URL_UNPOOLED`（没有时用 `DATABASE_URL`）指向的数据库到最新脚本               |
+| `task member -- add\|revoke <邮箱> --target <环境>` | 把一个人加进目标环境数据库的成员名单，或者取消他的资格                                      |
+| `task member -- list --target <环境>`               | 按加入时间列出目标环境的成员名单                                                            |
 
 ## 改动怎样检查
 
@@ -91,6 +93,8 @@ CI 总是跑全部检查。PR 上的每一项都是必过检查：
 合并到 main 后，`ci` 再完整跑一遍，全部通过后自动部署 staging，并跑冒烟测试。main 上每个提交的 `ci` 各自运行，后来的推送不会取消前面的，所以先推送的提交可能后跑完。部署 staging 时排队，一次只部署一个；轮到某个提交部署时，如果它已经不是 main 的最新提交，就跳过部署，任务照样算成功，日志里写明跳过的原因，这样晚跑完的旧提交不会把 staging 上的新代码盖掉。手动部署用工作流 `deploy`：选目标 staging 或 production，填版本标签（如 `v1.2.3`），staging 也可以填 main 上的提交 SHA；这个提交必须在 main 上，并且它在 main 上的 `ci` 已经跑完、全部检查通过。手动部署不检查是不是 main 的最新提交，可以有意部署旧版本。
 
 环境变量和密钥：每个部署目标（staging，以后还有 production）的变量和密钥只存在同名的 GitHub 环境里。应用在运行时读的值列在 `scripts/lib/runtime-env.ts` 里，密钥存成 GitHub 环境的 secret，其余存成 variable。每次部署在拉取、构建和部署之前，把这些值写进目标 Vercel 项目的 Production 环境，覆盖 Vercel 上原有的副本；密钥在 Vercel 上存成 Sensitive。GitHub 环境里没有设置的名字会跳过，Vercel 上原有的值不动，所以一个目标可以逐个设置。写值的那一步在 `.github/workflows/deploy-target.yml` 里按名字只拿这些值：密钥只从 `secrets` 取，变量只从 `vars` 取，每个名字另有一个标志，说明另一种里是不是也存了这个名字；有值存错了种类，或者列表里的名字这一步没有拿，同步就失败，什么都不写。新增运行时值时，在列表里加一行，把它和它的标志加进这一步的 `env`，再到每个 GitHub 环境里设置；单元测试比对列表和这一步的 `env`，两边不一致时失败，并列出应有的写法。本机开发用的值在 `scripts/env-pull.json` 写的 Vercel 项目（`vexto-staging`）的 Development 环境里，用 `task env-pull` 拉到 `.env.local`；要换项目或团队时改这个文件，或者传 `VERCEL_PROJECT=<项目>`、`VERCEL_SCOPE=<团队>`（写在命令后面或设成环境变量都可以）。
+
+成员名单：`task member` 修改目标环境数据库里的 `members` 表，目标名就是部署目标的名字。连接地址由 Neon CLI（`neonctl`，用 `pnpm dlx` 临时运行，版本是 `Taskfile.yml` 里的 `NEON_CLI_VERSION`）按 `scripts/neon-targets.json` 里该目标的 Neon 项目、分支和数据库取得；没写数据库时，用分支里唯一的那个。地址只在脚本的内存里，不显示，不写进文件，也不传给别的命令；出错时只报错误的种类。第一次用之前，先用 `pnpm dlx neonctl@<NEON_CLI_VERSION> auth` 登录 Neon。邮箱存成小写，比对不分大小写。`add` 对取消过的人把他设回有效；`revoke` 在一个事务里删除这个人的个人数据，清空绑定的 Clerk 用户和条款确认记录，再设为 `revoked`。个人数据表的删除语句写在 `scripts/lib/members.ts` 的 `memberDataRemovals` 里，每加一张存个人数据的表，就在那里加上它的语句。不用 GitHub 工作流管理名单，因为公开仓库的运行日志谁都能看。
 
 ## 分支和提交
 

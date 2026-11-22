@@ -62,4 +62,16 @@ task test-smoke -- <地址>         # 对一个运行中的应用跑冒烟测试
 
 测试命令后面可以用 `--` 接文件或测试工具的参数，只跑一部分，例如 `task test-unit -- src/features/health`。
 
+## 成员名单
+
+只有名单里的人能用 vexto。名单存在每个部署目标的数据库里，由项目所有者在自己的电脑上管理：
+
+```sh
+task member -- add <邮箱> --target staging      # 加进名单；取消过的人重新设为有效
+task member -- revoke <邮箱> --target staging   # 取消资格，删除这个人的个人数据
+task member -- list --target staging            # 按加入时间列出名单
+```
+
+命令用 Neon CLI 取得目标数据库的连接地址，地址不会显示出来。第一次用之前先登录 Neon：`pnpm dlx neonctl@<版本> auth`，版本是 `Taskfile.yml` 里的 `NEON_CLI_VERSION`。每个目标对应的 Neon 项目、分支和数据库写在 `scripts/neon-targets.json` 里。
+
 全部命令和开发规则见 [`AGENTS.md`](AGENTS.md)。
