@@ -1,0 +1,4257 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>vexto phone prototype</title>
+    <style>
+      /* Visual tokens, type scale and components come from lingocurrent's approved touch layout. */
+      :root {
+        color-scheme: light dark;
+        --bg: light-dark(#f4f6f9, #151b25);
+        --surface: light-dark(#fff, #1d2634);
+        --ink: light-dark(#26344b, #e2e9f4);
+        --muted: light-dark(#637187, #a9b7cb);
+        --line: light-dark(#d8dfe9, #3b475b);
+        --blue: light-dark(#245ab8, #9bbdff);
+        --on: light-dark(#fff, #15284a);
+        --soft: light-dark(#edf3fe, #263a58);
+        --red: light-dark(#ba3c40, #ff9b9e);
+        --amber: light-dark(#89590b, #f8cb75);
+        --green: light-dark(#24745a, #83d5b7);
+      }
+      /* Screenshot states turn every animation and transition off. */
+      html[data-static] *,
+      html[data-static] *::before,
+      html[data-static] *::after {
+        transition: none !important;
+        animation: none !important;
+        scroll-behavior: auto !important;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.5 'Segoe UI',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Microsoft YaHei',
+          sans-serif;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* The container query below needs this container; without it the narrow rules never apply. */
+      .app {
+        container: app / inline-size;
+        position: relative;
+        max-width: 600px;
+        min-height: 100vh;
+        margin: 0 auto;
+        background: var(--bg);
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 4px 10px;
+        background: linear-gradient(var(--surface), var(--bg));
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        box-shadow:
+          0 1px 1px #00000008,
+          inset 0 1px #ffffff15;
+        font-weight: 500;
+        white-space: nowrap;
+        -webkit-tap-highlight-color: transparent;
+      }
+      button:active {
+        box-shadow: inset 0 1px 3px #00000025;
+      }
+      button:disabled {
+        opacity: 0.45;
+      }
+      :focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+      button.primary {
+        background: linear-gradient(color-mix(in srgb, var(--blue), #fff 6%), var(--blue));
+        border-color: var(--blue);
+        color: var(--on);
+      }
+      button.flat {
+        border-color: transparent;
+        box-shadow: none;
+        background: transparent;
+      }
+      button.icon {
+        width: 44px;
+        padding: 4px;
+        flex: none;
+      }
+      button.danger {
+        background: var(--red);
+        border-color: var(--red);
+        color: light-dark(#fff, #311216);
+      }
+      .ico {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 19px;
+        font-weight: 600;
+        letter-spacing: -0.3px;
+      }
+      h2 {
+        font-size: 17px;
+        font-weight: 600;
+      }
+      a {
+        color: var(--blue);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .small {
+        font-size: 11px;
+      }
+      input:not([type='range']):not([type='checkbox']):not([type='radio']),
+      select {
+        min-width: 0;
+        min-height: 44px;
+        padding: 5px 7px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      .spin {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Top bar: brand, the two entries and the account button. */
+      .rail {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+        padding: 16px 12px 9px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: -0.4px;
+      }
+      .brand b {
+        display: grid;
+        place-items: center;
+        width: 23px;
+        height: 25px;
+        border-radius: 5px;
+        background: var(--blue);
+        color: var(--on);
+        font-size: 15px;
+      }
+      .rail nav {
+        display: flex;
+        flex: 1;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .rail nav button {
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--surface);
+        box-shadow: 0 1px 1px #00000008;
+      }
+      .rail nav button[aria-current='page'] {
+        border-color: color-mix(in srgb, var(--blue), var(--line) 50%);
+        background: var(--soft);
+        color: var(--blue);
+      }
+      .vocabulary-nav {
+        position: relative;
+        display: block;
+      }
+      .badges {
+        position: absolute;
+        right: -11px;
+        top: -10px;
+        display: flex;
+        gap: 3px;
+        pointer-events: none;
+      }
+      .badge {
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--bg);
+        border-radius: 50%;
+        background: var(--red);
+        color: light-dark(#fff, #311216);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .badge.new {
+        background: light-dark(#f2c94c, #e9bb3f);
+        color: #483600;
+      }
+      .vocabulary-nav .badges {
+        right: -5px;
+        top: -8px;
+        gap: 2px;
+      }
+      .vocabulary-nav .badge {
+        width: auto;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 3px;
+        border-color: var(--surface);
+        border-radius: 9px;
+      }
+      .rail .avatar {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--bg);
+        font-size: 12px;
+      }
+      @container app (max-width: 450px) {
+        .nav-text,
+        .rail .brand span,
+        .mode-text,
+        .control-text {
+          display: none;
+        }
+        .rail nav button {
+          width: 44px;
+          min-width: 44px;
+          justify-content: center;
+        }
+        .float .lemma-row h2 {
+          font-size: 18px;
+        }
+      }
+
+      /* Lists. */
+      .main {
+        padding: 15px 12px;
+      }
+      .main.is-reader {
+        padding-bottom: 0;
+      }
+      .page-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+      .page-head h1 {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin: 11px 0;
+      }
+      .search {
+        display: flex;
+        flex: 1 1 100%;
+        gap: 5px;
+      }
+      .search input {
+        width: 100%;
+      }
+      .count {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .touch-controls {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .column-filter {
+        display: inline-flex;
+        position: relative;
+        flex: none;
+      }
+      .filter-trigger {
+        gap: 6px;
+        min-height: 44px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+        box-shadow: none;
+        color: var(--muted);
+      }
+      .filter-trigger .ico {
+        width: 15px;
+        height: 15px;
+      }
+      .filter-trigger .ico.funnel {
+        width: 11px;
+        height: 11px;
+      }
+      .filter-trigger.is-filtered {
+        color: var(--blue);
+        background: var(--soft);
+        border-color: var(--blue);
+      }
+      .sort-trigger {
+        margin-left: auto;
+        width: 44px;
+        padding: 6px;
+        flex: none;
+      }
+      .control-text {
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .grid-frame {
+        min-width: 0;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      .item-card {
+        padding: 13px 12px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+      }
+      .item-head {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 9px;
+      }
+      .item-head > div {
+        min-width: 0;
+      }
+      .article-link {
+        display: block;
+        max-width: 100%;
+        min-height: 28px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        background: none;
+        box-shadow: none;
+        color: var(--blue);
+        font-size: 14px;
+        line-height: 1.5;
+        text-align: left;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      .excerpt {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .source {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        min-width: 0;
+      }
+      .source-mark {
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 3px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--mark) 13%, var(--surface));
+        color: var(--mark);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 18px;
+        letter-spacing: 0.2px;
+      }
+      .item-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 9px;
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .visit-meta {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .visit-meta span {
+        white-space: nowrap;
+      }
+      .load-more {
+        display: flex;
+        justify-content: center;
+        padding: 14px;
+      }
+      .empty {
+        padding: 25px 14px;
+        color: var(--muted);
+      }
+
+      /* Vocabulary. */
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 13px;
+        border-bottom: 1px solid var(--line);
+      }
+      .tabs button {
+        min-width: 44px;
+        padding: 6px 1px 9px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        font-size: 12px;
+      }
+      .tabs button[aria-pressed='true'] {
+        color: var(--blue);
+        border-bottom-color: var(--blue);
+      }
+      .mode-buttons {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 15px;
+        margin: 15px 0 17px;
+        padding: 6px 4px 0;
+      }
+      .mode-wrap {
+        position: relative;
+        display: inline-flex;
+        flex: 1;
+        min-width: 0;
+      }
+      .mode-wrap > button {
+        width: 100%;
+        min-width: 0;
+        padding: 6px;
+      }
+      .mode-wrap .badges {
+        right: -8px;
+      }
+      .soon-text {
+        font-size: 12px;
+        font-weight: 400;
+      }
+      .mobile-progress {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+        margin-top: 10px;
+      }
+      .mode-progress {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        padding: 5px 8px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--bg);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .mode-progress > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .progress-mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        flex: none !important;
+        color: var(--muted);
+      }
+      .mode-progress .progress-text {
+        flex: none;
+        padding-left: 9px;
+        border-left: 1px solid var(--line);
+      }
+      .progress-text {
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .progress-text.now {
+        color: var(--red);
+      }
+      .progress-text.new {
+        color: var(--blue);
+      }
+      .progress-text.complete {
+        color: var(--green);
+      }
+      .vocab-card {
+        position: relative;
+        padding: 0;
+        overflow: hidden;
+        touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .vocab-card .card-front {
+        position: relative;
+        z-index: 1;
+        padding: 12px;
+        background: var(--surface);
+        transition: transform 0.16s ease;
+      }
+      .vocab-card.is-selected .card-front {
+        background: var(--soft);
+      }
+      .vocab-card.swipe-open .card-front {
+        transform: translateX(-80px);
+      }
+      .word-card-heading {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .word-card-name {
+        flex: 1;
+        min-width: 0;
+      }
+      .word-description {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .vocab-card button.swipe-delete {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        flex-direction: column;
+        gap: 4px;
+        width: 80px;
+        min-height: 100%;
+        border: 0;
+        border-radius: 0;
+        background: var(--red);
+        color: light-dark(#fff, #311216);
+        box-shadow: none;
+      }
+      .selection-bar {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-height: 48px;
+        margin-bottom: 9px;
+        padding: 2px 4px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--soft);
+        font-size: 12px;
+      }
+      .select-visible-label {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+      }
+      .selection-count {
+        margin-left: auto;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .selection-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 44px;
+        min-height: 44px;
+      }
+      .selection-check input {
+        width: 17px;
+        height: 17px;
+        margin: 0;
+        accent-color: var(--blue);
+      }
+      .delete-icon {
+        color: var(--muted);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .vocab-card .card-front {
+          transition: none;
+        }
+      }
+
+      /* Reader and word card. */
+      .reader {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        border-radius: 5px 5px 0 0;
+      }
+      .reader.card {
+        border-bottom: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      .reader-head {
+        padding: 15px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .reader-head h1 {
+        margin: 9px 0;
+        font-size: 21px;
+        line-height: 1.3;
+      }
+      .reader-tools {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 12px;
+      }
+      .voice-label {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        min-height: 44px;
+        padding: 0 2px;
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+        text-decoration: underline;
+        text-decoration-color: color-mix(in srgb, var(--muted), transparent 50%);
+        text-underline-offset: 2px;
+      }
+      .reader-tools .voice-label,
+      .lemma-row .voice-label {
+        margin-left: auto;
+      }
+      .text-area {
+        padding: 9px 8px;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .sentence {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        align-items: start;
+        gap: 3px;
+        margin: 4px 0;
+        padding: 2px 1px;
+        border-radius: 3px;
+      }
+      .sentence.active {
+        background: var(--soft);
+        box-shadow: inset 2px 0 var(--blue);
+      }
+      .sentence.paragraph-start {
+        margin-top: 17px;
+      }
+      .sentence > button {
+        width: 44px;
+        padding: 0;
+        border: 0;
+        background: none;
+        box-shadow: none;
+        color: var(--muted);
+      }
+      .sentence.active > button {
+        color: var(--blue);
+      }
+      .sentence p {
+        padding: 6px 0;
+        font-size: 16px;
+        line-height: 1.8;
+      }
+      [data-word] {
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .attribution {
+        display: grid;
+        gap: 2px;
+        padding: 12px 12px 6px 16px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .attribution .source {
+        color: var(--ink);
+        font-size: 13px;
+      }
+      .attribution-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .original-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 44px;
+      }
+      .attribution time {
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .player {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 58px;
+        padding: 8px 5px calc(8px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .player-track {
+        flex: 1;
+        min-width: 0;
+      }
+      .player-track > span {
+        display: block;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 10px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .player input[type='range'] {
+        width: 100%;
+        height: 28px;
+        margin: 0;
+        accent-color: var(--blue);
+      }
+      .speed-button {
+        min-width: 44px;
+        padding: 4px 6px;
+        font-size: 12px;
+      }
+      .continue-button {
+        flex: 1;
+      }
+      .detail-controls {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        min-height: 44px;
+        margin-bottom: 6px;
+      }
+
+      /* Explanation popovers stack above the player (or above the page bottom without one). */
+      .float-host {
+        position: fixed;
+        z-index: 20;
+        right: max(10px, calc((100vw - 600px) / 2 + 10px));
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        width: calc(min(100vw, 600px) - 28px);
+        pointer-events: none;
+      }
+      .float-host.above-player {
+        bottom: calc(74px + env(safe-area-inset-bottom));
+      }
+      .float {
+        position: relative;
+        overflow-wrap: anywhere;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        box-shadow: 0 10px 35px #00000022;
+        font-size: 12px;
+        pointer-events: auto;
+      }
+      .float.back-layer {
+        position: absolute;
+        left: -8px;
+        right: 8px;
+        bottom: 0;
+        pointer-events: none;
+      }
+      .float-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 0 0 9px;
+        border-bottom: 1px solid var(--line);
+        border-radius: 7px 7px 0 0;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .float-head > span {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .float-head .is-saved {
+        color: var(--blue);
+      }
+      .float-body {
+        padding: 11px;
+      }
+      .lemma-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .lemma-row h2 {
+        flex: 0 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 20px;
+        line-height: 1.3;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow-wrap: normal;
+      }
+      .pos {
+        margin-top: 3px !important;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .meaning {
+        margin: 11px 0 !important;
+        font-size: 14px;
+      }
+      mark {
+        padding: 1px 0;
+        background: var(--soft);
+        color: var(--blue);
+      }
+      .inline-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .inline-status.error {
+        color: var(--red);
+      }
+      .inline-status button {
+        margin-left: auto;
+        color: var(--ink);
+      }
+      .skeleton {
+        height: 12px;
+        margin: 10px 0;
+        border-radius: 3px;
+        background: var(--line);
+        opacity: 0.7;
+      }
+      .example-carousel {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) 44px;
+        gap: 0 5px;
+        min-width: 0;
+        margin: 10px 0 14px;
+        touch-action: pan-y pinch-zoom;
+      }
+      .example-actions {
+        display: flex;
+        grid-column: 1 / -1;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin: 0 0 3px;
+      }
+      .example-lead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .example-controls {
+        display: flex;
+        gap: 12px;
+      }
+      .example-text {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        min-width: 0;
+        margin: 0 !important;
+        padding: 4px 0;
+        font-size: 15px;
+        line-height: 1.8;
+        overflow-wrap: normal;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      .example-arrow {
+        grid-row: 3;
+        align-self: center;
+        width: 44px;
+      }
+      .example-prev {
+        grid-column: 1;
+      }
+      .example-next {
+        grid-column: 3;
+      }
+      .example-count {
+        grid-column: 2;
+        grid-row: 3;
+        align-self: center;
+        color: var(--muted);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      /* Single-question review. */
+      .review {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-height: calc(100vh - 100px);
+        padding: 0 3px;
+      }
+      .review-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .prompt {
+        flex: 1;
+        padding: 8px 3px 0;
+      }
+      .target {
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+      .target[lang='en'] {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .cloze {
+        font-size: 14px !important;
+        line-height: 1.7 !important;
+      }
+      .gap {
+        display: inline-block;
+        width: 76px;
+        height: 20px;
+        border-bottom: 2px solid var(--muted);
+        border-radius: 2px;
+        background: var(--bg);
+        vertical-align: baseline;
+        user-select: none;
+      }
+      .answer-label {
+        display: grid;
+        gap: 4px;
+      }
+      .answer {
+        width: 100%;
+        margin-top: 2px;
+      }
+      .option-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .option-list button {
+        justify-content: start;
+        padding: 7px 10px;
+        background: var(--surface);
+        font-size: 13px;
+        font-weight: 400;
+        text-align: left;
+      }
+      .option-list button[aria-pressed='true'] {
+        border-color: var(--blue);
+        background: var(--soft);
+      }
+      .option-list small {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .feedback {
+        margin-top: 13px;
+        padding: 9px 11px;
+        border-radius: 4px;
+        background: var(--soft);
+        font-size: 12px;
+      }
+      .feedback.error {
+        background: color-mix(in srgb, var(--red) 10%, var(--surface));
+        color: var(--red);
+      }
+      .feedback.warn {
+        background: color-mix(in srgb, var(--amber) 12%, var(--surface));
+        color: var(--amber);
+      }
+      .submit-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .submit-row button {
+        min-width: 90px;
+      }
+      .review-counter {
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .review-empty {
+        display: grid;
+        flex: 1;
+        align-content: center;
+        gap: 4px;
+        padding: 40px 10px;
+        text-align: center;
+      }
+      .review-empty p:first-child {
+        font-size: 15px;
+        font-weight: 500;
+      }
+
+      /* Popovers, dialogs and status messages. */
+      .overlay-host {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        pointer-events: none;
+      }
+      .compact-popover {
+        position: absolute;
+        left: 12px;
+        z-index: 30;
+        max-width: calc(100% - 24px);
+        margin: 0;
+        padding: 10px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 8px 26px #00000024;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 400;
+        text-align: left;
+        white-space: normal;
+        pointer-events: auto;
+      }
+      .popover-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .popover-title strong {
+        font-weight: 500;
+      }
+      .filter-options,
+      .sort-options {
+        display: grid;
+        gap: 0;
+        margin: 3px 0 9px;
+      }
+      .filter-options label,
+      .sort-options label {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 44px;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .compact-popover input[type='checkbox'],
+      .compact-popover input[type='radio'] {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--blue);
+      }
+      .filter-popover-actions,
+      .sort-direction {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 9px;
+        border-top: 1px solid var(--line);
+      }
+      .sort-direction button {
+        flex: 1;
+        padding: 5px;
+      }
+      .sort-direction button[aria-pressed='true'] {
+        color: var(--blue);
+        border-color: var(--blue);
+        background: var(--soft);
+      }
+      .account-popover {
+        display: grid;
+        gap: 6px;
+      }
+      .account-popover button {
+        justify-content: flex-start;
+        width: 100%;
+      }
+      .select-field {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+        margin-bottom: 10px;
+        font-size: 11px;
+      }
+      .select-field select {
+        width: 100%;
+        max-width: 100%;
+      }
+      .selection-fields {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+      }
+      dialog {
+        width: min(380px, calc(100% - 30px));
+        padding: 20px;
+        background: var(--surface);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        box-shadow: 0 16px 60px #00000040;
+        font-size: 13px;
+      }
+      dialog::backdrop {
+        background: #10223d66;
+      }
+      dialog p {
+        margin: 12px 0;
+        line-height: 1.7;
+      }
+      .dialog-actions {
+        display: flex;
+        justify-content: end;
+        gap: 8px;
+        margin-top: 17px;
+      }
+      .compare {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .compare section {
+        min-width: 0;
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--bg);
+      }
+      .compare section.is-new {
+        border-color: color-mix(in srgb, var(--blue), var(--line) 50%);
+        background: var(--soft);
+      }
+      .compare h3 {
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .compare .meaning {
+        margin: 0 0 8px !important;
+        font-size: 13px;
+      }
+      .compare ol {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding-left: 16px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .notice {
+        position: fixed;
+        z-index: 40;
+        top: 64px;
+        left: 50%;
+        max-width: min(340px, calc(100vw - 24px));
+        padding: 8px 12px;
+        transform: translateX(-50%);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 8px 26px #00000024;
+        font-size: 12px;
+      }
+      .notice:empty {
+        display: none;
+      }
+
+      /* Pages outside the app shell: sign-in, no access, terms and license. */
+      .doc-page {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: var(--surface);
+      }
+      .doc-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 69px;
+        padding: 16px 12px 9px;
+        border-bottom: 1px solid var(--line);
+      }
+      .doc-body {
+        flex: 1;
+        padding: 18px 16px 24px;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .doc-body h1 {
+        margin-bottom: 4px;
+        font-size: 22px;
+      }
+      .doc-body h2 {
+        margin: 20px 0 6px;
+        font-size: 15px;
+      }
+      .doc-body p {
+        margin: 8px 0;
+      }
+      .doc-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 44px;
+      }
+      .restrictions {
+        display: grid;
+        gap: 6px;
+        margin: 8px 0;
+        padding: 0;
+        list-style: none;
+      }
+      .restrictions li {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+      }
+      .doc-actions {
+        position: sticky;
+        bottom: 0;
+        display: flex;
+        gap: 10px;
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .doc-actions button {
+        flex: 1;
+      }
+      .license-text h2 {
+        margin: 18px 0 6px;
+        font-size: 14px;
+      }
+      .license-text p {
+        margin: 8px 0;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .center-page {
+        display: grid;
+        flex: 1;
+        align-content: center;
+        justify-items: center;
+        gap: 14px;
+        padding: 24px 16px;
+        text-align: center;
+      }
+      .center-page h1 {
+        font-size: 22px;
+      }
+      .center-page p {
+        max-width: 320px;
+        color: var(--muted);
+      }
+      .brand.big {
+        font-size: 20px;
+      }
+      .brand.big b {
+        width: 32px;
+        height: 34px;
+        font-size: 20px;
+      }
+      .auth-card {
+        display: grid;
+        gap: 14px;
+        width: 100%;
+        max-width: 340px;
+        padding: 28px 22px 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: 0 10px 35px #00000014;
+        text-align: center;
+      }
+      .auth-card h1 {
+        font-size: 18px;
+      }
+      .auth-card .brand {
+        justify-content: center;
+      }
+      .google-button {
+        width: 100%;
+      }
+      .google-mark {
+        color: #4285f4;
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .auth-foot {
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="app"></div>
+
+    <!-- Supertonic 3 LICENSE (BigScience Open RAIL-M, dated August 18, 2022), copied verbatim from
+     https://huggingface.co/Supertone/supertonic-3/raw/main/LICENSE. The terms page reads its use
+     restrictions from Attachment A of this text, so the two cannot drift apart. -->
+    <script type="text/plain" id="license-text">
+      BigScience Open RAIL-M License
+      dated August 18, 2022
+
+      Section I: PREAMBLE
+
+      This Open RAIL-M License was created by BigScience, a collaborative open innovation project aimed at
+      the responsible development and use of large multilingual datasets and Large Language Models
+      (“LLMs”). While a similar license was originally designed for the BLOOM model, we decided to adapt it
+      and create this license in order to propose a general open and responsible license applicable to other
+      machine learning based AI models (e.g. multimodal generative models).
+      In short, this license strives for both the open and responsible downstream use of the accompanying
+      model. When it comes to the open character, we took inspiration from open source permissive licenses
+      regarding the grant of IP rights. Referring to the downstream responsible use, we added use-based
+      restrictions not permitting the use of the Model in very specific scenarios, in order for the licensor to be
+      able to enforce the license in case potential misuses of the Model may occur. Even though downstream
+      derivative versions of the model could be released under different licensing terms, the latter will always
+      have to include - at minimum - the same use-based restrictions as the ones in the original license (this
+      license).
+      The development and use of artificial intelligence (“AI”), does not come without concerns. The world has
+      witnessed how AI techniques may, in some instances, become risky for the public in general. These risks
+      come in many forms, from racial discrimination to the misuse of sensitive information.
+      BigScience believes in the intersection between open and responsible AI development; thus, this License
+      aims to strike a balance between both in order to enable responsible open-science in the field of AI.
+      This License governs the use of the model (and its derivatives) and is informed by the model card
+      associated with the model.
+
+      NOW THEREFORE, You and Licensor agree as follows:
+
+      1. Definitions
+      (a) "License" means the terms and conditions for use, reproduction, and Distribution as defined in
+      this document.
+      (b) “Data” means a collection of information and/or content extracted from the dataset used with the
+      Model, including to train, pretrain, or otherwise evaluate the Model. The Data is not licensed under
+      this License.
+      (c)“Output” means the results of operating a Model as embodied in informational content resulting
+      therefrom.
+      (d)“Model” means any accompanying machine-learning based assemblies (including checkpoints),
+      consisting of learnt weights, parameters (including optimizer states), corresponding to the model
+      architecture as embodied in the Complementary Material, that have been trained or tuned, in whole or
+      in part on the Data, using the Complementary Material.
+      (e) “Derivatives of the Model” means all modifications to the Model, works based on the Model, or any
+      other model which is created or initialized by transfer of patterns of the weights, parameters,
+      activations or output of the Model, to the other model, in order to cause the other model to perform
+      similarly to the Model, including - but not limited to - distillation methods entailing the use of
+      intermediate data representations or methods based on the generation of synthetic data by the Model
+      for training the other model.
+      (f)“Complementary Material” means the accompanying source code and scripts used to define,
+      run, load, benchmark or evaluate the Model, and used to prepare data for training or evaluation, if
+      any. This includes any accompanying documentation, tutorials, examples, etc, if any.
+      (g) “Distribution” means any transmission, reproduction, publication or other sharing of the Model or
+      Derivatives of the Model to a third party, including providing the Model as a hosted service made
+      available by electronic or other remote means - e.g. API-based or web access.
+      (h) “Licensor” means the copyright owner or entity authorized by the copyright owner that is
+      granting the License, including the persons or entities that may have rights in the Model and/or
+      distributing the Model.
+      (i) "You" (or "Your") means an individual or Legal Entity exercising permissions granted by this
+      License and/or making use of the Model for whichever purpose and in any field of use, including
+      usage of the Model in an end-use application - e.g. chatbot, translator, image generator.
+      (j) “Third Parties” means individuals or legal entities that are not under common control with
+      Licensor or You.
+      (k) "Contribution" means any work of authorship, including the original version of the Model and
+      any modifications or additions to that Model or Derivatives of the Model thereof, that is
+      intentionally submitted to Licensor for inclusion in the Model by the copyright owner or by an
+      individual or Legal Entity authorized to submit on behalf of the copyright owner. For the
+      purposes of this definition,
+      “submitted” means any form of electronic, verbal, or written
+      communication sent to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems, and issue tracking
+      systems that are managed by, or on behalf of, the Licensor for the purpose of discussing and
+      improving the Model, but excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+      (l) "Contributor" means Licensor and any individual or Legal Entity on behalf of whom a
+      Contribution has been received by Licensor and subsequently incorporated within the Model.
+
+
+      Section II: INTELLECTUAL PROPERTY RIGHTS
+
+      Both copyright and patent grants apply to the Model, Derivatives of the Model and Complementary
+      Material. The Model and Derivatives of the Model are subject to additional terms as described in Section III.
+
+      2. Grant of Copyright License. Subject to the terms and conditions of this License, each Contributor
+      hereby grants to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare, publicly display, publicly perform, sublicense, and distribute the
+      Complementary Material, the Model, and Derivatives of the Model.
+
+      3. Grant of Patent License. Subject to the terms and conditions of this License and where and as
+      applicable, each Contributor hereby grants to You a perpetual, worldwide, non-exclusive, no-charge,
+      royalty-free, irrevocable (except as stated in this paragraph) patent license to make, have made, use, offer
+      to sell, sell, import, and otherwise transfer the Model and the Complementary Material, where such
+      license applies only to those patent claims licensable by such Contributor that are necessarily infringed by
+      their Contribution(s) alone or by combination of their Contribution(s) with the Model to which such
+      Contribution(s) was submitted. If You institute patent litigation against any entity (including a cross-claim
+      or counterclaim in a lawsuit) alleging that the Model and/or Complementary Material or a Contribution
+      incorporated within the Model and/or Complementary Material constitutes direct or contributory patent
+      infringement, then any patent licenses granted to You under this License for the Model and/or Work shall
+      terminate as of the date such litigation is asserted or filed.
+      Section III: CONDITIONS OF USAGE, DISTRIBUTION AND REDISTRIBUTION
+
+      4. Distribution and Redistribution. You may host for Third Party remote access purposes (e.g.
+      software-as-a-service), reproduce and distribute copies of the Model or Derivatives of the Model thereof
+      in any medium, with or without modifications, provided that You meet the following conditions:
+
+      a. Use-based restrictions as referenced in paragraph 5 MUST be included as an enforceable provision
+      by You in any type of legal agreement (e.g. a license) governing the use and/or distribution of the
+      Model or Derivatives of the Model, and You shall give notice to subsequent users You Distribute to,
+      that the Model or Derivatives of the Model are subject to paragraph 5. This provision does not apply
+      to the use of Complementary Material.
+
+      b. You must give any Third Party recipients of the Model or Derivatives of the Model a copy of this
+      License;
+
+      c. You must cause any modified files to carry prominent notices stating that You changed the files;
+
+      d. You must retain all copyright, patent, trademark, and attribution notices excluding those notices
+      that do not pertain to any part of the Model, Derivatives of the Model.
+      You may add Your own copyright statement to Your modifications and may provide additional or
+      different license terms and conditions - respecting paragraph 4.a.
+      - for use, reproduction, or Distribution
+      of Your modifications, or for any such Derivatives of the Model as a whole, provided Your use,
+      reproduction, and Distribution of the Model otherwise complies with the conditions stated in this License.
+
+      5. Use-based restrictions. The restrictions set forth in Attachment A are considered Use-based restrictions.
+      Therefore You cannot use the Model and the Derivatives of the Model for the specified restricted uses. You
+      may use the Model subject to this License, including only for lawful purposes and in accordance with the
+      License. Use may include creating any content with, finetuning, updating, running, training, evaluating and/or
+      reparametrizing the Model. You shall require all of Your users who use the Model or a Derivative of the Model
+      to comply with the terms of this paragraph (paragraph 5).
+
+      6. The Output You Generate. Except as set forth herein, Licensor claims no rights in the Output You
+      generate using the Model. You are accountable for the Output you generate and its subsequent uses. No
+      use of the output can contravene any provision as stated in the License.
+
+      Section IV: OTHER PROVISIONS
+
+      7. Updates and Runtime Restrictions. To the maximum extent permitted by law, Licensor reserves the
+      right to restrict (remotely or otherwise) usage of the Model in violation of this License, update the Model
+      through electronic means, or modify the Output of the Model based on updates. You shall undertake
+      reasonable efforts to use the latest version of the Model.
+
+      8. Trademarks and related. Nothing in this License permits You to make use of Licensors’ trademarks,
+      trade names, logos or to otherwise suggest endorsement or misrepresent the relationship between the
+      parties; and any rights not expressly granted herein are reserved by the Licensors.
+
+      9. Disclaimer of Warranty. Unless required by applicable law or agreed to in writing, Licensor provides
+      the Model and the Complementary Material (and each Contributor provides its Contributions) on an "AS
+      IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied,
+      including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT,
+      MERCHANTABILITY , or FITNESS FOR A PARTICULAR PURPOSE. You are solely responsible for
+      determining the appropriateness of using or redistributing the Model, Derivatives of the Model, and the
+      Complementary Material and assume any risks associated with Your exercise of permissions under this
+      License.
+
+      10. Limitation of Liability. In no event and under no legal theory, whether in tort (including negligence),
+      contract, or otherwise, unless required by applicable law (such as deliberate and grossly negligent acts) or
+      agreed to in writing, shall any Contributor be liable to You for damages, including any direct, indirect,
+      special, incidental, or consequential damages of any character arising as a result of this License or out of
+      the use or inability to use the Model and the Complementary Material (including but not limited to
+      damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other
+      commercial damages or losses), even if such Contributor has been advised of the possibility of such
+      damages.
+
+      11. Accepting Warranty or Additional Liability. While redistributing the Model, Derivatives of the
+      Model and the Complementary Material thereof, You may choose to offer, and charge a fee for, acceptance
+      of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License.
+      However, in accepting such obligations, You may act only on Your own behalf and on Your sole
+      responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and
+      hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor
+      by reason of your accepting any such warranty or additional liability.
+
+      12. If any provision of this License is held to be invalid, illegal or unenforceable, the remaining
+      provisions shall be unaffected thereby and remain valid as if such provision had not been set forth herein.
+
+      END OF TERMS AND CONDITIONS
+
+      Attachment A
+
+      Use Restrictions
+
+      You agree not to use the Model or Derivatives of the Model:
+      (a) In any way that violates any applicable national, federal, state, local or international law
+      or regulation;
+      (b) For the purpose of exploiting, harming or attempting to exploit or harm minors in any
+      way;
+      (c) To generate or disseminate verifiably false information and/or content with the purpose of
+      harming others;
+      (d) To generate or disseminate personal identifiable information that can be used to harm an
+      individual;
+      (e) To generate or disseminate information and/or content (e.g. images, code, posts, articles),
+      and place the information and/or content in any context (e.g. bot generating tweets)
+      without expressly and intelligibly disclaiming that the information and/or content is
+      machine generated;
+      (f) To defame, disparage or otherwise harass others;
+      (g) To impersonate or attempt to impersonate (e.g. deepfakes) others without their consent;
+      (h) For fully automated decision making that adversely impacts an individual’s legal rights or
+      otherwise creates or modifies a binding, enforceable obligation;
+      (i) For any use intended to or which has the effect of discriminating against or harming
+      individuals or groups based on online or offline social behavior or known or predicted
+      personal or personality characteristics;
+      (j) To exploit any of the vulnerabilities of a specific group of persons based on their age,
+      social, physical or mental characteristics, in order to materially distort the behavior of a
+      person pertaining to that group in a manner that causes or is likely to cause that person or
+      another person physical or psychological harm;
+      (k) For any use intended to or which has the effect of discriminating against individuals or
+      groups based on legally protected characteristics or categories;
+      (l) To provide medical advice and medical results interpretation;
+      (m) To generate or disseminate information for the purpose to be used for administration of
+      justice, law enforcement, immigration or asylum processes, such as predicting an
+      individual will commit fraud/crime commitment (e.g. by text profiling, drawing causal
+      relationships between assertions made in documents, indiscriminate and
+      arbitrarily-targeted use).
+    </script>
+
+    <script>
+      (() => {
+        'use strict';
+        const app = document.getElementById('app');
+
+        // ---------------------------------------------------------------- icons
+        // Shapes from the Lucide icon set (ISC licence), inlined so the page renders offline.
+        const ICONS = {
+          play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+          pause:
+            '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+          square: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+          x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+          plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+          check: '<path d="M20 6 9 17l-5-5"/>',
+          search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+          newspaper:
+            '<path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/>',
+          'book-open':
+            '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+          mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+          keyboard:
+            '<path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>',
+          languages:
+            '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+          filter: '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+          'building-2':
+            '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+          tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+          'arrow-down-wide-narrow':
+            '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/>',
+          'arrow-up-narrow-wide':
+            '<path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/>',
+          'arrow-up': '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+          'arrow-down': '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+          'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+          'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+          'log-out':
+            '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
+          'text-cursor-input':
+            '<path d="M5 4h1a3 3 0 0 1 3 3 3 3 0 0 1 3-3h1"/><path d="M13 20h-1a3 3 0 0 1-3-3 3 3 0 0 1-3 3H5"/><path d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"/><path d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"/><path d="M9 7v10"/>',
+          'volume-2':
+            '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+          'refresh-cw':
+            '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+          'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+          'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+          'skip-forward':
+            '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/>',
+          'trash-2':
+            '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+          'list-checks':
+            '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+          'loader-circle': '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+          'circle-alert':
+            '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+          'external-link':
+            '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+          'file-text':
+            '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+          scale:
+            '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+        };
+        const icon = (name, cls = '') =>
+          `<svg class="ico${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+        const esc = (v) =>
+          String(v).replace(
+            /[&<>"']/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+          );
+
+        // ---------------------------------------------------------------- demo configuration
+        // Feeds mirror the feed configuration: display name, letter mark, colour, category, credit text.
+        // A feed under a licence that requires it (for example CC BY) adds `license: { name, url }`.
+        const FEEDS = [
+          {
+            key: 'nasa-technology',
+            name: 'NASA Technology',
+            mark: 'NT',
+            color: '#245ab8',
+            category: 'Technology',
+            credit: 'Courtesy of NASA.',
+            site: 'https://www.nasa.gov/technology/',
+          },
+          {
+            key: 'nasa-aeronautics',
+            name: 'NASA Aeronautics',
+            mark: 'NA',
+            color: '#0f6f8f',
+            category: 'Science',
+            credit: 'Courtesy of NASA.',
+            site: 'https://www.nasa.gov/aeronautics/',
+          },
+          {
+            key: 'nih-research-matters',
+            name: 'NIH Research Matters',
+            mark: 'NH',
+            color: '#24745a',
+            category: 'Health',
+            credit: 'Courtesy of the National Institutes of Health.',
+            site: 'https://www.nih.gov/news-events/nih-research-matters',
+          },
+          {
+            key: 'nist-news',
+            name: 'NIST News',
+            mark: 'NS',
+            color: '#7945c4',
+            category: 'Technology',
+            credit: 'Courtesy of the National Institute of Standards and Technology.',
+            site: 'https://www.nist.gov/news-events/news',
+          },
+          {
+            key: 'loc-inside-adams',
+            name: 'Inside Adams',
+            mark: 'IA',
+            color: '#a0522d',
+            category: 'History',
+            credit: 'Courtesy of the Library of Congress, Inside Adams blog.',
+            site: 'https://blogs.loc.gov/inside_adams/',
+          },
+        ];
+        const feedByKey = Object.fromEntries(FEEDS.map((f) => [f.key, f]));
+        const CATEGORIES = [...new Set(FEEDS.map((f) => f.category))];
+
+        // The signed-in person; initials come from the account, not from the code.
+        const USER = { name: 'Alex Chen', email: 'alex.chen@example.com' };
+        const initials = USER.name
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+        const TERMS = { version: '1', date: 'November 22, 2026' };
+
+        const MODES = ['Speak', 'Spell', 'Translate'];
+        const MODE_ICONS = ['mic', 'keyboard', 'languages'];
+        const MODE_READY = [false, true, true];
+        const REVIEW_STAGES = [1, 2, 4, 7, 15, 30, null];
+        const BATCH = 20;
+        const MAX_SELECTION_WORDS = 8;
+        const MAX_SELECTION_CHARS = 80;
+        const MAX_BATCH_DELETE = 100;
+        const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+
+        // Fixed clock: every time is a local time in November 2026; "now" is Nov 22, 10:00.
+        const at = (d, t) => ({ d, t });
+        const NOW = at(22, '10:00');
+        const stamp = (x) => x.d * 10000 + Number(x.t.replace(':', ''));
+        const fmtShort = (x) => `Nov ${x.d}, ${x.t}`;
+        const fmtLong = (x) => `Nov ${x.d}, 2026, ${x.t}`;
+
+        // ---------------------------------------------------------------- demo articles
+        // Titles and texts are written for this prototype; they are not copied from the sources.
+        const ARTICLE_ROWS = [
+          [
+            1,
+            'nasa-technology',
+            'Lunar dust shields move from lab benches to field trials',
+            at(22, '09:04'),
+            at(22, '09:40'),
+            null,
+            'Moon dust is fine, sharp and surprisingly sticky.',
+          ],
+          [
+            2,
+            'nasa-aeronautics',
+            'Quieter supersonic flight moves closer to community tests',
+            at(22, '09:03'),
+            null,
+            null,
+            'Engineers are preparing an experimental jet to fly over several towns and record how people hear its softer sonic thump.',
+          ],
+          [
+            3,
+            'nih-research-matters',
+            'Sleep patterns linked to memory in older adults',
+            at(21, '09:05'),
+            at(21, '20:15'),
+            'Lena Morris',
+            'Older adults who kept a regular sleep schedule did better on memory tasks than those whose bedtimes shifted from night to night.',
+          ],
+          [
+            4,
+            'nist-news',
+            'A new clock keeps time with a single trapped ion',
+            at(21, '09:02'),
+            null,
+            null,
+            'A clock built around one charged atom kept time so steadily that it would drift less than a second over billions of years.',
+          ],
+          [
+            5,
+            'loc-inside-adams',
+            'Trade cards: tiny advertisements from the 1880s',
+            at(20, '09:06'),
+            at(21, '08:30'),
+            'Dana Whitfield',
+            'Long before glossy magazines, shopkeepers handed out small printed cards to remind customers of their names and wares.',
+          ],
+          [
+            6,
+            'nasa-technology',
+            'Small satellites test a folding antenna in orbit',
+            at(20, '09:01'),
+            null,
+            null,
+            'A satellite the size of a shoebox unfolded a lightweight antenna that had been packed as tightly as a paper fan.',
+          ],
+          [
+            7,
+            'nist-news',
+            'Better sensors help bridges report their own wear',
+            at(19, '09:04'),
+            null,
+            null,
+            'Bridges carry heavy loads every day, but signs of wear are often hidden inside steel and concrete.',
+          ],
+          [
+            8,
+            'nasa-aeronautics',
+            'Wind tunnel data helps design wings that bend in flight',
+            at(19, '09:02'),
+            null,
+            null,
+            'Researchers spent weeks in a wind tunnel measuring how a long, thin wing twists when air pushes against it.',
+          ],
+          [
+            9,
+            'nih-research-matters',
+            'Gut bacteria may shape how mice respond to stress',
+            at(18, '09:03'),
+            at(18, '21:00'),
+            'Lena Morris',
+            'Mice with certain gut bacteria recovered faster from a stressful situation than mice without them.',
+          ],
+          [
+            10,
+            'nasa-technology',
+            'A 3D-printed engine part survives a long hot-fire test',
+            at(18, '09:01'),
+            null,
+            null,
+            'A rocket engine part made by 3D printing ran for several minutes at full power without cracking.',
+          ],
+          [
+            11,
+            'nist-news',
+            'A reference sample helps labs count microplastics',
+            at(17, '09:05'),
+            null,
+            null,
+            'Labs that count tiny plastic particles in water now have a shared sample to check their methods against.',
+          ],
+          [
+            12,
+            'loc-inside-adams',
+            'How department store catalogs shaped holiday shopping',
+            at(16, '09:07'),
+            null,
+            'Marcus Reed',
+            'Thick holiday catalogs once arrived in homes across the country and changed how families planned their shopping.',
+          ],
+          [
+            13,
+            'nasa-aeronautics',
+            'Drone traffic rules get a trial run over a busy city',
+            at(16, '09:02'),
+            null,
+            null,
+            'Dozens of small drones shared the same airspace in a test of rules that keep them safely apart.',
+          ],
+          [
+            14,
+            'nih-research-matters',
+            'A protein map shows how cells repair damaged DNA',
+            at(15, '09:04'),
+            null,
+            'Priya Natarajan',
+            'Scientists mapped how a group of proteins finds and fixes breaks in DNA.',
+          ],
+          [
+            15,
+            'nasa-technology',
+            'Robotic arm practices refueling a satellite on the ground',
+            at(15, '09:01'),
+            null,
+            null,
+            'A robotic arm practiced connecting a fuel line to a model satellite, a task that usually requires steady human hands.',
+          ],
+          [
+            16,
+            'nist-news',
+            'Quantum light source passes a key reliability test',
+            at(14, '09:03'),
+            null,
+            null,
+            'A device that releases one particle of light at a time worked reliably for hundreds of hours.',
+          ],
+          [
+            17,
+            'nih-research-matters',
+            'Regular walking tied to lower blood pressure',
+            at(13, '09:02'),
+            null,
+            'Priya Natarajan',
+            'People who walked most days of the week had lower blood pressure on average after several years.',
+          ],
+          [
+            18,
+            'nasa-aeronautics',
+            'Electric aircraft motors face a season of endurance runs',
+            at(13, '09:01'),
+            null,
+            null,
+            'Electric motors designed for small aircraft are running for hours at a time to see how they hold up.',
+          ],
+          [
+            19,
+            'loc-inside-adams',
+            'The crowded early history of the paper clip',
+            at(12, '09:06'),
+            null,
+            'Dana Whitfield',
+            'The bent wire clip on your desk has a surprisingly crowded history of patents and claims.',
+          ],
+          [
+            20,
+            'nasa-technology',
+            'Engineers tune software that lets rovers plan their own routes',
+            at(11, '09:02'),
+            null,
+            null,
+            'Software that lets a rover choose its own path is learning to avoid soft sand and sharp rocks.',
+          ],
+          [
+            21,
+            'nist-news',
+            'Measuring how well masks filter fine particles',
+            at(10, '09:04'),
+            null,
+            null,
+            'Researchers measured how much fine dust passes through common types of masks under controlled airflow.',
+          ],
+          [
+            22,
+            'loc-inside-adams',
+            'A century of ledgers from one family business',
+            at(9, '09:05'),
+            null,
+            'Marcus Reed',
+            'A set of handwritten ledgers follows one family store through good years, hard years and changing tastes.',
+          ],
+          [
+            23,
+            'loc-inside-adams',
+            'What old cookbooks reveal about kitchen technology',
+            at(8, '09:03'),
+            null,
+            'Dana Whitfield',
+            'Recipes written a century ago hint at the new stoves, iceboxes and gadgets that were arriving in kitchens.',
+          ],
+        ];
+        const BODIES = {
+          1: [
+            [
+              'Moon dust is fine, sharp and surprisingly sticky.',
+              'It clings to suits, lenses and solar panels, and it can wear down moving parts within days.',
+              'Engineers want equipment that is resilient enough to keep working after long exposure to it.',
+            ],
+            [
+              'One approach uses a thin film of electrodes that pushes charged grains away from a surface.',
+              'In early lab tests, the film cleared most of the dust from a glass panel in under a minute.',
+              'The team then had to adapt the design for vacuum chambers that mimic conditions on the Moon.',
+              'They gradually increased the amount of dust and the length of each test.',
+            ],
+            [
+              'Field trials will take into account temperature swings, uneven ground and the limited power a lander can allocate to cleaning.',
+              'If the shields stay consistent over months, they could sustain longer missions.',
+              'In the long run, the same idea may help keep solar farms on Earth cleaner as well.',
+            ],
+          ],
+          2: [
+            [
+              'Engineers are preparing an experimental jet to fly over several towns and record how people hear its softer sonic thump.',
+              'Older supersonic planes produced a loud boom that rattled windows, so flights over land were restricted.',
+            ],
+            [
+              'The new aircraft has a long, narrow nose and carefully shaped wings that spread out the pressure waves.',
+              'Instead of one sharp boom, people on the ground should hear something closer to a distant car door.',
+              'Volunteers in each town will be asked to describe what they heard and whether it bothered them.',
+            ],
+            [
+              'Microphones placed along the flight path will capture the sound at the same time.',
+              'Researchers will compare the recordings with the survey answers to see how well their models predict real reactions.',
+              'The results could help regulators decide whether quieter supersonic flights should be allowed over land.',
+              'If so, a trip across the country might one day take only a few hours.',
+            ],
+          ],
+          5: [
+            [
+              'Long before glossy magazines, shopkeepers handed out small printed cards to remind customers of their names and wares.',
+              'These trade cards were cheap to produce and easy to keep.',
+              'Many people collected them in albums, so a number of them survive today.',
+            ],
+            [
+              'The cards often showed bright pictures that had little to do with the product.',
+              'A card for a hardware store might feature a kitten, a ship or a famous building.',
+              'On the back, the merchant printed an address, a list of goods and sometimes a short poem.',
+            ],
+            [
+              'Historians use the cards to study how small businesses tried to stand out in crowded towns.',
+              'They also reveal which products were new, from sewing machines to canned food.',
+              'Looking at a full album, you can watch advertising slowly learn to sell a feeling as well as a thing.',
+              'The collection is open to researchers, and many of the cards can be viewed online.',
+            ],
+          ],
+        };
+        const baseArticles = () =>
+          ARTICLE_ROWS.map(([id, feed, title, collected, visited, author, lead]) => ({
+            id,
+            feed,
+            title,
+            collected,
+            visited,
+            author,
+            body: BODIES[id] || [
+              [lead, 'The rest of this article is not part of the prototype data.'],
+            ],
+          }));
+
+        // ---------------------------------------------------------------- demo vocabulary
+        // Progress per mode: round 0-7 and minutes until due (null when new or complete).
+        const p = (round, mins) => ({ round, mins });
+        const NEW = () => [p(0, null), p(0, null), p(0, null)];
+        const baseWords = () => [
+          {
+            id: 1,
+            word: 'resilient',
+            pos: 'adjective',
+            zh: '有适应力的；能迅速恢复的',
+            forms: ['resilient'],
+            examples: [
+              'A resilient city can adapt to unexpected challenges.',
+              'She remained resilient during a difficult first year abroad.',
+            ],
+            options: [
+              '持久的；持续很久的',
+              '有适应力的；能迅速恢复的',
+              '准确的；精确的',
+              '脆弱的；易受损的',
+            ],
+            correct: 1,
+            m: [p(0, null), p(2, -30), p(2, -5)],
+          },
+          {
+            id: 2,
+            word: 'allocate',
+            pos: 'verb',
+            zh: '分配；划拨',
+            forms: ['allocate', 'allocates', 'allocated', 'allocating'],
+            examples: ['The school will allocate more time to reading next term.'],
+            options: ['分配；划拨', '拒绝；回绝', '收集；采集', '修理；修复'],
+            correct: 0,
+            m: [p(0, null), p(2, -20), p(1, 180)],
+          },
+          {
+            id: 3,
+            word: 'in the long run',
+            pos: 'phrase',
+            zh: '从长远来看',
+            forms: ['in the long run'],
+            examples: ['Saving a little each month pays off in the long run.'],
+            options: ['马上；立刻', '偶尔；有时', '从长远来看', '无论如何'],
+            correct: 2,
+            m: NEW(),
+          },
+          {
+            id: 4,
+            word: 'sustain',
+            pos: 'verb',
+            zh: '维持；使持续',
+            forms: ['sustain', 'sustains', 'sustained', 'sustaining'],
+            examples: ['Solar panels can sustain a small research station through the winter.'],
+            options: ['打断；中断', '维持；使持续', '隐藏；遮盖', '比较；对照'],
+            correct: 1,
+            m: [p(0, null), p(2, -1), p(3, -3)],
+          },
+          {
+            id: 5,
+            word: 'underlying',
+            pos: 'adjective',
+            zh: '潜在的；根本的',
+            forms: ['underlying'],
+            examples: ['Engineers studied the underlying reasons for the repeated failures.'],
+            options: ['明亮的；鲜艳的', '临时的；暂时的', '潜在的；根本的', '吵闹的；喧哗的'],
+            correct: 2,
+            m: NEW(),
+          },
+          {
+            id: 6,
+            word: 'gradually',
+            pos: 'adverb',
+            zh: '逐渐地',
+            forms: ['gradually'],
+            examples: ['The river gradually wore a deep channel through the rock.'],
+            options: ['逐渐地', '突然地', '大声地', '准确地'],
+            correct: 0,
+            m: [p(0, null), p(4, 10080), p(3, 2)],
+          },
+          {
+            id: 7,
+            word: 'take into account',
+            pos: 'phrase',
+            zh: '考虑到',
+            forms: [
+              'take into account',
+              'takes into account',
+              'took into account',
+              'taken into account',
+              'taking into account',
+            ],
+            examples: ['Planners must take into account how people actually use the park.'],
+            options: ['忽视；不理会', '考虑到', '提前完成', '轮流做'],
+            correct: 1,
+            m: [p(0, null), p(7, null), p(2, 0.4)],
+          },
+          {
+            id: 8,
+            word: 'perspective',
+            pos: 'noun',
+            zh: '观点；视角',
+            forms: ['perspective', 'perspectives'],
+            examples: ['Living abroad gave him a new perspective on his hometown.'],
+            options: ['距离；间隔', '观点；视角', '工具；器具', '季节；时节'],
+            correct: 1,
+            m: [p(0, null), p(7, null), p(7, null)],
+          },
+          {
+            id: 9,
+            word: 'consistent',
+            pos: 'adjective',
+            zh: '一致的；始终如一的',
+            forms: ['consistent'],
+            examples: ['Her test results have been consistent over the past year.'],
+            options: ['一致的；始终如一的', '昂贵的；高价的', '陌生的；不熟悉的', '狭窄的；窄小的'],
+            correct: 0,
+            m: [p(0, null), p(7, null), p(7, null)],
+          },
+        ];
+
+        // Explanations the demo "AI" returns for words in the articles and examples.
+        const LOOKUPS = {
+          resilient: {
+            word: 'resilient',
+            pos: 'adjective',
+            zh: '有韧性的；经得起损耗的',
+            forms: ['resilient'],
+            examples: [
+              'The new coating keeps the camera resilient in harsh desert conditions.',
+              'Resilient materials return to their shape after being bent or pressed.',
+            ],
+          },
+          coating: {
+            word: 'coating',
+            pos: 'noun',
+            zh: '涂层；覆盖层',
+            forms: ['coating', 'coatings'],
+            examples: [
+              'A thin coating of wax protects the wooden table from water.',
+              'The coating on the lens reduces glare in bright sunlight.',
+            ],
+          },
+          adapt: {
+            word: 'adapt',
+            pos: 'verb',
+            zh: '使适应；调整',
+            forms: ['adapt', 'adapts', 'adapted', 'adapting'],
+            examples: [
+              'Teams often adapt their plans when the weather changes suddenly.',
+              'The cooks had to adapt the recipe for a much smaller oven.',
+            ],
+          },
+          dust: {
+            word: 'dust',
+            pos: 'noun',
+            zh: '灰尘；尘土',
+            forms: ['dust'],
+            examples: [
+              'A layer of dust covered the old piano in the attic.',
+              'Wind carried red dust across the dry fields all afternoon.',
+            ],
+          },
+          sticky: {
+            word: 'sticky',
+            pos: 'adjective',
+            zh: '黏的；黏性的',
+            forms: ['sticky'],
+            examples: [
+              'The jam left a sticky mark on the kitchen table.',
+              'Warm, sticky air made the long walk feel even longer.',
+            ],
+          },
+        };
+        const ALT_EXAMPLES = [
+          'In this situation, {w} is a useful word to remember.',
+          'Teachers often explain {w} with a short story about daily life.',
+        ];
+
+        // ---------------------------------------------------------------- state
+        let s;
+        let timer = null;
+        let noticeTimer = null;
+        let observer = null;
+        let gesture = null;
+        let exampleGesture = null;
+        let suppressExampleLookupUntil = 0;
+        let afterRender = null;
+
+        function freshState() {
+          return {
+            frozen: false,
+            auth: 'member',
+            termsAccepted: true,
+            page: 'articles',
+            back: [],
+            articles: baseArticles(),
+            words: baseWords(),
+            aq: '',
+            sourceValues: [],
+            categoryValues: [],
+            sort: 'collected',
+            dir: -1,
+            loaded: BATCH,
+            loadingMore: false,
+            popover: null,
+            draft: [],
+            accountOpen: false,
+            selectionTool: null,
+            selectionSegment: 0,
+            selectionStart: 0,
+            selectionEnd: 0,
+            articleId: 1,
+            sentence: 0,
+            position: false,
+            playing: false,
+            playMode: null,
+            single: null,
+            speed: 1,
+            queue: [],
+            queueIndex: 0,
+            blocked: false,
+            readerClose: 'back',
+            layers: [],
+            dialog: null,
+            notice: '',
+            tab: 'All',
+            vq: '',
+            roundValues: [[], [], []],
+            vsort: 'word',
+            vdir: 1,
+            vloaded: BATCH,
+            vloadingMore: false,
+            selectMode: false,
+            selectedIds: [],
+            swipeId: null,
+            swipeDrag: null,
+            suppressClickUntil: 0,
+            detailId: 1,
+            detailExample: 0,
+            detailAudio: 'idle',
+            review: null,
+            returnArticles: null,
+            returnVocabulary: null,
+          };
+        }
+
+        // ---------------------------------------------------------------- progress helpers
+        const isComplete = (x) => x.round === REVIEW_STAGES.length;
+        const isNew = (x) => x.round === 0 && x.mins == null;
+        const isDue = (x) => !isComplete(x) && x.mins != null && x.mins <= 0;
+        const roundLabel = (x) => (isComplete(x) ? 'Complete' : 'Round ' + (x.round + 1));
+        function when(x) {
+          if (isComplete(x) || isNew(x)) return '—';
+          return x.mins <= 0 ? 'Due' : duration(x.mins);
+        }
+        function duration(mins) {
+          if (mins < 1) return '< 1 min';
+          if (mins < 60) {
+            const n = Math.ceil(mins);
+            return n + (n === 1 ? ' min' : ' mins');
+          }
+          if (mins < 1440) {
+            const n = Math.ceil(mins / 60);
+            return n + (n === 1 ? ' hour' : ' hours');
+          }
+          const n = Math.ceil(mins / 1440);
+          return n + (n === 1 ? ' day' : ' days');
+        }
+        const progressClass = (x) =>
+          isComplete(x) ? 'complete' : isNew(x) ? 'new' : isDue(x) ? 'now' : '';
+        const wordState = (w) =>
+          w.m.every(isNew) ? 'New' : w.m.every(isComplete) ? 'Archived' : 'Ongoing';
+        function modeCounts(i) {
+          return {
+            due: s.words.filter((w) => isDue(w.m[i])).length,
+            new: s.words.filter((w) => isNew(w.m[i])).length,
+          };
+        }
+        // Red and yellow counts add up only the modes that can be reviewed now (Speak is excluded).
+        function totalCounts() {
+          return MODES.reduce(
+            (sum, _m, i) => {
+              if (!MODE_READY[i]) return sum;
+              const c = modeCounts(i);
+              return { due: sum.due + c.due, new: sum.new + c.new };
+            },
+            { due: 0, new: 0 },
+          );
+        }
+        const badges = (c) =>
+          (c.due ? `<span class="badge">${c.due}</span>` : '') +
+          (c.new ? `<span class="badge new">${c.new}</span>` : '');
+
+        // ---------------------------------------------------------------- text helpers
+        const feedOf = (a) => feedByKey[a.feed];
+        const activeArticle = () => s.articles.find((a) => a.id === s.articleId) || s.articles[0];
+        const sentencesOf = (a) =>
+          a.body.flatMap((para, pi) =>
+            para.map((text, si) => ({ text, start: pi > 0 && si === 0 })),
+          );
+        const bodyText = (a) => a.body.flat().join(' ');
+        const countWords = (text) =>
+          text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length || 0;
+        const countText = (n, noun) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+        const fmtSpeed = (v) => `${v}×`;
+        const sourceMark = (f) =>
+          `<span class="source"><span class="source-mark" style="--mark:${f.color}" aria-hidden="true">${esc(f.mark)}</span><span>${esc(f.name)}</span></span>`;
+
+        function wordMarkup(text, targetForms = []) {
+          const lower = text.toLowerCase();
+          const ranges = [];
+          targetForms.forEach((form) => {
+            const t = form.toLowerCase();
+            let from = 0;
+            let hit;
+            while (t && (hit = lower.indexOf(t, from)) !== -1) {
+              ranges.push([hit, hit + t.length]);
+              from = hit + t.length;
+            }
+          });
+          let offset = 0;
+          return text
+            .split(/(\s+)/)
+            .map((part) => {
+              const start = offset;
+              offset += part.length;
+              if (!part || /^\s+$/.test(part)) return part;
+              const key = part.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+              const marked = ranges.some(([a, b]) => start < b && offset > a);
+              return `<span data-word="${esc(key)}">${marked ? '<mark>' : ''}${esc(part)}${marked ? '</mark>' : ''}</span>`;
+            })
+            .join('');
+        }
+        function formPattern(forms) {
+          const sorted = [...forms]
+            .sort((a, b) => b.length - a.length)
+            .map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+          return new RegExp(`\\b(?:${sorted.join('|')})\\b`, 'gi');
+        }
+        // The hidden target never reaches the page: each occurrence becomes an empty gap.
+        function maskedExample(text, forms) {
+          return text
+            .split(formPattern(forms))
+            .map((piece) => `<span class="selectable">${wordMarkup(piece)}</span>`)
+            .join('<span class="gap" role="img" aria-label="Hidden word"></span>');
+        }
+
+        // ---------------------------------------------------------------- queries
+        function filteredArticles() {
+          const q = s.aq.toLowerCase();
+          const rows = s.articles.filter(
+            (a) =>
+              (!s.sourceValues.length || s.sourceValues.includes(a.feed)) &&
+              (!s.categoryValues.length || s.categoryValues.includes(feedOf(a).category)) &&
+              (!q || q.split(/\s+/).every((term) => bodyText(a).toLowerCase().includes(term))),
+          );
+          const value = (a) =>
+            ({
+              collected: stamp(a.collected),
+              visited: a.visited ? stamp(a.visited) : null,
+              article: a.title,
+              source: feedOf(a).name,
+              category: feedOf(a).category,
+            })[s.sort];
+          return rows.sort((a, b) => {
+            const av = value(a);
+            const bv = value(b);
+            if (av == null || bv == null) return av == null ? (bv == null ? a.id - b.id : 1) : -1;
+            return (typeof av === 'string' ? av.localeCompare(bv) : av - bv) * s.dir || a.id - b.id;
+          });
+        }
+        function filteredWords() {
+          const q = s.vq.toLowerCase();
+          const rows = s.words.filter(
+            (w) =>
+              (s.tab === 'All' || wordState(w) === s.tab) &&
+              (!q || [w.word, w.zh, w.pos, ...w.examples].join(' ').toLowerCase().includes(q)) &&
+              s.roundValues.every(
+                (values, i) =>
+                  !values.length ||
+                  values.includes(isComplete(w.m[i]) ? 'Complete' : String(w.m[i].round + 1)),
+              ),
+          );
+          return rows.sort((a, b) => {
+            if (s.vsort === 'word') return a.word.localeCompare(b.word) * s.vdir || a.id - b.id;
+            const [, kind, idx] = s.vsort.match(/^(round|next)(\d)$/);
+            const pick = (w) => {
+              const x = w.m[Number(idx)];
+              return kind === 'round' ? (isComplete(x) ? null : x.round + 1) : x.mins;
+            };
+            const av = pick(a);
+            const bv = pick(b);
+            if (av == null || bv == null) return av == null ? (bv == null ? a.id - b.id : 1) : -1;
+            return (av - bv) * s.vdir || a.id - b.id;
+          });
+        }
+
+        // ---------------------------------------------------------------- shared pieces
+        function rail() {
+          const c = totalCounts();
+          const onArticles = ['articles', 'reader'].includes(s.page);
+          const onVocabulary = ['vocabulary', 'detail', 'review'].includes(s.page);
+          return `<header class="rail"><div class="brand" aria-label="vexto"><b aria-hidden="true">v</b><span>vexto</span></div><nav aria-label="Main navigation"><button data-page="articles" aria-label="Articles" ${onArticles ? 'aria-current="page"' : ''}>${icon('newspaper')}<span class="nav-text">Articles</span></button><span class="vocabulary-nav"><button data-page="vocabulary" aria-label="Vocabulary, ${c.due} due reviews, ${c.new} new reviews" ${onVocabulary ? 'aria-current="page"' : ''}>${icon('book-open')}<span class="nav-text">Vocabulary</span></button><span class="badges" aria-hidden="true">${badges(c)}</span></span></nav><button class="avatar flat" data-action="account" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="${s.accountOpen}">${esc(initials)}</button></header>`;
+        }
+        const searchBox = (field, placeholder) =>
+          `<form class="search" data-search="${field}" role="search"><input aria-label="${esc(placeholder)}" value="${esc(s[field])}" placeholder="${esc(placeholder)}" enterkeyhint="search"><button type="submit" class="icon" aria-label="Search">${icon('search')}</button></form>`;
+        function loadMore(total, loaded, loading) {
+          if (loading)
+            return `<div class="load-more"><button disabled aria-busy="true">${icon('loader-circle', 'spin')}Loading…</button></div>`;
+          return `<div class="load-more">${loaded < total ? '<button data-action="more">Load more</button>' : '<span class="muted small" role="status">All loaded</span>'}</div>`;
+        }
+        const voiceLabel = () =>
+          '<a class="voice-label" href="#license" data-action="open-license">AI-generated voice</a>';
+        const selectionButton = (context) =>
+          `<button class="icon flat" data-action="select-text" data-selection-context="${context}" aria-label="Select words for lookup">${icon('text-cursor-input')}</button>`;
+
+        function filterValues(key) {
+          if (key === 'source') return s.sourceValues;
+          if (key === 'category') return s.categoryValues;
+          return s.roundValues[Number(key.slice(-1))];
+        }
+        function filterOptions(key) {
+          if (key === 'source') return FEEDS.map((f) => [f.key, f.name]);
+          if (key === 'category') return CATEGORIES.map((c) => [c, c]);
+          return ['1', '2', '3', '4', '5', '6', '7', 'Complete'].map((v) => [
+            v,
+            v === 'Complete' ? v : 'Round ' + v,
+          ]);
+        }
+        const filterLabel = (key) =>
+          key === 'source'
+            ? 'Source'
+            : key === 'category'
+              ? 'Category'
+              : MODES[Number(key.slice(-1))] + ' round';
+        function filterTrigger(key) {
+          const values = filterValues(key);
+          const active = values.length > 0;
+          const glyph =
+            { source: 'building-2', category: 'tag' }[key] || MODE_ICONS[Number(key.slice(-1))];
+          const names = filterOptions(key)
+            .filter(([v]) => values.includes(v))
+            .map(([, label]) => label)
+            .join(', ');
+          return `<span class="column-filter"><button class="filter-trigger ${active ? 'is-filtered' : ''}" data-column-filter="${key}" aria-label="Filter ${filterLabel(key)}${active ? ', ' + esc(names) : ''}" aria-haspopup="dialog" aria-expanded="${s.popover === key}" aria-pressed="${active}">${icon(glyph)}<span class="control-text">${filterLabel(key)}</span>${icon('filter', 'funnel')}</button></span>`;
+        }
+        function sortFields() {
+          if (s.page === 'articles')
+            return [
+              ['collected', 'Collected'],
+              ['visited', 'Last visited'],
+              ['article', 'Article'],
+              ['source', 'Source'],
+              ['category', 'Category'],
+            ];
+          return [
+            ['word', 'Word'],
+            ...MODES.flatMap((m, i) => [
+              ['round' + i, m + ' round'],
+              ['next' + i, m + ' next'],
+            ]),
+          ];
+        }
+        const currentSort = () => (s.page === 'articles' ? [s.sort, s.dir] : [s.vsort, s.vdir]);
+        function sortTrigger() {
+          const [key, dir] = currentSort();
+          const label = sortFields().find((f) => f[0] === key)?.[1] || key;
+          return `<button class="filter-trigger sort-trigger" data-action="sort-options" aria-label="Sort by ${label}, ${dir === 1 ? 'ascending' : 'descending'}" aria-haspopup="dialog" aria-expanded="${s.popover === 'sort'}">${icon(dir === 1 ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow')}</button>`;
+        }
+
+        // ---------------------------------------------------------------- pages outside the shell
+        function signInPage() {
+          return `<div class="doc-page"><div class="center-page"><div class="auth-card"><div class="brand big"><b aria-hidden="true">v</b><span>vexto</span></div><h1>Sign in to vexto</h1><p class="muted">Welcome! Please sign in to continue.</p><button class="google-button" data-action="sign-in"><span class="google-mark" aria-hidden="true">G</span>Continue with Google</button><div class="auth-foot">Secured by Clerk</div></div></div></div>`;
+        }
+        function noAccessPage() {
+          return `<div class="doc-page"><header class="doc-head"><div class="brand"><b aria-hidden="true">v</b><span>vexto</span></div></header><div class="center-page"><h1>No access</h1><p>${esc(USER.email)} isn't on the vexto invitation list.</p><p>Ask the person who runs vexto to invite this Google account, or log out and use another account.</p><button data-action="sign-out">${icon('log-out')}Log out</button></div></div>`;
+        }
+        // The license is shown reflowed for a phone: hard line breaks inside a paragraph become spaces.
+        function licenseBlocks() {
+          const blocks = [];
+          let current = null;
+          const starts =
+            /^(\([a-z]\)|[a-z]\.\s|\d+\.\s|Section [IVX]+:|Attachment A$|Use Restrictions$|END OF TERMS|NOW THEREFORE|You agree not to use)/;
+          document
+            .getElementById('license-text')
+            .textContent.split('\n')
+            .forEach((raw) => {
+              const line = raw.trim();
+              if (!line) {
+                current = null;
+                return;
+              }
+              if (!current || starts.test(line)) {
+                current = { text: line };
+                blocks.push(current);
+              } else current.text += ' ' + line;
+            });
+          return blocks.map((b) => ({
+            ...b,
+            heading:
+              /^(BigScience Open RAIL-M License|Section [IVX]+:|Attachment A$|Use Restrictions$|END OF TERMS)/.test(
+                b.text,
+              ),
+          }));
+        }
+        function useRestrictions() {
+          const blocks = licenseBlocks();
+          const from = blocks.findIndex((b) => b.text.startsWith('You agree not to use'));
+          return {
+            intro: blocks[from].text,
+            items: blocks
+              .slice(from + 1)
+              .filter((b) => /^\([a-m]\)/.test(b.text))
+              .map((b) => [b.text.slice(0, 3), b.text.slice(3).trim()]),
+          };
+        }
+        function termsPage(viewOnly) {
+          const r = useRestrictions();
+          const head = `<header class="doc-head"><div class="brand"><b aria-hidden="true">v</b><span>vexto</span></div>${viewOnly ? `<button class="icon flat" data-action="close-doc" aria-label="Close terms">${icon('x')}</button>` : ''}</header>`;
+          const actions = viewOnly
+            ? ''
+            : `<div class="doc-actions"><button data-action="sign-out">${icon('log-out')}Log out</button><button class="primary" data-action="agree-terms">I agree</button></div>`;
+          return `<div class="doc-page">${head}<div class="doc-body"><h1>Terms of use</h1><p class="small muted">Version ${TERMS.version} · ${TERMS.date}${viewOnly ? ' · Accepted Nov 21, 2026' : ''}</p><p>${viewOnly ? 'You accepted these terms to use vexto.' : 'Please read and accept these terms to use vexto.'}</p><h2>The voice is AI-generated</h2><p>Every voice in vexto, for articles, words and example sentences, is generated by Supertonic 3, an AI text-to-speech model. Supertonic 3 is licensed under the BigScience Open RAIL-M License.</p><a class="doc-link" href="#license" data-action="open-license">${icon('scale')}Read the full license</a><h2>Use restrictions</h2><p>The license requires everyone who uses the model to follow its use restrictions (Attachment A). By using vexto, you agree to them:</p><p>${esc(r.intro)}</p><ol class="restrictions">${r.items.map(([letter, text]) => `<li><span>${esc(letter)}</span><span>${esc(text)}</span></li>`).join('')}</ol><h2>Sharing audio</h2><p>If you share audio from vexto, state clearly that it is machine-generated.</p><h2>Articles</h2><p>Articles come from public sources and are provided for language learning only. They are not medical advice.</p></div>${actions}</div>`;
+        }
+        function licensePage() {
+          const blocks = licenseBlocks();
+          return `<div class="doc-page"><header class="doc-head"><div class="brand"><b aria-hidden="true">v</b><span>vexto</span></div><button class="icon flat" data-action="close-doc" aria-label="Close license">${icon('x')}</button></header><div class="doc-body"><h1>License</h1><p class="muted">The voice in vexto is generated by Supertonic 3, which is licensed under the BigScience Open RAIL-M License. Full text:</p><div class="license-text">${blocks.map((b) => (b.heading ? `<h2>${esc(b.text)}</h2>` : `<p>${esc(b.text)}</p>`)).join('')}</div></div></div>`;
+        }
+
+        // ---------------------------------------------------------------- Articles
+        function articleCard(a) {
+          const f = feedOf(a);
+          return `<article class="item-card article-card" data-article-item="${a.id}"><div class="item-head"><div><button class="article-link" data-read="${a.id}" data-target="card">${esc(a.title)}</button><span class="excerpt">${esc(a.body[0][0])}</span></div><button class="icon" data-play="${a.id}" aria-label="Play ${esc(a.title)}">${icon('play')}</button></div><div class="item-meta">${sourceMark(f)}<span>${esc(f.category)}</span></div><div class="visit-meta"><span>Collected ${fmtShort(a.collected)}</span>${a.visited ? `<span>Last visited ${fmtShort(a.visited)}</span>` : ''}</div></article>`;
+        }
+        function articlesPage() {
+          const rows = filteredArticles();
+          const empty = s.articles.length ? 'No articles match.' : 'No articles yet.';
+          return `<div class="page-head"><h1>Articles</h1><button class="primary icon" data-action="play-all" aria-label="Play all articles" ${rows.length ? '' : 'disabled'}>${icon('play')}</button></div><div class="toolbar">${searchBox('aq', 'Search article text')}<span class="count">${countText(rows.length, 'article')}</span></div><div class="toolbar touch-controls">${filterTrigger('source')}${filterTrigger('category')}${sortTrigger()}</div><div class="grid-frame"><div class="cards">${rows.slice(0, s.loaded).map(articleCard).join('') || `<div class="empty">${empty}</div>`}${rows.length ? loadMore(rows.length, s.loaded, s.loadingMore) : ''}</div></div>`;
+        }
+
+        // ---------------------------------------------------------------- Reader
+        function readerPage() {
+          const a = activeArticle();
+          const f = feedOf(a);
+          const rows = sentencesOf(a);
+          const words = countWords(bodyText(a));
+          const minutes = Math.max(1, Math.ceil((words * 0.4) / 60));
+          const playingArticle = s.playing && s.playMode === 'article';
+          const topLabel = playingArticle
+            ? 'Pause article'
+            : s.single != null
+              ? `Play from sentence ${s.single + 1}`
+              : s.position
+                ? 'Resume article'
+                : 'Play article';
+          const back =
+            s.readerClose === 'x'
+              ? `<div class="detail-controls"><button class="icon flat" data-action="close-article" aria-label="Close article and return to Articles">${icon('x')}</button></div>`
+              : `<div class="page-head"><button class="flat" data-action="close-article">${icon('arrow-left')}Articles</button></div>`;
+          const highlight = s.playing || s.position || s.single != null;
+          const sentences = rows
+            .map((row, i) => {
+              const selected = s.single === i;
+              return `<div class="sentence ${highlight && i === s.sentence ? 'active' : ''} ${row.start ? 'paragraph-start' : ''}" data-sentence-row="${i}"><button data-sentence="${i}" aria-label="${selected ? `Stop sentence ${i + 1} and clear the selection` : `Play sentence ${i + 1}`}">${icon(selected ? 'square' : 'play')}</button><p class="selectable">${wordMarkup(row.text)}</p></div>`;
+            })
+            .join('');
+          const credit =
+            esc(f.credit) +
+            (a.author ? ` By ${esc(a.author)}.` : '') +
+            (f.license ? ` <a href="${esc(f.license.url)}">${esc(f.license.name)}</a>` : '');
+          const attribution = `<footer class="attribution" aria-label="Source">${sourceMark(f)}<p>${credit}</p><div class="attribution-row"><a class="original-link" href="${esc(f.site)}" target="_blank" rel="noopener noreferrer">Original${icon('external-link')}</a><time aria-label="Collected ${fmtLong(a.collected)}">${fmtLong(a.collected)}</time></div></footer>`;
+          return `${back}<article class="reader"><header class="reader-head"><div class="item-meta">${sourceMark(f)}<span>${esc(f.category)}</span></div><h1>${esc(a.title)}</h1><div class="small muted">${words} words · ${minutes} min listening</div><div class="reader-tools"><button class="primary icon" data-action="toggle" aria-label="${topLabel}">${icon(playingArticle ? 'pause' : 'play')}</button>${selectionButton('article')}${voiceLabel()}</div></header><div class="text-area" data-select-scope="article">${sentences}</div>${attribution}${player(a, rows.length)}</article>`;
+        }
+        function player(a, total) {
+          const playingArticle = s.playing && s.playMode === 'article';
+          const inQueue = s.queue.length > 0;
+          const middle = s.blocked
+            ? '<button class="primary continue-button" data-action="continue">Tap to continue</button>'
+            : `<button class="primary icon" data-action="toggle" aria-label="${playingArticle ? 'Pause' : 'Play'} article">${icon(playingArticle ? 'pause' : 'play')}</button><div class="player-track"><span>${esc(a.title)} · ${s.sentence + 1}/${total}</span><input type="range" aria-label="Article progress" min="0" max="${total - 1}" value="${s.sentence}" data-seek></div>`;
+          return `<footer class="player" aria-label="Article player">${middle}<button class="speed-button" data-action="speed" aria-label="Playback speed, ${fmtSpeed(s.speed)}" aria-haspopup="dialog" aria-expanded="${s.popover === 'speed'}">${fmtSpeed(s.speed)}</button>${inQueue ? `<button class="icon flat" data-action="next-article" aria-label="Next article">${icon('skip-forward')}</button>` : ''}</footer>`;
+        }
+
+        // ---------------------------------------------------------------- Explanations
+        function exampleRecord(context, layerIndex = 0) {
+          if (context === 'lookup') {
+            const l = s.layers[layerIndex];
+            return { rows: l.examples, index: l.idx, forms: l.forms };
+          }
+          if (context === 'detail') {
+            const w = detailWord();
+            return {
+              rows: w.examples,
+              index: Math.min(s.detailExample, w.examples.length - 1),
+              forms: w.forms,
+            };
+          }
+          const w = reviewWord();
+          return {
+            rows: w.examples,
+            index: Math.min(s.review.example, w.examples.length - 1),
+            forms: w.forms,
+          };
+        }
+        function examplePanel(context, layerIndex = 0) {
+          const { rows, index, forms } = exampleRecord(context, layerIndex);
+          const reviewing = context === 'review';
+          const hidden = reviewing && s.review.mode !== 'Translate';
+          const data = `data-example-context="${context}" data-example-layer="${layerIndex}"`;
+          let lead = '<span class="small muted">Example</span>';
+          let controls = selectionButton(context === 'lookup' ? 'example' : context);
+          if (reviewing && s.review.mode === 'Spell') {
+            lead = `<div class="example-lead"><button data-action="play-review-example" aria-label="Play the full example">${icon('volume-2')}Play example</button>${voiceLabel()}</div>`;
+          } else if (!reviewing) {
+            controls += `<button class="icon" data-action="play-example" ${data} aria-label="Play example">${icon('volume-2')}</button><button class="icon" data-action="refresh-example" ${data} aria-label="Refresh this example">${icon('refresh-cw')}</button>`;
+          }
+          const text = hidden
+            ? maskedExample(rows[index], forms)
+            : wordMarkup(rows[index], reviewing ? [] : forms);
+          return `<section class="example-carousel" ${data} role="group" aria-label="Examples"><div class="example-actions">${lead}<div class="example-controls">${controls}</div></div><p class="example-text ${hidden ? 'cloze' : 'selectable'}" data-select-scope="${reviewing ? 'review' : 'example'}">${text}</p><button class="icon flat example-arrow example-prev" data-action="example-prev" ${data} aria-label="Previous example" ${index === 0 ? 'disabled' : ''}>${icon('chevron-left')}</button><span class="example-count" role="status" aria-live="polite">${index + 1} / ${rows.length}</span><button class="icon flat example-arrow example-next" data-action="example-next" ${data} aria-label="Next example" ${index === rows.length - 1 ? 'disabled' : ''}>${icon('chevron-right')}</button></section>`;
+        }
+        // While word audio is being generated the label gives way to a status; it returns afterwards.
+        const audioLabel = (audio) =>
+          audio === 'generating'
+            ? '<span class="voice-label" role="status">Generating…</span>'
+            : voiceLabel();
+        const audioError = (audio) =>
+          audio === 'error'
+            ? `<div class="inline-status error" role="alert">${icon('circle-alert')}<span>Audio isn't available right now.</span><button data-action="retry-audio">Retry</button></div>`
+            : '';
+        function playWordButton(action, audio) {
+          return audio === 'generating'
+            ? `<button class="icon flat" data-action="${action}" aria-label="Generating word audio" aria-busy="true">${icon('loader-circle', 'spin')}</button>`
+            : `<button class="icon flat" data-action="${action}" aria-label="Play word">${icon('volume-2')}</button>`;
+        }
+        function floatHTML(layer, n, back) {
+          const depth = s.layers.length - n - 1;
+          const style = back ? ` style="transform:translateX(${-8 * depth}px);z-index:${n}"` : '';
+          const ready = layer.kind === 'ready';
+          const add = layer.saved
+            ? `<button class="icon flat is-saved" data-action="add-word" aria-label="Saved to Vocabulary" aria-pressed="true">${icon('check')}</button>`
+            : `<button class="icon flat" data-action="add-word" aria-label="Add word" ${ready ? '' : 'disabled'}>${icon('plus')}</button>`;
+          let body;
+          if (layer.kind === 'loading') {
+            body = `<div class="float-body" aria-busy="true"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div><div class="skeleton" style="width:28%"></div><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:92%"></div><div class="skeleton" style="width:64%"></div><p class="inline-status" role="status">${icon('loader-circle', 'spin')}Explaining…</p></div>`;
+          } else if (layer.kind === 'error') {
+            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div><div class="inline-status error" role="alert">${icon('circle-alert')}<span>Couldn't explain this.</span><button data-action="retry-lookup">${icon('refresh-cw')}Retry</button></div></div>`;
+          } else {
+            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.word)}</h2>${playWordButton('play-word', layer.audio)}${audioLabel(layer.audio)}</div>${audioError(layer.audio)}<p class="pos">${esc(layer.pos)}</p><p class="meaning">${esc(layer.zh)}</p>${examplePanel('lookup', n)}</div>`;
+          }
+          return `<section class="float ${back ? 'back-layer' : ''}"${style} aria-label="Explanation of ${esc(layer.word || layer.text)}" ${back ? 'inert' : ''}><header class="float-head"><span>Word explanation</span>${add}<button class="icon flat" data-action="close-lookup" aria-label="Close this explanation">${icon('x')}</button></header>${body}</section>`;
+        }
+        function floatHost() {
+          if (!['reader', 'detail', 'review'].includes(s.page)) return '';
+          return `<div class="float-host ${s.page === 'reader' ? 'above-player' : ''}">${s.layers.map((l, n) => floatHTML(l, n, n < s.layers.length - 1)).join('')}</div>`;
+        }
+
+        // ---------------------------------------------------------------- Vocabulary
+        function modeButtons() {
+          return `<div class="mode-buttons">${MODES.map((m, i) => {
+            if (!MODE_READY[i])
+              return `<div class="mode-wrap"><button data-mode="${m}" disabled aria-label="${m}, coming soon">${icon(MODE_ICONS[i])}<span class="soon-text">Coming soon</span></button></div>`;
+            const c = modeCounts(i);
+            return `<div class="mode-wrap"><button data-mode="${m}" ${s.selectMode || s.selectedIds.length ? 'disabled' : ''} aria-label="${m}, ${c.due} due, ${c.new} new">${icon(MODE_ICONS[i])}<span class="mode-text">${m}</span></button><span class="badges" aria-hidden="true">${badges(c)}</span></div>`;
+          }).join('')}</div>`;
+        }
+        function progressGroups(w) {
+          return `<div class="mobile-progress">${w.m.map((x, i) => `<div class="mode-progress" aria-label="${MODES[i]}, ${roundLabel(x)}, ${esc(when(x))}"><span class="progress-mode">${icon(MODE_ICONS[i])}<span class="mode-text">${MODES[i]}</span></span><span>${roundLabel(x)}</span><span class="progress-text ${progressClass(x)}">${esc(when(x))}</span></div>`).join('')}</div>`;
+        }
+        const wordCheckbox = (w) =>
+          `<label class="selection-check" aria-label="Select ${esc(w.word)}"><input type="checkbox" data-select-word="${w.id}" aria-label="Select ${esc(w.word)}" ${s.selectedIds.includes(w.id) ? 'checked' : ''}></label>`;
+        function wordCard(w) {
+          const open = s.swipeId === w.id && !s.selectMode;
+          const drag = s.swipeDrag && s.swipeDrag.id === w.id ? s.swipeDrag.x : null;
+          const front =
+            drag != null ? ` style="transform:translateX(${drag}px);transition:none"` : '';
+          const swipe = s.selectMode
+            ? ''
+            : `<button class="swipe-delete" ${open || drag != null ? '' : 'inert aria-hidden="true"'} data-delete-id="${w.id}" aria-label="Delete ${esc(w.word)}">${icon('trash-2')}Delete</button>`;
+          return `<article class="item-card vocab-card ${s.selectedIds.includes(w.id) ? 'is-selected' : ''} ${open ? 'swipe-open' : ''}" data-vocab-card="${w.id}">${swipe}<div class="card-front"${front}><div class="word-card-heading">${s.selectMode ? wordCheckbox(w) : ''}<div class="word-card-name"><button class="article-link" data-card="${w.id}" data-target="card">${esc(w.word)}</button><div class="small muted word-description">${esc(w.pos)} · ${esc(w.zh)}</div></div></div>${progressGroups(w)}</div></article>`;
+        }
+        function selectionBar(rows) {
+          if (!s.selectMode && !s.selectedIds.length) return '';
+          const all = rows.length && rows.every((w) => s.selectedIds.includes(w.id));
+          return `<div class="selection-bar" role="region" aria-label="Selected words"><div class="select-visible-label"><label class="selection-check"><input type="checkbox" data-select-visible aria-label="Select loaded words" ${all ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label><span>Loaded</span></div><span class="selection-count" role="status">${s.selectedIds.length} selected</span><button class="icon delete-icon" data-action="delete-selected" aria-label="Delete ${s.selectedIds.length} selected words" ${s.selectedIds.length ? '' : 'disabled'}>${icon('trash-2')}</button><button class="icon flat" data-action="clear-selection" aria-label="Cancel selection">${icon('x')}</button></div>`;
+        }
+        function vocabularyPage() {
+          const rows = filteredWords();
+          const shown = rows.slice(0, s.vloaded);
+          const empty = s.words.length
+            ? 'No words match.'
+            : 'No words yet. Select a word while reading to look it up.';
+          return `<div class="page-head"><h1>Vocabulary</h1><button class="icon" data-action="selection-mode" aria-label="${s.selectMode ? 'Finish selecting' : 'Select words'}" aria-pressed="${s.selectMode}">${icon(s.selectMode ? 'x' : 'list-checks')}</button></div>${modeButtons()}<div class="tabs" role="group" aria-label="Word state">${['All', 'New', 'Ongoing', 'Archived'].map((t) => `<button data-tab="${t}" aria-pressed="${s.tab === t}">${t}</button>`).join('')}</div><div class="toolbar">${searchBox('vq', 'Search words, examples, 中文')}<span class="count">${countText(rows.length, 'word')}</span></div><div class="toolbar touch-controls">${[0, 1, 2].map((i) => filterTrigger('round' + i)).join('')}${sortTrigger()}</div>${selectionBar(shown)}<div class="grid-frame"><div class="cards">${shown.map(wordCard).join('') || `<div class="empty">${empty}</div>`}${rows.length ? loadMore(rows.length, s.vloaded, s.vloadingMore) : ''}</div></div>`;
+        }
+        const detailWord = () => s.words.find((w) => w.id === s.detailId) || s.words[0];
+        function detailPage() {
+          const w = detailWord();
+          return `<div class="detail-controls"><button class="icon flat" data-action="close-detail" aria-label="Close word and return to Vocabulary">${icon('x')}</button></div><div class="reader card"><div class="reader-head"><div class="lemma-row"><h2>${esc(w.word)}</h2>${playWordButton('detail-word', s.detailAudio)}${audioLabel(s.detailAudio)}</div>${audioError(s.detailAudio)}<p class="pos">${esc(w.pos)}</p><p class="meaning">${esc(w.zh)}</p></div><div style="padding:16px">${examplePanel('detail')}${progressGroups(w)}</div></div>`;
+        }
+
+        // ---------------------------------------------------------------- Review
+        const modeIndex = (mode) => MODES.indexOf(mode);
+        const reviewWord = () => s.words.find((w) => w.id === s.review.cardId);
+        // Due cards first (earliest due, then id), then new cards (by id); no sessions or daily caps.
+        function nextQuestion(mode) {
+          const i = modeIndex(mode);
+          const due = s.words
+            .filter((w) => isDue(w.m[i]))
+            .sort((a, b) => a.m[i].mins - b.m[i].mins || a.id - b.id);
+          const fresh = s.words.filter((w) => isNew(w.m[i])).sort((a, b) => a.id - b.id);
+          const w = due[0] || fresh[0];
+          if (!w) {
+            const waits = s.words
+              .map((x) => x.m[i])
+              .filter((x) => !isComplete(x) && x.mins > 0)
+              .map((x) => x.mins);
+            return { mode, empty: true, nextDue: waits.length ? Math.min(...waits) : null };
+          }
+          return {
+            mode,
+            cardId: w.id,
+            nextRound: w.m[i].round + 1,
+            example: 0,
+            answer: '',
+            option: null,
+            feedback: null,
+            result: null,
+          };
+        }
+        function reviewPage() {
+          const r = s.review;
+          const top = `<div class="review-controls"><span>${r.mode}</span><button class="icon flat" data-action="close-review" aria-label="Close review and return to Vocabulary">${icon('x')}</button></div>`;
+          if (r.empty) {
+            return `<section class="review">${top}<div class="review-empty" role="status"><p>No reviews due.</p>${r.nextDue != null ? `<p class="muted">Next review in ${duration(r.nextDue)}.</p>` : ''}</div></section>`;
+          }
+          const w = reviewWord();
+          const locked = r.feedback != null;
+          const translate = r.mode === 'Translate';
+          const target = translate
+            ? `<div class="target" lang="en">${esc(w.word)}</div>`
+            : `<div class="target">${esc(w.zh)}</div>`;
+          const input = translate
+            ? `<div class="option-list">${w.options.map((o, i) => `<button data-option="${i}" aria-pressed="${r.option === i}" ${locked ? 'disabled' : ''}><span>${esc(o)}<small>${esc(w.pos)}</small></span></button>`).join('')}</div>`
+            : `<label class="small muted answer-label">Your answer<input class="answer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-answer ${locked ? 'disabled' : ''} value="${esc(r.answer)}"></label>`;
+          const feedback = {
+            correct: ['', r.result],
+            incorrect: [
+              '',
+              `${esc(translate ? w.options[w.correct] : w.word)} · Try again in 10 mins`,
+            ],
+            offline: ['error', 'Not saved. Reconnect to check the result.'],
+            changed: ['warn', 'This word changed on another device.'],
+          }[r.feedback];
+          const button =
+            r.feedback === 'offline'
+              ? `<button class="primary" data-action="retry-submit">${icon('refresh-cw')}Retry</button>`
+              : `<button class="primary" data-action="${locked ? 'next-question' : 'submit-answer'}">${locked ? 'Next' : 'Submit'}${icon('arrow-right')}</button>`;
+          return `<section class="review">${top}<div class="prompt">${target}<p class="pos">${esc(w.pos)}</p>${examplePanel('review')}${input}${feedback ? `<div class="feedback ${feedback[0]}" role="status">${feedback[1]}</div>` : ''}</div><div class="submit-row"><span class="review-counter">Round ${r.nextRound}</span>${button}</div></section>`;
+        }
+
+        // ---------------------------------------------------------------- overlays and dialogs
+        function overlay() {
+          if (s.accountOpen) {
+            return `<section class="compact-popover account-popover" role="dialog" aria-label="Account" data-width="220"><button data-action="open-terms">${icon('file-text')}Terms</button><button data-action="open-license">${icon('scale')}License</button><button data-action="sign-out">${icon('log-out')}Log out</button></section>`;
+          }
+          if (s.selectionTool) return selectionPopover();
+          if (s.popover === 'speed') {
+            return `<section class="compact-popover speed-popover" role="dialog" aria-label="Playback speed" data-width="200"><div class="popover-title"><strong>Speed</strong><button class="icon flat" data-action="cancel-column" aria-label="Close speed">${icon('x')}</button></div><div class="sort-options">${SPEEDS.map((v) => `<label><input type="radio" name="speed" data-speed-choice="${v}" ${s.speed === v ? 'checked' : ''}><span>${fmtSpeed(v)}</span></label>`).join('')}</div></section>`;
+          }
+          if (s.popover === 'sort') {
+            const [key, dir] = currentSort();
+            return `<section class="compact-popover sort-popover" role="dialog" aria-label="Sort"><div class="popover-title"><strong>Sort</strong><button class="icon flat" data-action="cancel-column" aria-label="Close sort">${icon('x')}</button></div><div class="sort-options">${sortFields()
+              .map(
+                ([k, label]) =>
+                  `<label><input type="radio" name="sort" data-sort-choice="${k}" ${key === k ? 'checked' : ''}><span>${label}</span></label>`,
+              )
+              .join(
+                '',
+              )}</div><div class="sort-direction"><button data-order="1" aria-pressed="${dir === 1}">${icon('arrow-up')}Ascending</button><button data-order="-1" aria-pressed="${dir === -1}">${icon('arrow-down')}Descending</button></div></section>`;
+          }
+          if (!s.popover) return '';
+          const key = s.popover;
+          const marks = key === 'source';
+          return `<section class="compact-popover filter-popover" role="dialog" aria-label="Filter ${filterLabel(key)}"><div class="popover-title"><strong>${filterLabel(key)}</strong><button class="icon flat" data-action="cancel-column" aria-label="Close filter">${icon('x')}</button></div><div class="filter-options">${filterOptions(
+            key,
+          )
+            .map(
+              ([v, label]) =>
+                `<label><input type="checkbox" data-filter-choice="${esc(v)}" ${s.draft.includes(v) ? 'checked' : ''}>${marks ? sourceMark(feedByKey[v]) : `<span>${esc(label)}</span>`}</label>`,
+            )
+            .join(
+              '',
+            )}</div><div class="filter-popover-actions"><button data-action="clear-column">Clear</button><button class="primary" data-action="apply-column">Apply</button></div></section>`;
+        }
+        function selectionSegments() {
+          if (s.selectionTool === 'article') return sentencesOf(activeArticle()).map((r) => r.text);
+          if (s.selectionTool === 'example') {
+            const n = s.layers.length - 1;
+            const { rows, index } = exampleRecord('lookup', n);
+            return [rows[index]];
+          }
+          if (s.selectionTool === 'detail') {
+            const { rows, index } = exampleRecord('detail');
+            return [rows[index]];
+          }
+          const { rows, index, forms } = exampleRecord('review');
+          return s.review.mode === 'Translate'
+            ? [rows[index]]
+            : rows[index].split(formPattern(forms)).filter((t) => t.trim());
+        }
+        function selectionPopover() {
+          const segments = selectionSegments();
+          const tokens = (segments[s.selectionSegment] || '').split(/\s+/).filter(Boolean);
+          const options = (selected, disabledBelow) =>
+            tokens
+              .map(
+                (t, i) =>
+                  `<option value="${i}" ${selected === i ? 'selected' : ''} ${i < disabledBelow ? 'disabled' : ''}>${esc(t)}</option>`,
+              )
+              .join('');
+          return `<section class="compact-popover selection-popover" role="dialog" aria-label="Select words"><div class="popover-title"><strong>Select words</strong><button class="icon flat" data-action="close-selection" aria-label="Close selection">${icon('x')}</button></div>${segments.length > 1 ? `<label class="select-field">Sentence<select data-selection-segment>${segments.map((t, i) => `<option value="${i}" ${s.selectionSegment === i ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : ''}<div class="selection-fields"><label class="select-field">From<select data-selection-start>${options(s.selectionStart, 0)}</select></label><label class="select-field">To<select data-selection-end>${options(s.selectionEnd, s.selectionStart)}</select></label></div><button class="primary" data-action="lookup-chosen">Look up</button></section>`;
+        }
+        function dialogHTML() {
+          const d = s.dialog;
+          if (!d) return '';
+          if (d.kind === 'delete') {
+            const entries = filteredWords().filter((w) => d.ids.includes(w.id));
+            const names =
+              entries
+                .slice(0, 3)
+                .map((w) => w.word)
+                .join(', ') + (entries.length > 3 ? ` +${entries.length - 3}` : '');
+            return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">${entries.length === 1 ? 'Delete word?' : `Delete ${entries.length} words?`}</h2><p>${esc(names)}. Review progress will also be deleted.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="danger" data-action="confirm-dialog">Delete</button></div></dialog>`;
+          }
+          const layer = s.layers[d.layer];
+          const saved = savedCardFor(layer);
+          const column = (title, cls, meaning, examples) =>
+            `<section class="${cls}"><h3>${title}</h3><p class="meaning">${esc(meaning)}</p><ol>${examples.map((e) => `<li>${esc(e)}</li>`).join('')}</ol></section>`;
+          return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">Replace saved word?</h2><p class="muted" style="margin:6px 0 0">${esc(saved.word)} · ${esc(saved.pos)}</p><div class="compare">${column('Saved', '', saved.zh, saved.examples)}${column('New', 'is-new', layer.zh, layer.examples)}</div><p>Review progress stays the same.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="primary" data-action="confirm-dialog">Replace</button></div></dialog>`;
+        }
+        const savedCardFor = (layer) =>
+          s.words.find(
+            (w) => w.word.toLowerCase() === (layer.word || '').toLowerCase() && w.pos === layer.pos,
+          );
+
+        function positionOverlay() {
+          const panel = app.querySelector('.compact-popover');
+          if (!panel) return;
+          const selector = s.accountOpen
+            ? '[data-action="account"]'
+            : s.selectionTool
+              ? `[data-selection-context="${s.selectionTool}"]`
+              : s.popover === 'sort'
+                ? '[data-action="sort-options"]'
+                : s.popover === 'speed'
+                  ? '[data-action="speed"]'
+                  : `[data-column-filter="${s.popover}"]`;
+          const trigger = [...app.querySelectorAll(selector)].find(
+            (el) => el.getBoundingClientRect().width > 0,
+          );
+          if (!trigger) return;
+          const cr = app.getBoundingClientRect();
+          const tr = trigger.getBoundingClientRect();
+          const margin = 12;
+          const width = Math.max(
+            0,
+            Math.min(Number(panel.dataset.width || 280), cr.width - 2 * margin),
+          );
+          panel.style.width = width + 'px';
+          panel.style.maxHeight = Math.max(100, window.innerHeight - 24) + 'px';
+          panel.style.overflowY = 'auto';
+          const height = panel.getBoundingClientRect().height;
+          const left = Math.max(
+            margin,
+            Math.min(tr.right - cr.left - width, cr.width - width - margin),
+          );
+          let top = tr.bottom - cr.top + 6;
+          const visibleBottom = Math.min(cr.bottom, window.innerHeight) - cr.top - margin;
+          if (top + height > visibleBottom && tr.top - cr.top - height - 6 >= margin)
+            top = tr.top - cr.top - height - 6;
+          panel.style.left = left + 'px';
+          panel.style.top = top + 'px';
+        }
+
+        // ---------------------------------------------------------------- render
+        function pageBody() {
+          if (s.page === 'reader') return readerPage();
+          if (s.page === 'vocabulary') return vocabularyPage();
+          if (s.page === 'detail') return detailPage();
+          if (s.page === 'review') return reviewPage();
+          return articlesPage();
+        }
+        // The license page is public; everything else needs a member who accepted the current terms.
+        function render() {
+          observer?.disconnect();
+          let html;
+          if (s.page === 'license') html = licensePage();
+          else if (s.auth === 'signedout') html = signInPage();
+          else if (s.auth === 'notmember') html = noAccessPage();
+          else if (!s.termsAccepted) html = termsPage(false);
+          else if (s.page === 'terms') html = termsPage(true);
+          else
+            html = `${rail()}<main class="main ${s.page === 'reader' ? 'is-reader' : ''}">${pageBody()}</main>${floatHost()}`;
+          app.innerHTML = `${html}<div class="overlay-host">${overlay()}</div><div class="notice" role="status" aria-live="polite">${esc(s.notice)}</div>${dialogHTML()}`;
+          positionOverlay();
+          const dialog = app.querySelector('dialog');
+          if (dialog) {
+            dialog.addEventListener('cancel', () => {
+              s.dialog = null;
+              render();
+            });
+            dialog.showModal();
+            dialog.querySelector('[data-action="cancel-dialog"]').focus();
+          }
+          autoLoad();
+          if (afterRender) {
+            const fn = afterRender;
+            afterRender = null;
+            fn();
+          }
+        }
+        // Loading the next batch when Load more scrolls into view is an enhancement; the button stays.
+        function autoLoad() {
+          if (
+            s.frozen ||
+            s.selectMode ||
+            !globalThis.IntersectionObserver ||
+            !['articles', 'vocabulary'].includes(s.page)
+          )
+            return;
+          const more = app.querySelector('[data-action="more"]');
+          if (!more) return;
+          observer = new IntersectionObserver(
+            (entries) => {
+              if (entries.some((e) => e.isIntersecting)) {
+                observer.disconnect();
+                loadNextBatch(false);
+              }
+            },
+            { rootMargin: '0px 0px 80px 0px' },
+          );
+          observer.observe(more);
+        }
+        function notify(text) {
+          s.notice = text;
+          const el = app.querySelector('.notice');
+          if (el) el.textContent = text;
+          clearTimeout(noticeTimer);
+          if (text && !s.frozen) noticeTimer = setTimeout(() => notify(''), 3500);
+        }
+        function focusVisible(selector) {
+          const el = [...app.querySelectorAll(selector)].find(
+            (x) => x.getBoundingClientRect().width > 0,
+          );
+          el?.focus({ preventScroll: true });
+        }
+
+        // ---------------------------------------------------------------- behaviour: lists
+        function loadNextBatch(manual) {
+          const vocab = s.page === 'vocabulary';
+          const before = vocab ? s.vloaded : s.loaded;
+          if (vocab) s.vloadingMore = true;
+          else s.loadingMore = true;
+          render();
+          setTimeout(() => {
+            if (vocab) {
+              s.vloadingMore = false;
+              s.vloaded += BATCH;
+            } else {
+              s.loadingMore = false;
+              s.loaded += BATCH;
+            }
+            render();
+            notify('More records loaded.');
+            if (manual)
+              app
+                .querySelectorAll('.cards [data-read], .cards [data-card]')
+                [before]?.focus({ preventScroll: true });
+          }, 600);
+        }
+        function articleContext() {
+          return {
+            aq: s.aq,
+            sourceValues: [...s.sourceValues],
+            categoryValues: [...s.categoryValues],
+            sort: s.sort,
+            dir: s.dir,
+            loaded: s.loaded,
+            scrollY: window.scrollY,
+          };
+        }
+        function vocabularyContext() {
+          return {
+            tab: s.tab,
+            vq: s.vq,
+            roundValues: s.roundValues.map((v) => [...v]),
+            vsort: s.vsort,
+            vdir: s.vdir,
+            vloaded: s.vloaded,
+            selectedIds: [...s.selectedIds],
+            selectMode: s.selectMode,
+            scrollY: window.scrollY,
+          };
+        }
+        function restore(saved, focusSelector) {
+          const { scrollY, ...query } = saved || {};
+          Object.assign(s, query);
+          render();
+          focusVisible(focusSelector);
+          window.scrollTo({ top: scrollY || 0, behavior: 'instant' });
+        }
+        function goPage(page) {
+          s.layers = [];
+          s.popover = null;
+          s.accountOpen = false;
+          s.selectionTool = null;
+          s.selectMode = false;
+          s.selectedIds = [];
+          s.swipeId = null;
+          if (page === 'vocabulary') {
+            s.vq = '';
+            s.vsort = 'word';
+            s.vdir = 1;
+            s.vloaded = BATCH;
+          }
+          s.page = page;
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+        function openDoc(page) {
+          s.back.push(s.page);
+          s.accountOpen = false;
+          s.page = page;
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+        function openArticle(id, keepQueue = false) {
+          if (s.page === 'articles') s.returnArticles = articleContext();
+          if (!keepQueue) {
+            s.queue = [];
+            stopPlayback();
+          }
+          s.page = 'reader';
+          s.articleId = id;
+          s.sentence = 0;
+          s.position = false;
+          s.single = null;
+          s.layers = [];
+          s.blocked = false;
+          // The visit is recorded when the reader opens.
+          activeArticle().visited = NOW;
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+        function openWord(id) {
+          if (s.page !== 'vocabulary' || Date.now() < s.suppressClickUntil) return;
+          if (s.selectMode) {
+            toggleWordSelection(id, !s.selectedIds.includes(id));
+            return;
+          }
+          s.returnVocabulary = vocabularyContext();
+          s.detailId = id;
+          s.detailExample = 0;
+          s.detailAudio = 'idle';
+          s.page = 'detail';
+          s.layers = [];
+          s.swipeId = null;
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          focusVisible('[data-action="close-detail"]');
+        }
+        function toggleWordSelection(id, checked) {
+          if (checked && !s.selectedIds.includes(id) && s.selectedIds.length >= MAX_BATCH_DELETE) {
+            render();
+            notify('Select up to 100 words at a time.');
+            return;
+          }
+          s.selectedIds = checked
+            ? [...new Set([...s.selectedIds, id])]
+            : s.selectedIds.filter((x) => x !== id);
+          s.swipeId = null;
+          render();
+          focusVisible(`[data-select-word="${id}"]`);
+        }
+        function requestDelete(ids) {
+          s.dialog = { kind: 'delete', ids: [...new Set(ids)] };
+          render();
+        }
+        function commitDelete() {
+          const ids = new Set(s.dialog.ids);
+          const count = s.words.filter((w) => ids.has(w.id)).length;
+          s.words = s.words.filter((w) => !ids.has(w.id));
+          s.dialog = null;
+          s.selectedIds = [];
+          s.selectMode = false;
+          s.swipeId = null;
+          render();
+          notify(`${count} ${count === 1 ? 'word' : 'words'} deleted.`);
+        }
+
+        // ---------------------------------------------------------------- behaviour: playback
+        function stopPlayback() {
+          s.playing = false;
+          s.playMode = null;
+          clearTimeout(timer);
+        }
+        function startArticle(from) {
+          s.sentence = from;
+          s.position = true;
+          s.single = null;
+          s.playing = true;
+          s.playMode = 'article';
+          s.blocked = false;
+          render();
+          schedule();
+          updateMediaSession();
+        }
+        // A sentence's own button plays only that sentence; pressing it again stops and clears the selection.
+        function playSentence(i) {
+          if (s.single === i) {
+            stopPlayback();
+            s.single = null;
+            s.position = false;
+            s.sentence = 0;
+            render();
+            return;
+          }
+          s.single = i;
+          s.sentence = i;
+          s.playing = true;
+          s.playMode = 'sentence';
+          render();
+          schedule();
+        }
+        // Simulated clock: each sentence lasts 1.8 s at 1×.
+        function schedule() {
+          clearTimeout(timer);
+          if (!s.playing) return;
+          timer = setTimeout(() => {
+            if (s.playMode === 'sentence') {
+              s.playing = false;
+              s.playMode = null;
+              render();
+              return;
+            }
+            const total = sentencesOf(activeArticle()).length;
+            if (s.sentence < total - 1) {
+              s.sentence++;
+              if (s.page === 'reader') {
+                render();
+                const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+                app
+                  .querySelector(`[data-sentence-row="${s.sentence}"]`)
+                  ?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+              }
+              schedule();
+            } else nextArticle();
+          }, 1800 / s.speed);
+        }
+        // In the foreground an article end returns to the list, then the next article opens after 500 ms.
+        function nextArticle() {
+          clearTimeout(timer);
+          if (s.queue.length && s.queueIndex + 1 < s.queue.length) {
+            s.queueIndex++;
+            const id = s.queue[s.queueIndex];
+            const position = filteredArticles().findIndex((a) => a.id === id);
+            if (position >= s.loaded) s.loaded = Math.ceil((position + 1) / BATCH) * BATCH;
+            s.page = 'articles';
+            s.layers = [];
+            s.playing = false;
+            render();
+            timer = setTimeout(() => {
+              openArticle(id, true);
+              startArticle(0);
+            }, 500);
+          } else {
+            stopPlayback();
+            s.queue = [];
+            s.page = 'articles';
+            s.layers = [];
+            render();
+            notify('Playback finished.');
+          }
+        }
+        function updateMediaSession() {
+          if (!('mediaSession' in navigator) || !globalThis.MediaMetadata) return;
+          const a = activeArticle();
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: a.title,
+            artist: feedOf(a).name,
+            album: 'vexto',
+          });
+          navigator.mediaSession.setActionHandler('play', () => {
+            if (!s.playing) startArticle(s.sentence);
+          });
+          navigator.mediaSession.setActionHandler('pause', () => {
+            stopPlayback();
+            render();
+          });
+          navigator.mediaSession.setActionHandler(
+            'nexttrack',
+            s.queue.length ? () => nextArticle() : null,
+          );
+        }
+        // Word and example audio pause the article; the article does not resume by itself.
+        function pauseForWordAudio() {
+          if (s.playing) {
+            stopPlayback();
+            render();
+          }
+        }
+
+        // ---------------------------------------------------------------- behaviour: lookups
+        function explain(text) {
+          const key = text.toLowerCase();
+          const card = s.words.find((w) => w.forms.includes(key));
+          const found =
+            LOOKUPS[key] ||
+            (card && {
+              word: card.word,
+              pos: card.pos,
+              zh: card.zh,
+              forms: card.forms,
+              examples: [...card.examples],
+            });
+          return (
+            found || {
+              word: text,
+              pos: 'phrase',
+              zh: '所选词语在当前句子中的含义',
+              forms: [key],
+              examples: ALT_EXAMPLES.map((e) => e.replace('{w}', text)),
+            }
+          );
+        }
+        function openLookup(raw) {
+          const text = raw.trim().replace(/^[\s.,;:!?“”"']+|[\s.,;:!?“”"']+$/g, '');
+          if (!text) return;
+          if (text.split(/\s+/).length > MAX_SELECTION_WORDS || text.length > MAX_SELECTION_CHARS) {
+            notify('Select up to 8 words.');
+            return;
+          }
+          const layer = { kind: 'loading', text, idx: 0, audio: 'idle', saved: false };
+          s.layers.push(layer);
+          render();
+          setTimeout(() => {
+            Object.assign(layer, explain(text), { kind: 'ready' });
+            if (s.layers.includes(layer)) render();
+          }, 700);
+        }
+        function addWord() {
+          const layer = s.layers.at(-1);
+          if (!layer || layer.kind !== 'ready' || layer.saved) return;
+          if (savedCardFor(layer)) {
+            s.dialog = { kind: 'replace', layer: s.layers.length - 1 };
+            render();
+            return;
+          }
+          s.words.push({
+            id: Math.max(0, ...s.words.map((w) => w.id)) + 1,
+            word: layer.word,
+            pos: layer.pos,
+            zh: layer.zh,
+            forms: layer.forms,
+            examples: [...layer.examples],
+            options: [layer.zh, '拒绝；回绝', '收集；采集', '修理；修复'],
+            correct: 0,
+            m: NEW(),
+          });
+          layer.saved = true;
+          render();
+          notify('Saved to Vocabulary.');
+        }
+        function confirmReplace() {
+          const layer = s.layers[s.dialog.layer];
+          const card = savedCardFor(layer);
+          card.zh = layer.zh;
+          card.examples = [...layer.examples];
+          card.forms = [...layer.forms];
+          layer.saved = true;
+          s.dialog = null;
+          render();
+          notify('Saved word replaced. Review progress is unchanged.');
+        }
+        function playWordAudio(target) {
+          pauseForWordAudio();
+          if (target === 'detail') s.detailAudio = 'generating';
+          else s.layers.at(-1).audio = 'generating';
+          render();
+          setTimeout(() => {
+            if (target === 'detail') s.detailAudio = 'idle';
+            else if (s.layers.at(-1)) s.layers.at(-1).audio = 'idle';
+            render();
+          }, 1200);
+        }
+        function moveExample(context, layer, delta) {
+          const { rows, index } = exampleRecord(context, layer);
+          const next = Math.max(0, Math.min(rows.length - 1, index + delta));
+          if (next === index) return;
+          if (context === 'review') {
+            const input = app.querySelector('[data-answer]');
+            if (input) s.review.answer = input.value;
+            s.review.example = next;
+          } else if (context === 'detail') s.detailExample = next;
+          else s.layers[layer].idx = next;
+          s.selectionTool = null;
+          render();
+          notify(`Example ${next + 1} of ${rows.length}`);
+        }
+        // Refresh replaces only the visible example and keeps the others.
+        function refreshExample(context, layer) {
+          const { index } = exampleRecord(context, layer);
+          const owner = context === 'detail' ? detailWord() : s.layers[layer];
+          const current = owner.examples[index];
+          owner.examples = [...owner.examples];
+          owner.examples[index] = ALT_EXAMPLES.map((e) => e.replace('{w}', owner.word)).find(
+            (e) => e !== current,
+          );
+          render();
+        }
+
+        // ---------------------------------------------------------------- behaviour: review
+        function startReview(mode) {
+          if (s.page !== 'vocabulary' || s.selectMode || s.selectedIds.length) return;
+          s.returnVocabulary = vocabularyContext();
+          stopPlayback();
+          s.popover = null;
+          s.layers = [];
+          s.page = 'review';
+          s.review = nextQuestion(mode);
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }
+        const normalise = (t) => t.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+        function submitAnswer() {
+          const r = s.review;
+          const w = reviewWord();
+          const i = modeIndex(r.mode);
+          if (r.mode === 'Spell') {
+            r.answer = app.querySelector('[data-answer]')?.value || '';
+            if (!r.answer.trim()) {
+              notify('Enter your answer.');
+              return;
+            }
+          } else if (r.option == null) {
+            notify('Select an option.');
+            return;
+          }
+          if (!navigator.onLine) {
+            r.feedback = 'offline';
+            render();
+            return;
+          }
+          const correct =
+            r.mode === 'Spell' ? w.forms.includes(normalise(r.answer)) : r.option === w.correct;
+          const x = w.m[i];
+          if (correct) {
+            const wait = REVIEW_STAGES[x.round];
+            x.round += 1;
+            x.mins = wait == null ? null : wait * 1440;
+            r.result =
+              wait == null
+                ? 'Correct · Complete'
+                : `Correct · Next review in ${duration(wait * 1440)}`;
+          } else {
+            x.round = Math.max(0, x.round - 1);
+            x.mins = 10;
+          }
+          r.feedback = correct ? 'correct' : 'incorrect';
+          render();
+        }
+
+        // ---------------------------------------------------------------- events
+        const ACTIONS = {
+          account: () => {
+            s.accountOpen = !s.accountOpen;
+            s.popover = null;
+            s.selectionTool = null;
+            render();
+            focusVisible('.account-popover button');
+          },
+          'open-terms': () => openDoc('terms'),
+          'open-license': () => openDoc('license'),
+          'close-doc': () => {
+            s.page = s.back.pop() || 'articles';
+            render();
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          },
+          'agree-terms': () => {
+            s.termsAccepted = true;
+            s.page = 'articles';
+            render();
+          },
+          'sign-out': () => {
+            stopPlayback();
+            Object.assign(s, freshState(), { auth: 'signedout', frozen: s.frozen });
+            render();
+          },
+          'sign-in': () => {
+            s.auth = 'member';
+            s.page = 'articles';
+            render();
+          },
+          'sort-options': () => {
+            s.popover = s.popover === 'sort' ? null : 'sort';
+            s.accountOpen = false;
+            render();
+          },
+          speed: () => {
+            s.popover = s.popover === 'speed' ? null : 'speed';
+            render();
+          },
+          'clear-column': () => {
+            s.draft = [];
+            render();
+          },
+          'cancel-column': () => {
+            s.popover = null;
+            render();
+          },
+          'apply-column': () => {
+            const key = s.popover;
+            const values = s.draft.length === filterOptions(key).length ? [] : [...s.draft];
+            if (key === 'source') s.sourceValues = values;
+            else if (key === 'category') s.categoryValues = values;
+            else s.roundValues[Number(key.slice(-1))] = values;
+            s.popover = null;
+            s.loaded = BATCH;
+            s.vloaded = BATCH;
+            render();
+            focusVisible(`[data-column-filter="${key}"]`);
+          },
+          more: () => loadNextBatch(true),
+          'play-all': () => {
+            s.queue = filteredArticles().map((a) => a.id);
+            s.queueIndex = 0;
+            if (s.queue.length) {
+              openArticle(s.queue[0], true);
+              startArticle(0);
+            }
+          },
+          // The top play button continues from the selected sentence, else from the paused position.
+          toggle: () => {
+            if (s.playing && s.playMode === 'article') {
+              stopPlayback();
+              render();
+              return;
+            }
+            startArticle(s.single ?? (s.position ? s.sentence : 0));
+          },
+          continue: () => startArticle(s.sentence),
+          'next-article': () => nextArticle(),
+          'close-article': () => {
+            s.layers = [];
+            s.page = 'articles';
+            restore(s.returnArticles, `[data-read="${s.articleId}"]`);
+          },
+          'select-text': (b) => {
+            s.selectionTool = b.dataset.selectionContext;
+            s.selectionSegment = 0;
+            s.selectionStart = 0;
+            s.selectionEnd = 0;
+            s.accountOpen = false;
+            s.popover = null;
+            render();
+          },
+          'close-selection': () => {
+            s.selectionTool = null;
+            render();
+          },
+          'lookup-chosen': () => {
+            const tokens = selectionSegments()[s.selectionSegment].split(/\s+/).filter(Boolean);
+            s.selectionTool = null;
+            openLookup(tokens.slice(s.selectionStart, s.selectionEnd + 1).join(' '));
+          },
+          'close-lookup': () => {
+            s.layers.pop();
+            render();
+          },
+          'add-word': () => addWord(),
+          'retry-lookup': () => {
+            const l = s.layers.at(-1);
+            l.kind = 'loading';
+            render();
+            setTimeout(() => {
+              Object.assign(l, explain(l.text), { kind: 'ready' });
+              render();
+            }, 700);
+          },
+          'play-word': () => playWordAudio('lookup'),
+          'detail-word': () => playWordAudio('detail'),
+          'retry-audio': () => playWordAudio(s.page === 'detail' ? 'detail' : 'lookup'),
+          'play-example': () => pauseForWordAudio(),
+          'play-review-example': () => pauseForWordAudio(),
+          'refresh-example': (b) =>
+            refreshExample(b.dataset.exampleContext, Number(b.dataset.exampleLayer)),
+          'example-prev': (b) =>
+            moveExample(b.dataset.exampleContext, Number(b.dataset.exampleLayer), -1),
+          'example-next': (b) =>
+            moveExample(b.dataset.exampleContext, Number(b.dataset.exampleLayer), 1),
+          'cancel-dialog': () => {
+            s.dialog = null;
+            render();
+          },
+          'confirm-dialog': () => (s.dialog.kind === 'delete' ? commitDelete() : confirmReplace()),
+          'selection-mode': () => {
+            s.selectMode = !s.selectMode;
+            s.selectedIds = [];
+            s.swipeId = null;
+            render();
+          },
+          'clear-selection': () => {
+            s.selectMode = false;
+            s.selectedIds = [];
+            render();
+            focusVisible('[data-action="selection-mode"]');
+          },
+          'delete-selected': () => requestDelete(s.selectedIds),
+          'close-detail': () => {
+            s.layers = [];
+            s.page = 'vocabulary';
+            restore(s.returnVocabulary, `[data-card="${s.detailId}"]`);
+          },
+          'close-review': () => {
+            const mode = s.review.mode;
+            s.layers = [];
+            s.page = 'vocabulary';
+            restore(s.returnVocabulary, `[data-mode="${mode}"]`);
+          },
+          'submit-answer': () => submitAnswer(),
+          'retry-submit': () => {
+            s.review.feedback = null;
+            submitAnswer();
+          },
+          'next-question': () => {
+            s.layers = [];
+            s.review = nextQuestion(s.review.mode);
+            render();
+          },
+        };
+
+        app.addEventListener('click', (e) => {
+          const link = e.target.closest('a[data-action]');
+          if (link) {
+            e.preventDefault();
+            ACTIONS[link.dataset.action]?.(link);
+            return;
+          }
+          const b = e.target.closest('button');
+          if (!b) {
+            cardTap(e);
+            return;
+          }
+          if (b.disabled) return;
+          const d = b.dataset;
+          if (Date.now() < s.suppressClickUntil && (d.card || d.deleteId)) return;
+          if (d.page) goPage(d.page);
+          else if (d.mode) startReview(d.mode);
+          else if (d.tab) {
+            s.tab = d.tab;
+            s.vloaded = BATCH;
+            s.selectedIds = [];
+            render();
+          } else if (d.read) openArticle(Number(d.read));
+          else if (d.play) {
+            const rows = filteredArticles();
+            const start = rows.findIndex((a) => a.id === Number(d.play));
+            s.queue = rows.slice(start).map((a) => a.id);
+            s.queueIndex = 0;
+            openArticle(Number(d.play), true);
+            startArticle(0);
+          } else if (d.card) openWord(Number(d.card));
+          else if (d.deleteId) requestDelete([Number(d.deleteId)]);
+          else if (d.sentence) playSentence(Number(d.sentence));
+          else if (d.option) {
+            s.review.option = Number(d.option);
+            render();
+          } else if (d.columnFilter) {
+            const key = d.columnFilter;
+            s.accountOpen = false;
+            s.popover = s.popover === key ? null : key;
+            s.draft = [...filterValues(key)];
+            render();
+          } else if (d.order) {
+            if (s.page === 'articles') {
+              s.dir = Number(d.order);
+              s.loaded = BATCH;
+            } else {
+              s.vdir = Number(d.order);
+              s.vloaded = BATCH;
+            }
+            render();
+          } else if (d.action) ACTIONS[d.action]?.(b);
+        });
+        // The whole card opens the article or word; its own buttons and checkboxes act on their own.
+        function cardTap(e) {
+          if (e.target.closest('input,label,select,a') || Date.now() < s.suppressClickUntil) return;
+          const card = e.target.closest('[data-vocab-card]');
+          if (card && s.page === 'vocabulary') {
+            openWord(Number(card.dataset.vocabCard));
+            return;
+          }
+          const article = e.target.closest('[data-article-item]');
+          if (article && s.page === 'articles') openArticle(Number(article.dataset.articleItem));
+        }
+        app.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const field = e.target.dataset.search;
+          s[field] = e.target.querySelector('input').value.trim();
+          if (field === 'aq') s.loaded = BATCH;
+          else {
+            s.vloaded = BATCH;
+            s.selectedIds = [];
+          }
+          render();
+        });
+        app.addEventListener('change', (e) => {
+          const d = e.target.dataset;
+          if ('filterChoice' in d) {
+            const v = d.filterChoice;
+            s.draft = e.target.checked
+              ? [...new Set([...s.draft, v])]
+              : s.draft.filter((x) => x !== v);
+          } else if ('sortChoice' in d) {
+            if (s.page === 'articles') {
+              s.sort = d.sortChoice;
+              s.loaded = BATCH;
+            } else {
+              s.vsort = d.sortChoice;
+              s.vloaded = BATCH;
+            }
+            render();
+          } else if ('speedChoice' in d) {
+            s.speed = Number(d.speedChoice);
+            s.popover = null;
+            render();
+            schedule();
+          } else if ('seek' in d) {
+            s.sentence = Number(e.target.value);
+            s.position = true;
+            render();
+            schedule();
+          } else if ('selectWord' in d) toggleWordSelection(Number(d.selectWord), e.target.checked);
+          else if ('selectVisible' in d) {
+            const visible = filteredWords()
+              .slice(0, s.vloaded)
+              .map((w) => w.id);
+            if (
+              e.target.checked &&
+              new Set([...s.selectedIds, ...visible]).size > MAX_BATCH_DELETE
+            ) {
+              render();
+              notify('Select up to 100 words at a time.');
+              return;
+            }
+            s.selectedIds = e.target.checked
+              ? [...new Set([...s.selectedIds, ...visible])]
+              : s.selectedIds.filter((id) => !visible.includes(id));
+            render();
+          } else if ('selectionSegment' in d) {
+            s.selectionSegment = Number(e.target.value);
+            s.selectionStart = 0;
+            s.selectionEnd = 0;
+            render();
+          } else if ('selectionStart' in d) {
+            s.selectionStart = Number(e.target.value);
+            s.selectionEnd = Math.max(s.selectionStart, s.selectionEnd);
+            render();
+          } else if ('selectionEnd' in d) s.selectionEnd = Number(e.target.value);
+        });
+        app.addEventListener('input', (e) => {
+          if ('answer' in e.target.dataset) s.review.answer = e.target.value;
+        });
+
+        // A tap on a word explains it; a native selection (long press and handles) explains the phrase.
+        app.addEventListener('pointerup', (e) => {
+          if (Date.now() < suppressExampleLookupUntil || e.target.closest('button,input,select,a'))
+            return;
+          if (!e.target.closest('.selectable')) return;
+          const selection = getSelection();
+          const text = selection?.toString().trim();
+          if (text && app.contains(selection.anchorNode) && app.contains(selection.focusNode)) {
+            const range = selection.getRangeAt(0);
+            if ([...app.querySelectorAll('.gap')].some((g) => range.intersectsNode(g))) {
+              notify('Select words on one side of the blank.');
+              return;
+            }
+            openLookup(text);
+          } else {
+            const word = e.target.closest('[data-word]')?.dataset.word;
+            if (word) openLookup(word);
+          }
+        });
+        // A tap on empty space closes one explanation layer; outside taps close popovers.
+        app.addEventListener('pointerdown', (e) => {
+          if (
+            (s.popover || s.accountOpen || s.selectionTool) &&
+            !e.target.closest(
+              '.compact-popover,.column-filter,[data-action="account"],[data-action="sort-options"],[data-action="speed"],[data-action="select-text"]',
+            )
+          ) {
+            s.popover = null;
+            s.accountOpen = false;
+            s.selectionTool = null;
+            render();
+            return;
+          }
+          if (
+            s.layers.length &&
+            !e.target.closest('.float,.selectable,.compact-popover,button,input,select,a,dialog')
+          ) {
+            s.layers.pop();
+            render();
+          }
+        });
+
+        // Vocabulary gestures: swipe left reveals Delete (80 px, stays open past 35 px); a 500 ms long press selects.
+        function cancelGesture() {
+          if (gesture?.hold) clearTimeout(gesture.hold);
+          gesture = null;
+        }
+        app.addEventListener('pointerdown', (e) => {
+          if (s.page !== 'vocabulary' || s.selectMode || !['touch', 'pen'].includes(e.pointerType))
+            return;
+          const card = e.target.closest('[data-vocab-card]');
+          if (!card || e.target.closest('[data-delete-id],input,label')) return;
+          cancelGesture();
+          const id = Number(card.dataset.vocabCard);
+          const g = {
+            id,
+            pointerId: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            card,
+            front: card.querySelector('.card-front'),
+            direction: null,
+            base: s.swipeId === id ? -80 : 0,
+          };
+          gesture = g;
+          g.hold = setTimeout(() => {
+            if (gesture !== g || g.direction) return;
+            s.selectMode = true;
+            s.selectedIds = [id];
+            s.swipeId = null;
+            s.suppressClickUntil = Date.now() + 600;
+            cancelGesture();
+            render();
+            notify('1 word selected.');
+            focusVisible(`[data-select-word="${id}"]`);
+          }, 500);
+        });
+        app.addEventListener(
+          'pointermove',
+          (e) => {
+            const g = gesture;
+            if (!g || e.pointerId !== g.pointerId) return;
+            const dx = e.clientX - g.x;
+            const dy = e.clientY - g.y;
+            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+              clearTimeout(g.hold);
+              if (!g.direction)
+                g.direction = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'horizontal' : 'vertical';
+            }
+            if (g.direction === 'horizontal') {
+              const x = Math.max(-80, Math.min(0, g.base + dx));
+              g.front.style.transition = 'none';
+              g.front.style.transform = `translateX(${x}px)`;
+              g.card.setPointerCapture?.(e.pointerId);
+              s.suppressClickUntil = Date.now() + 600;
+            }
+          },
+          { passive: true },
+        );
+        app.addEventListener('pointerup', (e) => {
+          const g = gesture;
+          if (!g || e.pointerId !== g.pointerId) return;
+          clearTimeout(g.hold);
+          if (g.direction === 'horizontal') {
+            s.swipeId = g.base + (e.clientX - g.x) < -35 ? g.id : null;
+            s.suppressClickUntil = Date.now() + 400;
+            cancelGesture();
+            render();
+          } else {
+            if (g.direction === 'vertical') s.suppressClickUntil = Date.now() + 350;
+            cancelGesture();
+          }
+        });
+        app.addEventListener('pointercancel', () => {
+          const g = gesture;
+          if (g) s.suppressClickUntil = Date.now() + 350;
+          cancelGesture();
+          if (g?.direction === 'horizontal') render();
+        });
+        app.addEventListener('contextmenu', (e) => {
+          if (e.target.closest('[data-vocab-card]')) e.preventDefault();
+        });
+
+        // Example carousels: a horizontal swipe of at least 45 px (and 1.3x the vertical move) turns the example.
+        app.addEventListener('pointerdown', (e) => {
+          if (!['touch', 'pen'].includes(e.pointerType) || e.target.closest('button,input,select'))
+            return;
+          const panel = e.target.closest('.example-carousel');
+          if (panel)
+            exampleGesture = {
+              pointerId: e.pointerId,
+              x: e.clientX,
+              y: e.clientY,
+              context: panel.dataset.exampleContext,
+              layer: Number(panel.dataset.exampleLayer),
+              moved: false,
+            };
+        });
+        app.addEventListener(
+          'pointermove',
+          (e) => {
+            const g = exampleGesture;
+            if (
+              g &&
+              g.pointerId === e.pointerId &&
+              (Math.abs(e.clientX - g.x) > 10 || Math.abs(e.clientY - g.y) > 10)
+            )
+              g.moved = true;
+          },
+          { passive: true },
+        );
+        app.addEventListener(
+          'pointerup',
+          (e) => {
+            const g = exampleGesture;
+            if (!g || g.pointerId !== e.pointerId) return;
+            exampleGesture = null;
+            if (!g.moved) return;
+            suppressExampleLookupUntil = Date.now() + 400;
+            const dx = e.clientX - g.x;
+            const dy = e.clientY - g.y;
+            if (
+              Math.abs(dx) >= 45 &&
+              Math.abs(dx) > Math.abs(dy) * 1.3 &&
+              !getSelection()?.toString().trim()
+            )
+              moveExample(g.context, g.layer, dx < 0 ? 1 : -1);
+          },
+          true,
+        );
+        app.addEventListener('pointercancel', () => {
+          exampleGesture = null;
+          suppressExampleLookupUntil = Date.now() + 350;
+        });
+        window.addEventListener('resize', positionOverlay);
+
+        // ---------------------------------------------------------------- screenshot states
+        // Each state starts from fresh demo data, so a state never depends on the one before it.
+        const reader =
+          (extra = {}) =>
+          (st) =>
+            Object.assign(st, { page: 'reader', articleId: 1, returnArticles: null }, extra);
+        const lookupLayer = (key, extra = {}) => ({
+          ...LOOKUPS[key],
+          kind: 'ready',
+          idx: 0,
+          audio: 'idle',
+          saved: false,
+          ...extra,
+        });
+        const vocabulary =
+          (extra = {}) =>
+          (st) =>
+            Object.assign(st, { page: 'vocabulary' }, extra);
+        const review =
+          (mode, extra = {}) =>
+          (st) => {
+            st.page = 'review';
+            st.review = Object.assign(nextQuestionFor(st, mode), extra);
+          };
+        function nextQuestionFor(st, mode) {
+          const saved = s;
+          s = st;
+          const q = nextQuestion(mode);
+          s = saved;
+          return q;
+        }
+        function selectWords(row, from, to) {
+          const spans = app.querySelectorAll(`[data-sentence-row="${row}"] [data-word]`);
+          const range = document.createRange();
+          range.setStartBefore(spans[from]);
+          range.setEndAfter(spans[to]);
+          getSelection().removeAllRanges();
+          getSelection().addRange(range);
+        }
+        const fullQueue = () => ARTICLE_ROWS.map((r) => r[0]);
+        const PRESETS = [
+          [
+            'sign-in',
+            'Sign in',
+            (st) => {
+              st.auth = 'signedout';
+            },
+          ],
+          [
+            'not-a-member',
+            'No access',
+            (st) => {
+              st.auth = 'notmember';
+            },
+          ],
+          [
+            'terms',
+            'Terms of use',
+            (st) => {
+              st.termsAccepted = false;
+            },
+          ],
+          [
+            'license',
+            'License',
+            (st) => {
+              st.termsAccepted = false;
+              st.page = 'license';
+              st.back = ['articles'];
+            },
+          ],
+          ['articles', 'Articles', () => {}],
+          [
+            'articles-filter-source',
+            'Articles: Source filter',
+            (st) => {
+              st.popover = 'source';
+              st.draft = ['nasa-technology', 'nist-news'];
+            },
+          ],
+          [
+            'articles-filter-category',
+            'Articles: Category filter',
+            (st) => {
+              st.sourceValues = ['nasa-technology', 'nist-news'];
+              st.popover = 'category';
+              st.draft = ['Technology'];
+            },
+          ],
+          [
+            'articles-sort',
+            'Articles: sort',
+            (st) => {
+              st.popover = 'sort';
+            },
+          ],
+          [
+            'articles-search',
+            'Articles: search results',
+            (st) => {
+              st.aq = 'satellite';
+            },
+          ],
+          [
+            'articles-search-empty',
+            'Articles: no results',
+            (st) => {
+              st.aq = 'volcano';
+            },
+          ],
+          [
+            'articles-loading-more',
+            'Articles: loading more',
+            (st) => {
+              st.loadingMore = true;
+            },
+          ],
+          [
+            'articles-empty',
+            'Articles: empty',
+            (st) => {
+              st.articles = [];
+            },
+          ],
+          ['reader', 'Reader', reader()],
+          [
+            'reader-playing',
+            'Reader: playing',
+            reader({ playing: true, playMode: 'article', position: true, sentence: 2 }),
+          ],
+          [
+            'reader-sentence-selected',
+            'Reader: sentence selected',
+            reader({ single: 4, sentence: 4 }),
+          ],
+          [
+            'reader-speed',
+            'Reader: speed',
+            reader({ popover: 'speed', position: true, sentence: 2, speed: 1.25 }),
+          ],
+          [
+            'reader-continuous',
+            'Reader: continuous play',
+            reader({
+              playing: true,
+              playMode: 'article',
+              position: true,
+              sentence: 5,
+              queue: fullQueue(),
+              queueIndex: 0,
+            }),
+          ],
+          ['reader-attribution', 'Reader: attribution', reader({ articleId: 5 })],
+          [
+            'reader-tap-to-continue',
+            'Reader: Tap to continue',
+            reader({
+              articleId: 2,
+              blocked: true,
+              position: true,
+              sentence: 0,
+              queue: fullQueue(),
+              queueIndex: 1,
+            }),
+          ],
+          ['reader-close-x', 'Reader: close button variant', reader({ readerClose: 'x' })],
+          [
+            'lookup-loading',
+            'Explanation: loading',
+            reader({
+              layers: [{ kind: 'loading', text: 'resilient', idx: 0, audio: 'idle', saved: false }],
+            }),
+          ],
+          ['lookup', 'Explanation', reader({ layers: [lookupLayer('resilient')] })],
+          [
+            'lookup-example-2',
+            'Explanation: example 2 of 2',
+            reader({ layers: [lookupLayer('resilient', { idx: 1 })] }),
+          ],
+          [
+            'lookup-word-audio-generating',
+            'Explanation: word audio generating',
+            reader({ layers: [lookupLayer('resilient', { audio: 'generating' })] }),
+          ],
+          [
+            'lookup-audio-unavailable',
+            'Explanation: audio unavailable',
+            reader({ layers: [lookupLayer('resilient', { audio: 'error' })] }),
+          ],
+          [
+            'lookup-failed',
+            'Explanation: AI failed',
+            reader({
+              layers: [{ kind: 'error', text: 'resilient', idx: 0, audio: 'idle', saved: false }],
+            }),
+          ],
+          [
+            'lookup-too-long',
+            'Selection too long',
+            reader({ notice: 'Select up to 8 words.' }),
+            () => selectWords(7, 0, 9),
+          ],
+          [
+            'lookup-nested',
+            'Nested explanation',
+            reader({ layers: [lookupLayer('resilient'), lookupLayer('coating')] }),
+          ],
+          [
+            'save-saved',
+            'Saved to Vocabulary',
+            (st) => {
+              reader({
+                layers: [lookupLayer('adapt', { saved: true })],
+                notice: 'Saved to Vocabulary.',
+              })(st);
+              st.words.push({
+                id: 10,
+                word: 'adapt',
+                pos: 'verb',
+                zh: LOOKUPS.adapt.zh,
+                forms: LOOKUPS.adapt.forms,
+                examples: [...LOOKUPS.adapt.examples],
+                options: [],
+                correct: 0,
+                m: NEW(),
+              });
+            },
+          ],
+          [
+            'save-replace',
+            'Replace saved word',
+            reader({ layers: [lookupLayer('resilient')], dialog: { kind: 'replace', layer: 0 } }),
+          ],
+          ['vocabulary', 'Vocabulary: All and review modes', vocabulary()],
+          ['vocabulary-new', 'Vocabulary: New', vocabulary({ tab: 'New' })],
+          ['vocabulary-ongoing', 'Vocabulary: Ongoing', vocabulary({ tab: 'Ongoing' })],
+          ['vocabulary-archived', 'Vocabulary: Archived', vocabulary({ tab: 'Archived' })],
+          ['vocabulary-search', 'Vocabulary: search', vocabulary({ vq: 'adjective' })],
+          [
+            'vocabulary-swipe-half',
+            'Swipe to delete: half open',
+            vocabulary({ swipeDrag: { id: 2, x: -40 } }),
+          ],
+          ['vocabulary-swipe-open', 'Swipe to delete: open', vocabulary({ swipeId: 2 })],
+          [
+            'vocabulary-delete-one',
+            'Delete one word',
+            vocabulary({ swipeId: 2, dialog: { kind: 'delete', ids: [2] } }),
+          ],
+          [
+            'vocabulary-long-press',
+            'Long press: select mode entered',
+            vocabulary({ selectMode: true, selectedIds: [9], notice: '1 word selected.' }),
+          ],
+          [
+            'vocabulary-multi-select',
+            'Multi-select',
+            vocabulary({ selectMode: true, selectedIds: [2, 6, 4] }),
+          ],
+          [
+            'vocabulary-batch-delete',
+            'Batch delete',
+            vocabulary({
+              selectMode: true,
+              selectedIds: [2, 6, 4],
+              dialog: { kind: 'delete', ids: [2, 6, 4] },
+            }),
+          ],
+          ['vocabulary-empty', 'Vocabulary: empty', vocabulary({ words: [] })],
+          ['card-detail', 'Word card', (st) => Object.assign(st, { page: 'detail', detailId: 1 })],
+          ['review-spell', 'Spell: dictation prompt', review('Spell')],
+          [
+            'review-spell-correct',
+            'Spell: correct',
+            review('Spell', {
+              answer: 'resilient',
+              feedback: 'correct',
+              result: 'Correct · Next review in 4 days',
+            }),
+          ],
+          [
+            'review-spell-wrong',
+            'Spell: wrong',
+            review('Spell', { answer: 'resiliant', feedback: 'incorrect' }),
+          ],
+          ['review-translate', 'Translate: prompt', review('Translate')],
+          [
+            'review-translate-answered',
+            'Translate: answered',
+            review('Translate', {
+              option: 1,
+              feedback: 'correct',
+              result: 'Correct · Next review in 4 days',
+            }),
+          ],
+          [
+            'review-empty',
+            'Review: nothing due',
+            (st) => {
+              st.words.forEach((w) => {
+                const x = w.m[1];
+                if (isNew(x) || isDue(x))
+                  Object.assign(x, { round: Math.max(1, x.round), mins: 180 + w.id * 60 });
+              });
+              review('Spell')(st);
+            },
+          ],
+          [
+            'review-offline',
+            'Review: not saved',
+            review('Spell', { answer: 'resilient', feedback: 'offline' }),
+          ],
+          [
+            'review-changed',
+            'Review: changed on another device',
+            review('Spell', { answer: 'resilient', feedback: 'changed' }),
+          ],
+          [
+            'account-menu',
+            'Account menu',
+            (st) => {
+              st.accountOpen = true;
+            },
+          ],
+        ].map(([name, title, apply, after]) => ({ name, title, apply, after }));
+
+        function show(name) {
+          const preset = PRESETS.find((x) => x.name === name);
+          if (!preset) return false;
+          clearTimeout(timer);
+          clearTimeout(noticeTimer);
+          getSelection()?.removeAllRanges();
+          s = freshState();
+          s.frozen = true;
+          preset.apply(s);
+          afterRender = preset.after || null;
+          document.documentElement.dataset.static = '';
+          render();
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          document.documentElement.dataset.state = name;
+          return true;
+        }
+        window.vexto = {
+          presets: PRESETS.map(({ name, title }) => ({ name, title })),
+          show,
+          relayout: positionOverlay,
+        };
+
+        s = freshState();
+        const initial = decodeURIComponent(location.hash.slice(1));
+        if (!initial || !show(initial)) render();
+        window.addEventListener('hashchange', () =>
+          show(decodeURIComponent(location.hash.slice(1))),
+        );
+      })();
+    </script>
+  </body>
+</html>
