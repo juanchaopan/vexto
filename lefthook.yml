@@ -1,5 +1,6 @@
 # Git hooks managed by lefthook and installed into .git/hooks by `task setup`. Hooks can be
-# skipped, so CI runs every one of these checks again.
+# skipped, so CI runs every one of these checks again. Each job runs the project task CI runs,
+# narrowed to what the hook is about, so a hook and its CI check cannot drift apart.
 # Globs use doublestar matching: `**` spans directories and `*` stays within one.
 glob_matcher: doublestar
 
@@ -8,23 +9,24 @@ pre-commit:
   parallel: true
   jobs:
     - name: format
-      run: pnpm exec prettier --check --ignore-unknown {staged_files}
+      run: task format-check -- --ignore-unknown {staged_files}
     - name: lint
       glob: '**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'
-      run: pnpm exec eslint --max-warnings 0 --no-warn-ignored {staged_files}
+      run: task lint -- --no-warn-ignored {staged_files}
     - name: docs-lint
       glob: '**/*.md'
-      run: pnpm exec markdownlint-cli2 --no-globs {staged_files}
+      run: task docs-lint -- --no-globs {staged_files}
     - name: secrets
-      run: gitleaks git --staged --config .gitleaks.toml --redact --no-banner .
+      run: task secrets-scan -- --staged
     - name: workflows
       glob:
         - '.github/workflows/*.{yml,yaml}'
         - '.github/actions/*/action.{yml,yaml}'
-      run: node scripts/lint-workflows.ts {staged_files}
+      run: task workflows-lint -- {staged_files}
 
-# Commit message format, then the workflow rules for the message and the staged files.
+# Commit message format, and the workflow rules for the message and the staged files.
 commit-msg:
+  parallel: true
   jobs:
     - name: commitlint
       run: pnpm exec commitlint --edit {1}
@@ -33,6 +35,7 @@ commit-msg:
 
 # Type check and the unit tests affected by the changes since origin/main.
 pre-push:
+  parallel: true
   jobs:
     - name: typecheck
       run: task typecheck

@@ -62,14 +62,16 @@ jobs:
       # dependencies would fail the project's dependency audit.
       # renovate: datasource=npm depName=vercel
       VERCEL_CLI_VERSION: 66.6.0
+      # The team and the project are plain variables, so the whole job reads them; the token is
+      # given only to the steps that need it.
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
     steps:
       - name: Check the target and the environment's settings
         env:
           TARGET: ${{ inputs.target }}
           REF: ${{ inputs.ref }}
           HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           APP_URL: ${{ vars.APP_URL }}
         run: |
           case "$TARGET" in
@@ -107,8 +109,6 @@ jobs:
       - name: Copy the runtime values to the Vercel project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           ENVIRONMENT_SECRETS: ${{ toJSON(secrets) }} # zizmor: ignore[overprovisioned-secrets]
           ENVIRONMENT_VARS: ${{ toJSON(vars) }}
         run: node scripts/sync-vercel-env.ts
@@ -122,23 +122,16 @@ jobs:
       - name: Pull the Vercel project settings
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
 
       # The build works from the pulled settings and needs no token, so the project's build code
       # never sees it.
       - name: Build
-        env:
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
 
       - name: Deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
 
       # Production runs only the smoke tests that are safe against real user data.

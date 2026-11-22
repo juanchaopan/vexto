@@ -33,6 +33,7 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 | 命令                                            | 做什么                                                                                   |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `task setup`                                    | 安装依赖、组件测试用的 Chromium 和 WebKit，以及 git hook                                 |
+| `task browsers`                                 | 只安装 Chromium 和 WebKit；CI 加 `--with-deps` 同时装它们的系统库                        |
 | `task env-pull`                                 | 链接 Vercel 项目 `vexto-staging`，把它 Development 环境的值拉到 `.env.local`             |
 | `task dev`                                      | 启动开发服务器（`next dev`）                                                             |
 | `task format`                                   | 用 Prettier 格式化文件（默认全部）                                                       |
@@ -45,7 +46,7 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 | `task duplication`                              | jscpd 查重复代码                                                                         |
 | `task licenses`                                 | 检查运行时依赖的许可证                                                                   |
 | `task audit`                                    | `pnpm audit`，有高危或严重漏洞就失败                                                     |
-| `task secrets-scan`                             | gitleaks 扫描整个提交历史里的密钥                                                        |
+| `task secrets-scan`                             | gitleaks 扫描整个提交历史里的密钥；传 `--staged` 时只扫暂存的改动                        |
 | `task workflows-lint`                           | actionlint 和 zizmor 检查 GitHub Actions 工作流和仓库里的 action                         |
 | `task commits-check`                            | commitlint 和项目的提交规则，默认检查 `origin/main..HEAD`，可以传 `FROM`、`TO`、`BRANCH` |
 | `task check`                                    | 依次跑格式、lint、文档格式、类型检查、架构规则、重复代码、许可证、依赖漏洞和密钥扫描     |
@@ -60,7 +61,7 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 
 ## 改动怎样检查
 
-git hook 由 lefthook 管理，`task setup` 会装好。不要用 `--no-verify` 跳过 hook；跳过了 CI 也会再查一遍。
+git hook 由 lefthook 管理，`task setup` 会装好。hook 调用和 CI 相同的 Task 命令，只是范围缩小到暂存的文件或受影响的测试。不要用 `--no-verify` 跳过 hook；跳过了 CI 也会再查一遍。
 
 | 时机       | 检查                                                                                                |
 | ---------- | --------------------------------------------------------------------------------------------------- |

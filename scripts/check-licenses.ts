@@ -6,21 +6,19 @@
 //                                              @img/sharp-<platform> packages
 //   pnpm licenses list --prod                  reads pnpm's lockfile and node_modules, including
 //                                              the optional packages installed on this platform
+// The two listings are independent, so they run at the same time.
 // Usage: node scripts/check-licenses.ts
-import { execSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { judgeLicense, listingProblems, type InstalledPackage } from './lib/license-policy.ts';
-import { repoRoot, runPackageBin } from './lib/node-tools.ts';
+import { pnpmOutput, runPackageBin, withTempDir } from './lib/node-tools.ts';
 
 type CheckerEntry = { licenses?: string | string[] };
 type PnpmEntry = { name: string; versions: string[]; license: string };
 
-async function licenseCheckerPackages(): Promise<InstalledPackage[]> {
-  const workDir = mkdtempSync(path.join(tmpdir(), 'licenses-'));
-  const outFile = path.join(workDir, 'licenses.json');
-  try {
+function licenseCheckerPackages(): Promise<InstalledPackage[]> {
+  return withTempDir('licenses-', async (workDir) => {
+    const outFile = path.join(workDir, 'licenses.json');
     const code = await runPackageBin('license-checker-rseidelsohn', 'license-checker-rseidelsohn', [
       '--production',
       '--excludePrivatePackages',
@@ -36,18 +34,11 @@ async function licenseCheckerPackages(): Promise<InstalledPackage[]> {
       const at = id.lastIndexOf('@');
       return { name: id.slice(0, at), version: id.slice(at + 1), license: entry.licenses ?? [] };
     });
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
+  });
 }
 
-function pnpmPackages(): InstalledPackage[] {
-  // A fixed command line run through the shell, because pnpm is a .cmd shim on Windows.
-  const output = execSync('pnpm licenses list --prod --json', {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+async function pnpmPackages(): Promise<InstalledPackage[]> {
+  const output = await pnpmOutput(['licenses', 'list', '--prod', '--json']);
   const groups = JSON.parse(output) as Record<string, PnpmEntry[]>;
   return Object.values(groups).flatMap((entries) =>
     entries.flatMap((entry) =>
@@ -60,8 +51,9 @@ function licenseText(license: InstalledPackage['license']) {
   return typeof license === 'string' ? license : license.join(' AND ') || 'none';
 }
 
+const listings = await Promise.all([licenseCheckerPackages(), pnpmPackages()]);
 const packages = new Map<string, InstalledPackage>();
-for (const pkg of [...(await licenseCheckerPackages()), ...pnpmPackages()]) {
+for (const pkg of listings.flat()) {
   packages.set(`${pkg.name}@${pkg.version}`, pkg);
 }
 const listed = [...packages.values()].sort((a, b) => a.name.localeCompare(b.name));

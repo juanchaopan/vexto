@@ -13,8 +13,13 @@ tasks:
     desc: Install dependencies, the browsers the component and smoke tests use, and the git hooks
     cmds:
       - pnpm install --frozen-lockfile
-      - pnpm exec playwright install {{.CLI_ARGS}} chromium webkit
+      - task: browsers
       - pnpm exec lefthook install
+
+  browsers:
+    desc: Install the browsers the component and smoke tests use (CI adds --with-deps for their system libraries)
+    cmds:
+      - pnpm exec playwright install {{.CLI_ARGS}} chromium webkit
 
   # Local development reads its values from the Development environment of a Vercel project;
   # the project and its team can be overridden on the command line.
@@ -84,9 +89,9 @@ tasks:
       - pnpm exec markdownlint-cli2 {{.CLI_ARGS}}
 
   secrets-scan:
-    desc: Scan every commit of the repository history for secrets with gitleaks
+    desc: Scan every commit of the repository history for secrets with gitleaks (pass --staged to scan the staged changes instead)
     cmds:
-      - gitleaks git --config .gitleaks.toml --redact --no-banner .
+      - gitleaks git --config .gitleaks.toml --redact --no-banner {{.CLI_ARGS}} .
 
   workflows-lint:
     desc: Lint the GitHub Actions workflows and local actions with actionlint and zizmor (default all)

@@ -128,6 +128,7 @@ jobs:
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - run: task licenses
 
+  # pnpm audit reads the lockfile only, so no dependencies are installed.
   audit:
     name: audit
     runs-on: ubuntu-24.04
@@ -139,8 +140,11 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+        with:
+          install: 'false'
       - run: task audit
 
+  # gitleaks scans every commit, so the whole history is fetched; it needs no dependencies.
   secrets-scan:
     name: secrets-scan
     runs-on: ubuntu-24.04
@@ -148,30 +152,25 @@ jobs:
     permissions:
       contents: read
     steps:
-      # gitleaks scans every commit, so the whole history is fetched.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
-      - name: Install gitleaks
-        env:
+        with:
+          install: 'false'
+      - uses: ./.github/actions/install-release-binary # zizmor: ignore[self-repository]
+        with:
+          repository: gitleaks/gitleaks
           # renovate: datasource=github-releases depName=gitleaks/gitleaks
-          GITLEAKS_VERSION: 8.30.1
-        run: |
-          dir="$RUNNER_TEMP/gitleaks"
-          mkdir -p "$dir"
-          cd "$dir"
-          release="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
-          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          checksums="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
-          curl --fail --silent --show-error --location \
-            --remote-name "$release/$archive" --remote-name "$release/$checksums"
-          grep " ${archive}\$" "$checksums" | sha256sum --check --strict
-          tar -xzf "$archive" gitleaks
-          echo "$dir" >> "$GITHUB_PATH"
+          version: 8.30.1
+          archive: gitleaks_{version}_linux_x64.tar.gz
+          checksums: gitleaks_{version}_checksums.txt
+          binary: gitleaks
       - run: task secrets-scan
 
+  # The lint script uses only Node.js built-ins and the two linters, so no dependencies are
+  # installed.
   workflows-lint:
     name: workflows-lint
     runs-on: ubuntu-24.04
@@ -183,22 +182,16 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
-      - name: Install actionlint
-        env:
+        with:
+          install: 'false'
+      - uses: ./.github/actions/install-release-binary # zizmor: ignore[self-repository]
+        with:
+          repository: rhysd/actionlint
           # renovate: datasource=github-releases depName=rhysd/actionlint
-          ACTIONLINT_VERSION: 1.7.12
-        run: |
-          dir="$RUNNER_TEMP/actionlint"
-          mkdir -p "$dir"
-          cd "$dir"
-          release="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
-          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          checksums="actionlint_${ACTIONLINT_VERSION}_checksums.txt"
-          curl --fail --silent --show-error --location \
-            --remote-name "$release/$archive" --remote-name "$release/$checksums"
-          grep " ${archive}\$" "$checksums" | sha256sum --check --strict
-          tar -xzf "$archive" actionlint
-          echo "$dir" >> "$GITHUB_PATH"
+          version: 1.7.12
+          archive: actionlint_{version}_linux_amd64.tar.gz
+          checksums: actionlint_{version}_checksums.txt
+          binary: actionlint
       # zizmor publishes no checksum file; its release archives carry build provenance
       # attestations, which `gh attestation verify` checks against the zizmor repository.
       - name: Install zizmor
@@ -243,7 +236,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - name: Install the browsers and their system libraries
-        run: pnpm exec playwright install --with-deps chromium webkit
+        run: task browsers -- --with-deps
       - run: task test-component
 
   test-integration:

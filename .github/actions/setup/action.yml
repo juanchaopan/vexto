@@ -8,6 +8,12 @@ inputs:
       Restore and save the pnpm store between runs. Workflows that deploy or release turn it off,
       so a cache written by pull request code cannot reach them.
     default: 'true'
+  install:
+    description: >-
+      Install the dependencies. Jobs whose task reads only the lockfile, Node.js built-ins or
+      tools from outside the repository turn it off; they also skip the pnpm store cache, so an
+      empty store is never saved under the lockfile's key.
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -25,8 +31,9 @@ runs:
       with:
         node-version-file: .nvmrc
         package-manager-cache: false
-        cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
+        cache: ${{ inputs.cache == 'true' && inputs.install == 'true' && 'pnpm' || '' }}
 
     - name: Install dependencies
+      if: inputs.install == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile

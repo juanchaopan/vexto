@@ -6,7 +6,7 @@
 //   main                           the default branch
 // Ops and spike issues have no pull requests, so they have no issue branch kind.
 
-export const issueTypes = ['feature', 'fix', 'refactor', 'maintenance'] as const;
+const issueTypes = ['feature', 'fix', 'refactor', 'maintenance'] as const;
 export type IssueType = (typeof issueTypes)[number];
 
 /** The Conventional Commits type that commits and pull requests of each issue type use. */

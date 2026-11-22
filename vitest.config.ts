@@ -8,7 +8,14 @@ import { defineConfig } from 'vitest/config';
 //   *.integration.test.ts integration tests from the route entry inward
 //   *.security.test.ts    sign-in, permission, data isolation and hostile input cases
 //   *.migration.test.ts   migration scripts run against data in the previous format
-const typedTests = ['integration', 'security', 'migration'].map((kind) => `**/*.${kind}.test.ts`);
+// The named Node kinds are listed with the directories their tests live in.
+const nodeTestRoots = {
+  integration: ['src'],
+  security: ['src'],
+  migration: ['src', 'drizzle'],
+};
+const nodeTestKinds = Object.entries(nodeTestRoots);
+const namedNodeTests = nodeTestKinds.map(([kind]) => `**/*.${kind}.test.ts`);
 
 // Phone-size viewport, matching the devices the application is built for.
 const phoneViewport = { width: 390, height: 844 };
@@ -25,7 +32,7 @@ export default defineConfig({
           name: 'unit',
           environment: 'node',
           include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
-          exclude: typedTests,
+          exclude: namedNodeTests,
         },
       },
       {
@@ -42,30 +49,14 @@ export default defineConfig({
           },
         },
       },
-      {
-        extends: true,
+      ...nodeTestKinds.map(([kind, roots]) => ({
+        extends: true as const,
         test: {
-          name: 'integration',
+          name: kind,
           environment: 'node',
-          include: ['src/**/*.integration.test.ts'],
+          include: roots.map((root) => `${root}/**/*.${kind}.test.ts`),
         },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'security',
-          environment: 'node',
-          include: ['src/**/*.security.test.ts'],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'migration',
-          environment: 'node',
-          include: ['src/**/*.migration.test.ts', 'drizzle/**/*.migration.test.ts'],
-        },
-      },
+      })),
     ],
   },
 });

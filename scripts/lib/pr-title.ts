@@ -1,9 +1,9 @@
 // Pull request title rules. The title becomes the squash commit on main, so it follows the same
 // header rules as the branch's commits and the same 100-character limit commitlint applies.
 import type { Branch } from './branches.ts';
-import { checkIssueHeader, parseHeader } from './commit-rules.ts';
+import { checkDependencyHeader, checkIssueHeader, parseHeader } from './commit-rules.ts';
 
-export const maxTitleLength = 100;
+const maxTitleLength = 100;
 
 /** Problems with a pull request title for the branch it comes from; empty when it is right. */
 export function checkPrTitle(title: string, branch: Branch): string[] {
@@ -24,16 +24,12 @@ function checkTitleForBranch(title: string, branch: Branch): string[] {
       return title === expected ? [] : [`A release pull request is titled "${expected}".`];
     }
     case 'renovate': {
-      const parsed = parseHeader(title);
-      const valid =
-        parsed !== null &&
-        ['fix', 'chore'].includes(parsed.type) &&
-        parsed.scope === 'deps' &&
-        !parsed.breaking &&
-        !/\(#\d+\)/.test(title);
-      return valid
-        ? []
-        : ['A dependency update is titled "fix(deps): ..." or "chore(deps): ..." with no issue.'];
+      // The squash commit of a dependency update lands on main, where a breaking mark would
+      // announce a breaking change of the application itself.
+      const breaking = parseHeader(title)?.breaking
+        ? ['A dependency update title carries no breaking-change mark "!".']
+        : [];
+      return [...checkDependencyHeader(title), ...breaking];
     }
     case 'scratch':
     case 'main':

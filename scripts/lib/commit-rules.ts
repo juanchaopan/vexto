@@ -76,6 +76,22 @@ export function checkIssueHeader(
   return problems;
 }
 
+/**
+ * Checks the type, scope and issue reference of a dependency update header: `fix(deps)` for the
+ * dependencies the application runs with, `chore(deps)` for the rest, and no issue.
+ */
+export function checkDependencyHeader(header: string): string[] {
+  const problems: string[] = [];
+  const parsed = parseHeader(header);
+  if (!parsed || !['fix', 'chore'].includes(parsed.type) || parsed.scope !== 'deps') {
+    problems.push('Dependency update commits start with "fix(deps): " or "chore(deps): ".');
+  }
+  if (issueRefsOf(header).length > 0) {
+    problems.push('Dependency update commits carry no issue reference.');
+  }
+  return problems;
+}
+
 /** The Step trailer of a message, with problems when it is repeated or has an unknown value. */
 export function stepOf(trailers: readonly Trailer[]): { step?: Step; problems: string[] } {
   const values = trailers
@@ -95,18 +111,10 @@ export function stepOf(trailers: readonly Trailer[]): { step?: Step; problems: s
 }
 
 function checkRenovateMessage(message: CommitMessage) {
-  const problems: string[] = [];
-  const parsed = parseHeader(message.header);
-  if (!parsed || !['fix', 'chore'].includes(parsed.type) || parsed.scope !== 'deps') {
-    problems.push('Dependency update commits start with "fix(deps): " or "chore(deps): ".');
-  }
-  if (issueRefsOf(message.header).length > 0) {
-    problems.push('Dependency update commits carry no issue reference.');
-  }
-  if (message.trailers.some((trailer) => trailer.key.toLowerCase() === 'step')) {
-    problems.push('Dependency update commits have no Step trailer.');
-  }
-  return problems;
+  const stepProblems = message.trailers.some((trailer) => trailer.key.toLowerCase() === 'step')
+    ? ['Dependency update commits have no Step trailer.']
+    : [];
+  return [...checkDependencyHeader(message.header), ...stepProblems];
 }
 
 /**
@@ -136,25 +144,31 @@ export function checkMessage(branch: Branch, message: CommitMessage): string[] {
 }
 
 const docsPattern = '.docs/**';
+const codeFiles = 'outside-docs';
 
-/** Files each step may change. Commits without a Step trailer are code commits. */
-export const stepFiles: Record<Step, readonly string[] | 'outside-docs'> = {
+/** Files each step may change, as path patterns or every file outside .docs/. */
+const stepFiles: Record<Step, readonly string[] | typeof codeFiles> = {
   kickoff: ['.docs/brief.md', '.docs/reference/**'],
   architect: ['.docs/architecture.md', '.docs/decisions/**'],
   design: ['.docs/design/**'],
-  scaffold: 'outside-docs',
-  implement: 'outside-docs',
+  scaffold: codeFiles,
+  implement: codeFiles,
 };
 
+/** Files a commit may change; a commit without a Step trailer is a code commit. */
+function allowedFilesOf(step: Step | undefined) {
+  return step ? stepFiles[step] : codeFiles;
+}
+
 function describeStep(step: Step | undefined) {
-  const allowed = step ? stepFiles[step] : 'outside-docs';
-  const files = allowed === 'outside-docs' ? 'files outside .docs/' : allowed.join(', ');
+  const allowed = allowedFilesOf(step);
+  const files = allowed === codeFiles ? 'files outside .docs/' : allowed.join(', ');
   return `${step ? `Step ${step}` : 'A commit without a Step trailer'} may change only ${files}`;
 }
 
-export function isAllowedForStep(step: Step | undefined, filePath: string) {
-  const allowed = step ? stepFiles[step] : 'outside-docs';
-  return allowed === 'outside-docs'
+function isAllowedForStep(step: Step | undefined, filePath: string) {
+  const allowed = allowedFilesOf(step);
+  return allowed === codeFiles
     ? !matchesPattern(filePath, docsPattern)
     : matchesAny(filePath, allowed);
 }
@@ -166,6 +180,14 @@ export function checkStepFiles(step: Step | undefined, files: readonly string[])
     return [];
   }
   return [`${describeStep(step)}; it changes ${forbidden.join(', ')}.`];
+}
+
+/**
+ * Whether the commits of a branch are held to the step table. Scratch branches are never merged,
+ * and a branch outside the workflow already fails on its name.
+ */
+function checksStepFiles(branch: Branch) {
+  return branch.kind !== 'scratch' && branch.kind !== 'unknown';
 }
 
 /**
@@ -196,11 +218,8 @@ export function checkCommit(branch: Branch, commit: CommitToCheck): CommitResult
   if (commit.skip) {
     return { ...base, skipped: commit.skip, problems: [] };
   }
-  if (branch.kind === 'scratch') {
-    return { ...base, problems: [] };
-  }
   const messageProblems = checkMessage(branch, commit.message);
-  if (branch.kind === 'unknown') {
+  if (!checksStepFiles(branch)) {
     return { ...base, problems: messageProblems };
   }
   const { step } = stepOf(commit.message.trailers);

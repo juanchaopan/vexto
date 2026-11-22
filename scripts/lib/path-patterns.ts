@@ -15,7 +15,7 @@ function segmentSource(segment: string) {
 }
 
 /** Converts a path pattern into a regular expression that matches whole paths. */
-export function patternToRegExp(pattern: string): RegExp {
+function patternToRegExp(pattern: string): RegExp {
   const cached = cache.get(pattern);
   if (cached) {
     return cached;

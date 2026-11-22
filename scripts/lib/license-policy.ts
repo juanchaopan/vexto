@@ -4,7 +4,7 @@
 import { matchesPattern } from './path-patterns.ts';
 
 /** Permissive licenses any runtime dependency may use. */
-export const allowedLicenses: readonly string[] = [
+const allowedLicenses: readonly string[] = [
   'MIT',
   'MIT-0',
   'Apache-2.0',
@@ -17,7 +17,7 @@ export const allowedLicenses: readonly string[] = [
   'BlueOak-1.0.0',
 ];
 
-export type LicenseException = {
+type LicenseException = {
   /** Package name pattern; `*` matches within the name. */
   packages: string;
   licenses: readonly string[];
@@ -27,13 +27,12 @@ export type LicenseException = {
  * Exceptions the project owner approved, each limited to the packages and licenses it names.
  * - sharp (used by Next.js image optimization) loads libvips from its platform packages: the
  *   @img/sharp-libvips-* packages are LGPL-3.0-or-later, and the @img/sharp-<platform> packages
- *   that bundle libvips are "Apache-2.0 AND LGPL-3.0-or-later". libvips is a dynamically linked
- *   library, used unmodified by a self-hosted web application that is not distributed, so the
- *   LGPL obligations for distributing it do not arise.
+ *   that bundle libvips are "Apache-2.0 AND LGPL-3.0-or-later"; `@img/sharp-*` names both
+ *   families. libvips is a dynamically linked library, used unmodified by a self-hosted web
+ *   application that is not distributed, so the LGPL obligations for distributing it do not arise.
  * - caniuse-lite is the browser support data Next.js ships; CC-BY-4.0 only asks for attribution.
  */
-export const licenseExceptions: readonly LicenseException[] = [
-  { packages: '@img/sharp-libvips-*', licenses: ['LGPL-3.0-or-later'] },
+const licenseExceptions: readonly LicenseException[] = [
   { packages: '@img/sharp-*', licenses: ['LGPL-3.0-or-later'] },
   { packages: 'caniuse-lite', licenses: ['CC-BY-4.0'] },
 ];
@@ -124,7 +123,7 @@ function satisfied(expression: Expression, accepted: ReadonlySet<string>): boole
 }
 
 /** Licenses a package may use: the allowed list plus the exceptions naming the package. */
-export function acceptedLicensesFor(name: string): Set<string> {
+function acceptedLicensesFor(name: string): Set<string> {
   const accepted = new Set(allowedLicenses);
   licenseExceptions
     .filter((exception) => matchesPattern(name, exception.packages))
