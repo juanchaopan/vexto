@@ -1,10 +1,19 @@
-# Install scripts stay off unless a package cannot work without one. esbuild, sharp,
-# unrs-resolver and lefthook ship their native binaries as platform-specific optional
-# dependencies, so their scripts are not needed. lefthook's script would also install the git
-# hooks on every install, including inside the end-to-end test container; `task setup` installs
-# them instead.
+# Install scripts stay off unless a package cannot work without one.
+# - esbuild, sharp, unrs-resolver and lefthook ship their native binaries as platform-specific
+#   optional dependencies, so their scripts are not needed. lefthook's script would also install
+#   the git hooks on every install, including inside the end-to-end test container; `task setup`
+#   installs them instead.
+# - onnxruntime-node bundles its CPU binaries in the package; its script only downloads the CUDA
+#   execution provider on Linux x64, which the CPU-only speech synthesis does not use.
+# - ssh2 and cpu-features (through testcontainers' Docker client) try to compile optional native
+#   bindings and fall back to JavaScript without them; protobufjs's script only prints a warning
+#   about how its dependents write its version.
 allowBuilds:
   esbuild: false
   sharp: false
   unrs-resolver: false
   lefthook: false
+  onnxruntime-node: false
+  ssh2: false
+  cpu-features: false
+  protobufjs: false
