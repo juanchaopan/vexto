@@ -10,12 +10,12 @@
 
 `ci` 工作流在 PR、merge queue 和推送 main 时运行，同一个 ref 上的旧运行会被取消。
 
-| 任务 | 内容 | 在 main 上的耗时 |
-|---|---|---|
-| `app` | 在固定版本的 Playwright 容器里依次跑：安装、格式检查、lint、架构规则、类型检查、Vitest 单元测试，以及 Storybook 里的浏览器测试和可访问性测试、构建、构建 Storybook、Playwright 端到端测试；失败时上传测试证据 | 约 70 秒 |
-| `local-stack` | 用 docker compose 起两个应用副本、nginx、PostgreSQL 17、S3Mock 和 AI 桩服务，检查负载均衡确实打到两个副本、存储桶可用，再拆掉 | 约 88 秒 |
-| `duplication` | jscpd | 约 19 秒 |
-| `ci` | 汇总，三个任务都通过才算通过 | 约 4 秒 |
+| 任务          | 内容                                                                                                                                                                                                          | 在 main 上的耗时 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `app`         | 在固定版本的 Playwright 容器里依次跑：安装、格式检查、lint、架构规则、类型检查、Vitest 单元测试，以及 Storybook 里的浏览器测试和可访问性测试、构建、构建 Storybook、Playwright 端到端测试；失败时上传测试证据 | 约 70 秒         |
+| `local-stack` | 用 docker compose 起两个应用副本、nginx、PostgreSQL 17、S3Mock 和 AI 桩服务，检查负载均衡确实打到两个副本、存储桶可用，再拆掉                                                                                 | 约 88 秒         |
+| `duplication` | jscpd                                                                                                                                                                                                         | 约 19 秒         |
+| `ci`          | 汇总，三个任务都通过才算通过                                                                                                                                                                                  | 约 4 秒          |
 
 整条流水线约 1.5 分钟。
 
@@ -42,9 +42,9 @@ Dependabot 每周更新 npm 依赖（最多同时开 5 个 PR）和 GitHub Actio
 
 ## 环境和部署
 
-| 环境 | Vercel 项目 | Neon 项目 | Clerk 实例 | 地址 |
-|---|---|---|---|---|
-| staging | `lingocurrent-staging` | `lingocurrent-staging-db` | `lingocurrent-staging-auth`（开发实例） | https://lingocurrent-staging.vercel.app |
+| 环境       | Vercel 项目               | Neon 项目                    | Clerk 实例                                 | 地址                                      |
+| ---------- | ------------------------- | ---------------------------- | ------------------------------------------ | ----------------------------------------- |
+| staging    | `lingocurrent-staging`    | `lingocurrent-staging-db`    | `lingocurrent-staging-auth`（开发实例）    | https://lingocurrent-staging.vercel.app   |
 | production | `lingocurrent-production` | `lingocurrent-production-db` | `lingocurrent-production-auth`（生产实例） | 计划用 `lingocurrent.dpdns.org`，从未部署 |
 
 两个 Vercel 项目都关掉了 Git 自动部署，由 GitHub Actions 部署：
