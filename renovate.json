@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency updates: weekly on Monday, every non-major update in one pull request, each major update on its own, security updates at any time.",
+  "description": "Dependency updates: weekly on Monday, every non-major update in one pull request, each major update on its own, Playwright and its container image together, security updates at any time.",
   "extends": ["config:best-practices"],
   "timezone": "UTC",
   "schedule": ["* * * * 1"],
@@ -47,11 +47,17 @@
       "allowedVersions": "/^\\d*[02468]\\./"
     },
     {
-      "description": "A major Playwright update moves the packages and the end-to-end container image together; scripts/test-e2e.ts fails when their versions differ.",
+      "description": [
+        "The Playwright packages and the end-to-end container image move together in one pull request for every update type, because scripts/test-e2e.ts fails when their versions differ. This rule comes after the non-major group, so it wins over it.",
+        "The group waits as long as other npm packages do. The image's registry publishes no release dates, so the image is not aged itself (timestamp-optional) and the packages' age holds the whole group: no update is dropped from the group while it waits (internalChecksFilter none), and the branch is created only once every aged update has passed (prCreation not-pending)."
+      ],
       "matchPackageNames": ["@playwright/test", "playwright", "mcr.microsoft.com/playwright"],
-      "matchUpdateTypes": ["major"],
       "groupName": "Playwright",
-      "groupSlug": "playwright"
+      "groupSlug": "playwright",
+      "minimumReleaseAge": "3 days",
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "internalChecksFilter": "none",
+      "prCreation": "not-pending"
     }
   ],
   "customManagers": [
