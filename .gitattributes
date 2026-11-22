@@ -1,0 +1,5 @@
+# Text files are stored and checked out with LF so Prettier's line-ending rule holds on every OS.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary

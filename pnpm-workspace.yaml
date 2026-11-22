@@ -1,0 +1,6 @@
+# Install scripts stay off unless a package cannot work without one. These packages ship their
+# native binaries as platform-specific optional dependencies, so their scripts are not needed.
+allowBuilds:
+  esbuild: false
+  sharp: false
+  unrs-resolver: false
