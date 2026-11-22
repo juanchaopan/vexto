@@ -60,14 +60,14 @@ describe('vexto-billing-guard', () => {
     expect(await response.json()).toEqual({ status: 'ok' });
   });
 
-  it('disables billing when a pushed notification is over the budget', async () => {
+  it('disables billing when a pushed notification reports a cost above zero', async () => {
     const response = await postNotification(0.07, 0.01);
 
     expect(response.status).toBe(204);
     expect(billing.disableBilling).toHaveBeenCalledWith('vexto-staging');
   });
 
-  it('keeps billing when a pushed notification is within the budget', async () => {
+  it('keeps billing when a pushed notification reports no cost', async () => {
     const response = await postNotification(0, 0.01);
 
     expect(response.status).toBe(204);

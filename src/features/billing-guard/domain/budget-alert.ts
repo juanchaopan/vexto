@@ -7,10 +7,10 @@ export type BudgetAlert = {
 };
 
 /**
- * Whether the guard disables the project's billing: the cost so far is above zero and above the
- * budget. The budget is meant to be the smallest amount Cloud Billing accepts, so any real cost
- * crosses it; a notification within the budget leaves billing on.
+ * Whether the guard disables the project's billing: as soon as the cost so far is above zero,
+ * whatever the budget amount is. Normal use stays within the free tiers, so any cost means
+ * something runs beyond them; a notification without cost leaves billing on.
  */
-export function isOverBudget({ costAmount, budgetAmount }: BudgetAlert): boolean {
-  return costAmount > 0 && costAmount > budgetAmount;
+export function shouldDisableBilling({ costAmount }: BudgetAlert): boolean {
+  return costAmount > 0;
 }

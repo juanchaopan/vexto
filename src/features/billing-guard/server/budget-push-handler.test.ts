@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe('createBudgetPushHandler', () => {
-  it('disables billing of the project when the cost is over the budget', async () => {
+  it('disables billing of the project when the cost is above zero', async () => {
     const billing = fakeBilling();
 
     const response = await createBudgetPushHandler(billing)({ body: pushOf(0.02, 0.01) });
@@ -48,7 +48,16 @@ describe('createBudgetPushHandler', () => {
     expect(logged.join('')).toContain('billing has been disabled');
   });
 
-  it('leaves billing alone while the cost is within the budget', async () => {
+  it('disables billing for a cost still below the budget amount', async () => {
+    const billing = fakeBilling();
+
+    const response = await createBudgetPushHandler(billing)({ body: pushOf(0.5, 1) });
+
+    expect(response).toEqual({ status: 204 });
+    expect(billing.disableBilling).toHaveBeenCalledWith('vexto-staging');
+  });
+
+  it('leaves billing alone while nothing has been spent', async () => {
     const billing = fakeBilling();
 
     const response = await createBudgetPushHandler(billing)({ body: pushOf(0, 0.01) });
