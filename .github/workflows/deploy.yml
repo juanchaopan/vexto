@@ -1,7 +1,7 @@
 # Manual deployment of a version to a target. Production takes a version tag such as v1.2.3;
 # staging also takes a commit SHA. The commit must be on main and its ci run on main must have
-# passed every check before deploy-target runs. Production fails until its GitHub environment
-# is set up (see deploy-target.yml).
+# completed with every check passed before deploy-target runs. Production fails until its GitHub
+# environment is set up (see deploy-target.yml).
 #
 # The reusable workflow is referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on that line.
@@ -69,16 +69,23 @@ jobs:
             || fail "$VERSION is not a commit of this repository."
           git merge-base --is-ancestor "$sha" origin/main || fail "$VERSION ($sha) is not on main."
 
-          # The latest ci run of the push to main that brought in the commit must have passed
-          # every job except the staging deployment it started.
+          # The latest ci run of the push to main that brought in the commit must have completed,
+          # and the jobs other than the staging deployment it started must all have passed or
+          # been skipped. A run cancelled before it started has no jobs, so an empty job list
+          # does not count as passing.
           runs_url="repos/$REPO/actions/workflows/ci.yml/runs"
-          run_id=$(gh api "$runs_url?head_sha=$sha&event=push&branch=main&per_page=1" \
-            --jq '.workflow_runs[0].id // empty')
-          [ -n "$run_id" ] || fail "No ci run on main exists for $sha."
-          not_passed=$(gh api --paginate "repos/$REPO/actions/runs/$run_id/jobs?per_page=100" \
+          run=$(gh api "$runs_url?head_sha=$sha&event=push&branch=main&per_page=1" \
+            --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"')
+          [ -n "$run" ] || fail "No ci run on main exists for $sha."
+          read -r run_id run_status <<< "$run"
+          [ "$run_status" = completed ] \
+            || fail "The ci run $run_id of $sha has not completed (status $run_status)."
+          jobs_file="$RUNNER_TEMP/ci-jobs.tsv"
+          gh api --paginate "repos/$REPO/actions/runs/$run_id/jobs?per_page=100" \
             --jq '.jobs[] | select((.name | startswith("deploy-staging")) | not)
-              | select(.conclusion != "success" and .conclusion != "skipped")
-              | "\(.name): \(.conclusion // .status)"')
+              | "\(.name)\t\(.conclusion // .status)"' > "$jobs_file"
+          [ -s "$jobs_file" ] || fail "The ci run $run_id of $sha has no check jobs, so it did not pass."
+          not_passed=$(awk -F '\t' '$2 != "success" && $2 != "skipped"' "$jobs_file")
           if [ -n "$not_passed" ]; then
             echo "$not_passed"
             fail "ci has not passed for $sha (run $run_id)."

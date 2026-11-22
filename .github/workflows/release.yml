@@ -10,8 +10,11 @@ on:
 
 permissions: {}
 
+# A concurrency group holds one running and one waiting run, and a newer run cancels the waiting
+# one, so every pushed commit gets a group of its own: a later push never cancels the release of
+# an earlier one, and reruns of one commit take turns.
 concurrency:
-  group: release
+  group: release-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:

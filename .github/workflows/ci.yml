@@ -18,9 +18,13 @@ on:
 
 permissions: {}
 
-# A new push to a pull request replaces the run in progress; runs on main finish in order.
+# A concurrency group holds one running and one waiting run, and a newer run cancels the waiting
+# one. A pull request has one group, so a new push replaces its run in progress. Every push to
+# main gets a group of its own commit, so no commit on main loses its checks or its staging
+# deployment to a later push; the deployments themselves take turns in the deploy-<target> group
+# of deploy-target.yml.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -265,8 +269,10 @@ jobs:
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - run: task test-security
 
-  # Migration tests run only when a file under drizzle/ changed. The decision is made inside the
-  # job, so the required check still reports success when there is nothing to test.
+  # Migration tests run only when a change touches the migrations: the scripts in drizzle/, the
+  # migration tests, the table definitions they are generated from, the drizzle-kit configuration
+  # or the migration program. The decision is made inside the job, so the required check still
+  # reports success when there is nothing to test.
   test-migration:
     name: test-migration
     runs-on: ubuntu-24.04
@@ -278,7 +284,7 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Look for changed migration scripts
+      - name: Look for changes to the migrations
         id: changes
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -286,6 +292,13 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
+          migration_paths=(
+            drizzle/
+            ':(glob)**/*.migration.test.ts'
+            ':(glob)src/features/*/server/schema.ts'
+            drizzle.config.ts
+            scripts/migrate.ts
+          )
           # A pull request is compared from where it left its base; a push from the previous tip of
           # main. A push without a usable previous tip runs the tests.
           if [ "$EVENT_NAME" = pull_request ]; then
@@ -299,12 +312,16 @@ jobs:
           if [ -z "$range" ]; then
             echo "No earlier commit to compare with; running the migration tests."
             changed=true
-          elif [ -n "$(git diff --name-only "$range" -- drizzle/)" ]; then
-            echo "Files under drizzle/ changed; running the migration tests."
-            changed=true
           else
-            echo "No file under drizzle/ changed; the migration tests are not needed."
-            changed=false
+            changed_files=$(git diff --name-only "$range" -- "${migration_paths[@]}")
+            if [ -n "$changed_files" ]; then
+              echo "Changed files that affect the migrations:"
+              echo "$changed_files"
+              changed=true
+            else
+              echo "No change affects the migrations; the migration tests are not needed."
+              changed=false
+            fi
           fi
           echo "migrations=$changed" >> "$GITHUB_OUTPUT"
       - if: steps.changes.outputs.migrations == 'true'
