@@ -82,10 +82,11 @@ jobs:
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - run: task typecheck
 
+  # Builds the web application and the Cloud Run image; the image is not pushed.
   build:
     name: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -389,7 +390,9 @@ jobs:
           task commits-check FROM="origin/$BASE_REF" TO="$HEAD_SHA" BRANCH="$HEAD_REF"
 
   # only-if-main-head makes the deployment skip, successfully, a commit that is no longer the
-  # head of main when its turn to deploy comes (see deploy-target.yml).
+  # head of main when its turn to deploy comes (see deploy-target.yml). A called workflow gets at
+  # most the permissions of its caller, so this job grants the id-token permission the
+  # deployment needs for its Google Cloud login.
   deploy-staging:
     name: deploy-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -413,6 +416,7 @@ jobs:
       - test-e2e
     permissions:
       contents: read
+      id-token: write
     uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository,secrets-inherit]
     with:
       target: staging

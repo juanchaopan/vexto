@@ -9,6 +9,8 @@ const plainWindowsArgument = /^[A-Za-z0-9_@+=:,./-]+$/;
 export type GcloudOptions = {
   /** Working directory; relative paths in the arguments are read from here. */
   cwd?: string;
+  /** Environment of the command; callers holding secrets in theirs pass one without them. */
+  env?: NodeJS.ProcessEnv;
   /** Written to standard input, for values such as secrets. */
   input?: string;
   /** Keep standard output in memory and resolve to it instead of showing it. */
@@ -23,13 +25,14 @@ function spawnGcloud(args: readonly string[], options: GcloudOptions) {
     options.captureOutput ? 'pipe' : 'inherit',
     'inherit',
   ];
+  const spawnOptions = { cwd: options.cwd, env: options.env ?? process.env, stdio };
   if (process.platform !== 'win32') {
-    return spawn('gcloud', args, { cwd: options.cwd, stdio });
+    return spawn('gcloud', args, spawnOptions);
   }
   if (!args.every((arg) => plainWindowsArgument.test(arg))) {
     throw new Error('A gcloud argument has characters the Windows shell would read itself.');
   }
-  return spawn(['gcloud', ...args].join(' '), { cwd: options.cwd, stdio, shell: true });
+  return spawn(['gcloud', ...args].join(' '), { ...spawnOptions, shell: true });
 }
 
 /**
