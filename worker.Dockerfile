@@ -8,14 +8,20 @@
 # packages and, while the lockfile stays the same, the dependencies.
 FROM node:26.13.1-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS base
 
-# Production dependencies only, installed from the lockfile with the pnpm version of
-# packageManager. Install scripts follow allowBuilds in pnpm-workspace.yaml. onnxruntime-node
-# ships its native library for every platform; only the image's own is kept.
+# Production dependencies of the Cloud Run entries only, with the pnpm version of packageManager.
+# scripts/worker-dependencies.ts takes the packages only the web application uses
+# (scripts/worker-image.json) out of the manifest and the lockfile, and the frozen install puts
+# every remaining package at its locked version. Install scripts follow allowBuilds in
+# pnpm-workspace.yaml. onnxruntime-node ships its native library for every platform; only the
+# image's own is kept.
 FROM base AS dependencies
 ARG TARGETARCH
 WORKDIR /build
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY scripts/worker-dependencies.ts scripts/worker-image.json ./scripts/
+COPY scripts/lib/worker-dependencies.ts ./scripts/lib/
 RUN npm install --global --no-fund --no-audit "$(node -p "require('./package.json').packageManager")" \
+  && node scripts/worker-dependencies.ts . \
   && pnpm install --frozen-lockfile --prod --config.confirm-modules-purge=false \
   && arch="$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)" \
   && for dir in node_modules/.pnpm/onnxruntime-node@*/node_modules/onnxruntime-node/bin/napi-v*; do \
@@ -24,14 +30,14 @@ RUN npm install --global --no-fund --no-audit "$(node -p "require('./package.jso
   done
 
 FROM base
-# ffmpeg encodes the speech as MP3; it comes from the distribution's packages.
+# lame encodes the speech as MP3; it comes from the distribution's packages.
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ffmpeg \
+  && apt-get install --yes --no-install-recommends lame \
   && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=dependencies /build/node_modules ./node_modules
-COPY package.json ./
+COPY --from=dependencies /build/package.json ./
 COPY config ./config
 COPY src ./src
 # The node user of the base image; the files stay owned by root, so the process cannot change them.

@@ -5,6 +5,8 @@
 //   src/lib       shared code such as the database connection and environment reading
 // Dependencies point app -> features -> lib and worker -> features -> lib.
 // Tests are left out of the graph: they may reach into the code they test.
+const fs = process.getBuiltinModule('node:fs');
+const path = process.getBuiltinModule('node:path');
 
 // Server-only packages that must never end up in code shipped to the browser.
 const serverSdks = [
@@ -25,6 +27,16 @@ const workerOnlyPackages = [
   'node_modules/@mozilla/readability/',
   'node_modules/onnxruntime-node/',
 ];
+
+// Runtime dependencies only the web application uses. The Cloud Run image is installed without
+// them (scripts/worker-image.json), so a Cloud Run entry that reached one would fail to start.
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const workerImage = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'scripts', 'worker-image.json'), 'utf8'),
+);
+const webOnlyPackages = workerImage.webOnlyDependencies.map(
+  (name) => `node_modules/${escapeRegExp(name)}/`,
+);
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -85,6 +97,14 @@ module.exports = {
         'jsdom, @mozilla/readability and onnxruntime-node run only in Cloud Run and must not be reachable from the web application.',
       from: { path: '^src/app/' },
       to: { path: workerOnlyPackages, reachable: true },
+    },
+    {
+      name: 'worker-not-to-web-only-packages',
+      severity: 'error',
+      comment:
+        'The Cloud Run image leaves out the packages in scripts/worker-image.json, so they must not be reachable from a Cloud Run entry.',
+      from: { path: '^src/worker/' },
+      to: { path: webOnlyPackages, reachable: true },
     },
     {
       name: 'cross-feature-through-index',

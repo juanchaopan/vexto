@@ -1,10 +1,14 @@
 # The worker image gets only what the Cloud Run entries run: the manifest and lockfile for the
-# dependencies, the release configuration and the code below src/worker/, src/features/ and
-# src/lib/. Everything else, tests included, stays out of the build context.
+# dependencies with the script that drops the web-only packages from both, the release
+# configuration and the code below src/worker/, src/features/ and src/lib/. Everything else,
+# tests included, stays out of the build context.
 *
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!scripts/worker-image.json
+!scripts/worker-dependencies.ts
+!scripts/lib/worker-dependencies.ts
 !config/
 !src/worker/
 !src/features/

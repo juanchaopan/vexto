@@ -49,7 +49,7 @@ export const cloudRunDeployments: readonly CloudRunDeployment[] = [
   },
   {
     // The model takes about 400 MB on disk and somewhat more once loaded, so 2 GiB leaves room
-    // for the inference and ffmpeg; one vCPU synthesizes a word or a sentence in seconds. With
+    // for the inference and lame; one vCPU synthesizes a word or a sentence in seconds. With
     // 1 vCPU and 2 GiB the free 180,000 vCPU-seconds and 360,000 GiB-seconds of Cloud Run
     // services both last 50 instance-hours a month. Cloud Storage volumes need the second
     // generation execution environment.

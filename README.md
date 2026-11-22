@@ -14,7 +14,7 @@ vexto 是一个手机网页应用：听读英文订阅源里的文章，选中�
 | pnpm       | 12.21.0 | `npm install --global pnpm@12.21.0`                         | `npm install --global pnpm@12.21.0`                |
 | Task       | 3.54.0  | `winget install --id Task.Task --version 3.54.0`            | `brew install go-task`                             |
 | Docker     | 最新版  | `winget install --id Docker.DockerDesktop`                  | `brew install --cask docker`                       |
-| ffmpeg     | 最新版  | `winget install --id Gyan.FFmpeg`                           | `brew install ffmpeg`                              |
+| lame       | 最新版  | `winget install --id LAME.LAME`                             | `brew install lame`                                |
 | gitleaks   | 8.30.1  | `winget install --id Gitleaks.Gitleaks --version 8.30.1`    | `brew install gitleaks`                            |
 | actionlint | 1.7.12  | `winget install --id rhysd.actionlint --version 1.7.12`     | `brew install actionlint`                          |
 | zizmor     | 1.32.0  | `winget install --id zizmor.zizmor --version 1.32.0`        | `brew install zizmor`                              |
@@ -22,7 +22,7 @@ vexto 是一个手机网页应用：听读英文订阅源里的文章，选中�
 - Node.js 的版本写在 `.nvmrc` 里，`fnm install` 和 `fnm use` 会读它；要让 fnm 进入仓库目录时自动切换，按 fnm 的说明在 shell 配置里加上 `fnm env --use-on-cd`。
 - pnpm 的版本写在 `package.json` 的 `packageManager` 里，其他版本的 pnpm 运行时会自动切换到这个版本。
 - Homebrew 只装最新版。装好后用 `task --version`、`gitleaks version`、`actionlint --version`、`zizmor --version` 看一下版本，和上表不一致时以上表为准，CI 用的也是上表的版本。
-- ffmpeg 给本机运行的收集任务和朗读服务把合成的声音编码成 MP3；Cloud Run 的镜像里装的是 Debian 的 ffmpeg，不用本机的这个。
+- lame 给本机运行的收集任务和朗读服务把合成的声音编码成 MP3；Cloud Run 的镜像里装的是 Debian 的 lame，不用本机的这个。
 - 集成测试、安全测试、端到端测试和 Cloud Run 镜像的构建都要用 Docker，运行前要先启动 Docker Desktop。
 - 只有把朗读模型复制到 Google Cloud 时（`task model-upload`）才要 gcloud CLI：`winget install --id Google.CloudSDK` 或 `brew install --cask google-cloud-sdk`。
 
