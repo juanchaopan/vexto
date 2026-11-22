@@ -59,7 +59,7 @@ flowchart LR
 | 对象存储   | 对象存储            | Neon Object Storage，私有存储桶，S3 协议；存文章、单词和例句的音频                   | 资源已存在，#3 接入 |
 | 模型存储   | 对象存储            | Google Cloud Storage 存储桶，存固定版本的朗读模型，挂载进 Cloud Run                  | #3 接入             |
 | AI         | 第三方服务          | OpenAI `gpt-6-luna`，服务端用官方 SDK 直接调用                                       | #3 接入             |
-| 登录       | 第三方服务          | Clerk，受邀 Google 登录，沿用 lingocurrent 的 Clerk 应用                             | #3 接入             |
+| 登录       | 第三方服务          | Clerk 应用 `vexto`，受邀 Google 登录，只开 Google 一种登录方式                       | #3 接入             |
 | Speak 判定 | 待定                | 待 spike #4                                                                          | 待 spike            |
 
 - 收集任务做完一篇文章的全部工作：读 RSS、需要时抓原网页、整理正文、切分句子、去重、逐句合成朗读、拼成整篇 MP3、上传、写入时间轴，最后把文章标成可读。Web 应用不收集，也不合成文章。
@@ -187,11 +187,11 @@ worker.Dockerfile         Cloud Run 镜像
 
 ## 部署目标
 
-| 目标       | 部署到                                                                                                                                                          | 地址                                       | 用到的资源                                                                                                                                                                                                                                              |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| staging    | Vercel 团队 `juanchaopan1`（ID `team_6WBQUpNIhHEGrjeEWxoFyN62`，Hobby）的项目 `vexto-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`）；函数地区 cle1；不连 Git | https://vexto-staging.vercel.app           | Neon 组织 `juanchao` 的项目 `vexto-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `lingocurrent-staging-audio`（私有）                              |
-| staging    | Google Cloud 项目 `vexto-staging`，地区 us-central1                                                                                                             | 朗读服务的地址由 #3 的 scaffold 创建后填写 | Cloud Run 任务 `vexto-collect`、服务 `vexto-tts` 和 `vexto-billing-guard`；Cloud Scheduler 任务 `vexto-collect`；Artifact Registry 仓库 `vexto`；Cloud Storage 模型存储桶；Secret Manager；预算和它的 Pub/Sub 主题；GitHub 和 Vercel 两个身份联合提供方 |
-| production | Vercel 项目 `lingocurrent-production`                                                                                                                           | 待定                                       | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有）；Google Cloud 项目以后单独建                                              |
+| 目标       | 部署到                                                                                                                                                          | 地址                                                        | 用到的资源                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| staging    | Vercel 团队 `juanchaopan1`（ID `team_6WBQUpNIhHEGrjeEWxoFyN62`，Hobby）的项目 `vexto-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`）；函数地区 cle1；不连 Git | https://vexto-staging.vercel.app                            | Neon 组织 `juanchao` 的项目 `vexto-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `vexto-staging-audio`（私有）；Clerk 应用 `vexto` 的开发实例                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| staging    | Google Cloud 项目 `vexto-staging`（编号 `290764849418`），地区 us-central1，关联项目所有者的结算账户（币种 CAD）                                                | 朗读服务 https://vexto-tts-290764849418.us-central1.run.app | Cloud Run 任务 `vexto-collect`；Cloud Run 服务 `vexto-tts` 和 `vexto-billing-guard`（https://vexto-billing-guard-290764849418.us-central1.run.app）；Cloud Scheduler 任务 `vexto-collect`；Artifact Registry 仓库 `vexto`；模型存储桶 `vexto-staging-models`；Secret Manager 密钥 `DATABASE_URL`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`；Pub/Sub 主题 `vexto-budget` 和推送订阅 `vexto-budget-push`；预算“vexto-staging zero spend”；Workload Identity 池 `github`（提供方 `vexto-repo`）和 `vercel`（提供方 `vexto-staging`）；服务账号 `vexto-deploy`、`vexto-collect`、`vexto-tts`、`vexto-billing-guard`、`vexto-scheduler`、`vexto-budget-push`、`vexto-tts-invoker`（都是 `@vexto-staging.iam.gserviceaccount.com`） |
+| production | Vercel 项目 `lingocurrent-production`                                                                                                                           | 待定                                                        | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有）；Google Cloud 项目以后单独建                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 - staging 在每次合并到 main 且 CI 通过后由 CD 自动部署，部署后跑全部冒烟测试。main 上每个提交各自跑一次 CI，互不取消；部署一次只跑一个，轮到某个提交部署时，如果它已经不是 main 的最新提交，就跳过部署，留给更新的提交。
 - 一次部署按这个顺序：迁移数据库 → 构建并推送镜像 → 更新 Cloud Run 任务和服务 → 部署 Vercel → 冒烟测试。Web 应用和 Cloud Run 总是同一个提交，代码和数据库结构的版本一致。
@@ -203,6 +203,29 @@ worker.Dockerfile         Cloud Run 镜像
   - 删掉 `vexto-staging` 的 Development 环境里遗留的 `DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`；
   - `neon projects update bold-water-71503400 --name vexto-staging-db`；
   - 建 GitHub 环境 `staging`（只允许 main 部署），设好它的变量和密钥（见下文）。
+- #3 执行过的操作：
+  - 在 Neon 分支 `br-cool-king-bdzirfp0` 上建私有存储桶 `vexto-staging-audio`；用 Neon CLI 建这个分支的凭据 `vexto-staging`（权限 `storage:read`、`storage:write`），经管道直接写进 GitHub 环境 `staging` 的两个 S3 密钥；删掉 lingocurrent 的 staging 存储桶 `lingocurrent-staging-audio`；
+  - 建 Clerk 应用 `vexto`（`app_3MTvgzTvtdoy9ZLFbtr0jH5wOG9`），它的开发实例（`ins_3MTvh0NtYW3cOCduWE9Q2wFD927`）给 staging 和本机开发用；只开 Google 登录，关掉密码和邮箱验证码登录；Clerk 上的注册是开放的，谁能用由应用查成员表决定；删掉 lingocurrent 的 staging Clerk 应用；
+  - 建 Google Cloud 项目 `vexto-staging`（编号 `290764849418`），关联项目所有者的结算账户（币种 CAD），打开这些 API：run、artifactregistry、secretmanager、iamcredentials、sts、cloudbilling、cloudscheduler、pubsub、storage、billingbudgets、iam、cloudresourcemanager；
+  - 建 Artifact Registry 仓库 `vexto`，清理策略只保留最新的两个版本；
+  - 建模型存储桶 `vexto-staging-models`（统一访问控制，禁止公开访问），把固定版本的朗读模型放进 `supertonic-3/aafc6e32416a594460b32413efc49d7fe4ce6d46/`（约 399 MB）；
+  - 建 Secret Manager 密钥 `DATABASE_URL`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`，版本由 CD 部署时写入；
+  - 建服务账号（都是 `@vexto-staging.iam.gserviceaccount.com`）并授权：
+    - `vexto-deploy`：项目上的 `run.admin`；三个运行身份 `vexto-collect`、`vexto-tts`、`vexto-billing-guard` 上的 `iam.serviceAccountUser`；仓库 `vexto` 上的 `artifactregistry.writer`；三个密钥上的 `secretmanager.secretVersionManager` 和 `secretmanager.secretAccessor`；它自己身上的 `iam.serviceAccountOpenIdTokenCreator`；`vexto-tts` 上的 `run.invoker`；
+    - `vexto-collect`：读模型存储桶和三个密钥；
+    - `vexto-tts`：读模型存储桶和两个 S3 密钥；
+    - `vexto-billing-guard`：项目上的 `billing.projectManager`；
+    - `vexto-scheduler`：启动收集任务；
+    - `vexto-budget-push`：调用结算保护；
+    - `vexto-tts-invoker`：调用朗读服务；
+  - 建 Workload Identity 池 `github` 和提供方 `vexto-repo`：只接受仓库 `juanchaopan/vexto`、GitHub 环境 `staging` 的令牌，只有主体 `repo:juanchaopan/vexto:environment:staging` 能扮演 `vexto-deploy`；
+  - 建 Workload Identity 池 `vercel` 和提供方 `vexto-staging`：签发方 https://oidc.vercel.com/juanchaopan1，受众 https://vercel.com/juanchaopan1，只有主体 `owner:juanchaopan1:project:vexto-staging:environment:production` 能扮演 `vexto-tts-invoker`；
+  - 用 Google 的示例镜像作占位，建 Cloud Run 任务 `vexto-collect` 和服务 `vexto-tts`、`vexto-billing-guard`；第一次真正的部署把占位镜像换成 vexto 的镜像；
+  - 建 Cloud Scheduler 任务 `vexto-collect`：`*/15 * * * *`（UTC），以 `vexto-scheduler` 的身份调用 Cloud Run API 的 `jobs.run`；建好时是暂停的，第一次真正的部署之后再恢复；
+  - 建 Pub/Sub 主题 `vexto-budget` 和推送订阅 `vexto-budget-push`，以 `vexto-budget-push` 的身份推送到结算保护的 `/budget-notifications`；
+  - 建预算“vexto-staging zero spend”：作用于项目 `vexto-staging`，金额 1 加元，阈值 1% 和 100%，通知发到主题 `vexto-budget`；结算保护看到费用大于 0 就停用结算，不等阈值；
+  - Vercel 项目 `vexto-staging` 打开 OIDC 联合，签发方模式选 Team；它的 Development 环境写入 Clerk 应用 `vexto` 开发实例的两个值；
+  - GitHub 环境 `staging` 设好 #3 的变量和密钥（见下文）。
 - Node 版本由 `package.json` 的 `engines`（26.x）决定，函数地区由 `vercel.json` 决定，都不在 Vercel 项目设置里改。
 
 ### Google Cloud 的费用
@@ -216,7 +239,7 @@ Google Cloud 必须绑定结算账户才能使用。正常使用全部在免费�
 | 出站流量          | 北美每月 1 GB                                  | 上传到 Neon 的 MP3，每月约 0.4 GB                                                 |
 | Cloud Scheduler   | 每个结算账户 3 个任务                          | 1 个                                                                              |
 | Cloud Storage     | us-central1 每月 5 GB，同地区读取不收流量费    | 模型约 400 MB                                                                     |
-| Artifact Registry | 0.5 GB                                         | 一个不含模型和网页专用包的镜像，约 150–200 MB，只保留最近两个版本                 |
+| Artifact Registry | 0.5 GB                                         | 一个不含模型和网页专用包的镜像，压缩后约 120 MB，只保留最近两个版本               |
 | Secret Manager    | 6 个活动版本                                   | 3 个密钥，值没变就不写新版本，写了新版本就删掉旧版本                              |
 
 限量和保护：
@@ -245,7 +268,7 @@ Google Cloud 必须绑定结算账户才能使用。正常使用全部在免费�
 | PostgreSQL         | 容器（`postgres:18`）                                                                                           | 测试命令用 Testcontainers 起一次性的容器                                   |
 | 对象存储           | 容器里的 Adobe S3Mock                                                                                           | 同左，由测试命令起停                                                       |
 | OpenAI             | 真实服务，用开发环境自己的密钥（见下文“本机开发”）                                                              | MSW 测试替身                                                               |
-| Clerk              | Clerk 开发实例（`lingocurrent-staging-auth`）                                                                   | Clerk 官方的测试模式，用 @clerk/testing                                    |
+| Clerk              | Clerk 应用 `vexto` 的开发实例，和 staging 共用                                                                  | Clerk 官方的测试模式，用 @clerk/testing                                    |
 | Cloud Scheduler    | 不运行，需要时手动运行收集任务                                                                                  | 不运行                                                                     |
 | Google 身份联合    | 本机的 Web 应用直接调用本机的朗读服务，不带身份令牌                                                             | 测试替身                                                                   |
 | Speak 判定         | 待 spike #4                                                                                                     | 待 spike #4                                                                |
@@ -391,27 +414,27 @@ Google Cloud 的身份：不用任何长期的服务账号密钥。
 - **staging 和 production**：以 GitHub 环境 `staging`、`production` 为准，这两个环境各自保存该目标的全部变量和密钥，只允许从 main 部署。应用运行在 Vercel 上，只能读 Vercel 项目里的环境变量，所以部署任务在构建之前，把运行时要用的值从 GitHub 环境经标准输入写进该目标 Vercel 项目的 Production 环境：密钥写成 Sensitive，变量写成普通类型；GitHub 环境里没有值的名字跳过；某个值存成了错误的类型（密钥存成了变量，或者反过来）时停止同步。Cloud Run 要用的密钥同样经标准输入写进该目标 Google Cloud 项目的 Secret Manager，值没变就不写新版本，写了新版本就删掉旧版本；变量写成 Cloud Run 的环境变量。Vercel 和 Google Cloud 里的值都只是副本，每次部署都会覆盖。运行时变量的名字和类型以 `scripts/lib/runtime-env.ts` 为准，清单里还写明每个值是 Web 应用用、Cloud Run 用还是都用；部署工作流的同步步骤按名字逐个接收这些值，不接收整个密钥集合，一个单元测试保证工作流里的名字和类型与这份清单完全一致。新加一个运行时值，要同时加进清单和同步步骤。
 - **本机开发**：保存在 Vercel 项目 `vexto-staging` 的 Development 环境，用 `task env-pull` 生成不提交的 `.env.local`。拉取哪个项目和团队写在 `scripts/env-pull.json` 里，可以用环境变量覆盖。本机的 `DATABASE_URL` 指向本机的 PostgreSQL 容器，对象存储指向本机的 S3Mock，`TTS_SERVICE_URL` 指向本机的朗读服务。
 
-| 名称                                                     | 用途                             | 类型 | 谁读                         | 值从哪来                                                                            | 由谁设置      |
-| -------------------------------------------------------- | -------------------------------- | ---- | ---------------------------- | ----------------------------------------------------------------------------------- | ------------- |
-| `VERCEL_TOKEN`                                           | 部署到 Vercel                    | 密钥 | 部署任务                     | 项目所有者在 Vercel 网页上新建，每个目标一个；Vercel 不允许命令行登录的会话创建令牌 | #1（staging） |
-| `VERCEL_ORG_ID`                                          | Vercel 团队                      | 变量 | 部署任务                     | 资源本身：`team_6WBQUpNIhHEGrjeEWxoFyN62`                                           | #1（staging） |
-| `VERCEL_PROJECT_ID`                                      | 该目标的 Vercel 项目             | 变量 | 部署任务                     | 资源本身：staging 是 `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`                             | #1（staging） |
-| `APP_URL`                                                | 冒烟测试的地址                   | 变量 | 部署任务                     | 资源本身：staging 是 https://vexto-staging.vercel.app                               | #1（staging） |
-| `GCP_PROJECT_ID`、`GCP_REGION`                           | 该目标的 Google Cloud 项目和地区 | 变量 | 部署任务                     | 资源本身                                                                            | #3（staging） |
-| `GCP_DEPLOY_PROVIDER`、`GCP_DEPLOY_SERVICE_ACCOUNT`      | 部署任务登录 Google Cloud        | 变量 | 部署任务                     | 建身份联合时得到                                                                    | #3（staging） |
-| `DATABASE_URL`                                           | 数据库连接（连接池）             | 密钥 | Web 应用、收集任务           | Neon 连接地址                                                                       | #3（staging） |
-| `DATABASE_URL_UNPOOLED`                                  | 数据库连接（直连，迁移用）       | 密钥 | 部署任务的迁移               | Neon 连接地址                                                                       | #3（staging） |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`                      | Clerk 公开密钥                   | 变量 | Web 应用                     | staging 和本机用 Clerk 开发实例，生产用生产实例                                     | #3（staging） |
-| `CLERK_SECRET_KEY`                                       | Clerk 密钥                       | 密钥 | Web 应用                     | 同上                                                                                | #3（staging） |
-| `OPENAI_API_KEY`                                         | 调用 OpenAI                      | 密钥 | Web 应用                     | 项目所有者在 OpenAI 建，staging、生产和本机各一个，可以各设消费上限                 | #3（staging） |
-| `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`                  | 对象存储位置                     | 变量 | Web 应用、收集任务、朗读服务 | Neon 存储桶                                                                         | #3（staging） |
-| `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`               | 对象存储凭据                     | 密钥 | Web 应用、收集任务、朗读服务 | Neon 存储桶；命令行不能生成时由项目所有者提供                                       | #3（staging） |
-| `TTS_SERVICE_URL`                                        | 朗读服务的地址                   | 变量 | Web 应用                     | 资源本身                                                                            | #3（staging） |
-| `GCP_VERCEL_PROVIDER`、`GCP_TTS_INVOKER_SERVICE_ACCOUNT` | Web 应用经身份联合调用朗读服务   | 变量 | Web 应用                     | 建身份联合时得到                                                                    | #3（staging） |
+| 名称                                                     | 用途                             | 类型 | 谁读                         | 值从哪来                                                                                                    | 由谁设置      |
+| -------------------------------------------------------- | -------------------------------- | ---- | ---------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------- |
+| `VERCEL_TOKEN`                                           | 部署到 Vercel                    | 密钥 | 部署任务                     | 项目所有者在 Vercel 网页上新建，每个目标一个；Vercel 不允许命令行登录的会话创建令牌                         | #1（staging） |
+| `VERCEL_ORG_ID`                                          | Vercel 团队                      | 变量 | 部署任务                     | 资源本身：`team_6WBQUpNIhHEGrjeEWxoFyN62`                                                                   | #1（staging） |
+| `VERCEL_PROJECT_ID`                                      | 该目标的 Vercel 项目             | 变量 | 部署任务                     | 资源本身：staging 是 `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`                                                     | #1（staging） |
+| `APP_URL`                                                | 冒烟测试的地址                   | 变量 | 部署任务                     | 资源本身：staging 是 https://vexto-staging.vercel.app                                                       | #1（staging） |
+| `GCP_PROJECT_ID`、`GCP_REGION`                           | 该目标的 Google Cloud 项目和地区 | 变量 | 部署任务                     | 资源本身：staging 是 `vexto-staging`、`us-central1`                                                         | #3（staging） |
+| `GCP_DEPLOY_PROVIDER`、`GCP_DEPLOY_SERVICE_ACCOUNT`      | 部署任务登录 Google Cloud        | 变量 | 部署任务                     | 建身份联合时得到：staging 是提供方 `vexto-repo` 和服务账号 `vexto-deploy`                                   | #3（staging） |
+| `DATABASE_URL`                                           | 数据库连接（连接池）             | 密钥 | Web 应用、收集任务           | Neon 连接地址，用 Neon CLI 取得                                                                             | #3（staging） |
+| `DATABASE_URL_UNPOOLED`                                  | 数据库连接（直连，迁移用）       | 密钥 | 部署任务的迁移               | Neon 连接地址，用 Neon CLI 取得                                                                             | #3（staging） |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`                      | Clerk 公开密钥                   | 变量 | Web 应用                     | Clerk 应用 `vexto`：staging 和本机用它的开发实例；生产用哪个实例在搭建生产时决定                            | #3（staging） |
+| `CLERK_SECRET_KEY`                                       | Clerk 密钥                       | 密钥 | Web 应用                     | 同上，用 Clerk CLI 取得                                                                                     | #3（staging） |
+| `OPENAI_API_KEY`                                         | 调用 OpenAI                      | 密钥 | Web 应用                     | 项目所有者在 OpenAI 建，staging、生产和本机各一个，可以各设消费上限                                         | #3（staging） |
+| `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`                  | 对象存储位置                     | 变量 | Web 应用、收集任务、朗读服务 | Neon 存储桶：staging 是 `vexto-staging-audio`                                                               | #3（staging） |
+| `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`               | 对象存储凭据                     | 密钥 | Web 应用、收集任务、朗读服务 | Neon 分支凭据（staging 是 `vexto-staging`，权限 `storage:read`、`storage:write`），建资源时用 Neon CLI 生成 | #3（staging） |
+| `TTS_SERVICE_URL`                                        | 朗读服务的地址                   | 变量 | Web 应用                     | 资源本身：staging 是 https://vexto-tts-290764849418.us-central1.run.app                                     | #3（staging） |
+| `GCP_VERCEL_PROVIDER`、`GCP_TTS_INVOKER_SERVICE_ACCOUNT` | Web 应用经身份联合调用朗读服务   | 变量 | Web 应用                     | 建身份联合时得到：staging 是提供方 `vexto-staging` 和服务账号 `vexto-tts-invoker`                           | #3（staging） |
 
 上表的密钥都存在 GitHub 环境里，Cloud Run 用到的那几个（`DATABASE_URL`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`）在部署时另写一份副本进 Secret Manager。定时触发由 Cloud Scheduler 用 Google 自己的认证启动收集任务，所以没有 `CRON_SECRET`。
 
-Vercel 项目 `vexto-staging` 的 Production 环境里，现在还有 Neon 集成接入时自动加的 `DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`，Development 环境里还有 lingocurrent 留下的 Clerk 开发实例的两个值。#3 把数据库地址存进 GitHub 环境后，以 GitHub 的为准；如果 Vercel 不允许覆盖集成管理的变量，#3 回到这一步重新决定。
+Vercel 项目 `vexto-staging` 的 Production 环境里有 Neon 集成接入时自动加的 `DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`，部署时由 GitHub 环境里的值覆盖，以 GitHub 的为准；如果 Vercel 不允许覆盖集成管理的变量，#3 回到这一步重新决定。Development 环境里是 Clerk 应用 `vexto` 开发实例的两个值，供本机开发用。
 
 成员名单：`task member -- add|revoke|list <邮箱> --target <环境>` 修改目标环境数据库里的成员表。数据库连接地址由 Neon CLI（`neonctl`，用 `pnpm dlx` 临时运行，版本写死在 `Taskfile.yml` 里）按配置里写的该目标的 Neon 项目和分支取得，项目所有者事先在本机用它登录一次；地址只在内存里交给脚本，不显示，也不写进文件。不用 GitHub 工作流做这件事，因为公开仓库的运行日志和输入谁都能看，会暴露成员的邮箱。
 
@@ -420,6 +443,6 @@ Vercel 项目 `vexto-staging` 的 Production 环境里，现在还有 Neon 集�
 ## 待定事项
 
 - Speak 用什么判定：由 spike #4 决定，Speak 复习在 #5 实现。
-- 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、生产的 Google Cloud 项目、Clerk 生产实例的邮件问题，以及两个 Clerk 实例共用一个 Google OAuth 客户端的问题。
+- 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、生产的 Google Cloud 项目、生产用的 Clerk 应用（沿用 lingocurrent 现有的 `lingocurrent-production-auth`，还是在 Clerk 应用 `vexto` 里建生产实例）、Clerk 生产实例的邮件问题，以及两个 Clerk 实例共用一个 Google OAuth 客户端的问题。
 
 Last changed: #3 (2026-11-22)
