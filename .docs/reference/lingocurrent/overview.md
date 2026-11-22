@@ -33,6 +33,7 @@ lingocurrent 是 GitHub 公开仓库 `juanchaopan/lingocurrent`，描述为“En
 - 一个响应式网页同时适配电脑、平板和手机。
 - 性能目标：列表和已生成的正文 P95 ≤ 3 秒，AI 查词和语音判定 P95 ≤ 10 秒；月可用性 99.5%；总费用目标每月 30 美元（是目标，不是上限）；Vercel 和 Neon 都保持免费套餐。
 - 不做：文章配图、付费、社交、原生 App、离线、导出、费用看板（用量和费用会记录）、微服务。
+- 只收全文 RSS，不抓网页；频道清单通过管理脚本导入数据库。
 
 需求编号 REQ-001 到 REQ-039，AI 给出的默认决定 D-001 到 D-016、E-001 到 E-008，未决问题 Q-001 到 Q-038，都写在它的产品文档里。
 
@@ -59,15 +60,16 @@ lingocurrent 是 GitHub 公开仓库 `juanchaopan/lingocurrent`，描述为“En
 
 ## 对 vexto 的结论
 
-lingocurrent 的产品功能代码几乎为零，所以 vexto 不需要沿用它的代码。它能用作模板的是下面三样：
+vexto 的功能范围以 lingocurrent 为准，只改了四处：只做手机布局；RSS 只给摘要时可以抓原网页；订阅源写在随版本发布的配置文件里；用户只有少数几个人。
+
+lingocurrent 的产品功能代码几乎为零，所以 vexto 不需要沿用它的代码。它能用作模板的是下面这些：
 
 1. **托管方式**：Next.js 应用在 Vercel Hobby，staging 和生产是两个独立的 Vercel 项目，都不连 Git，由 GitHub Actions 部署；PostgreSQL 和文件都在 Neon Free，staging 和生产各一个 Neon 项目，文件放在 Neon 的私有对象存储（S3 协议）。
 2. **工程体系**：CI 任务、架构规则检查、按风险分级的人工审批标签、Claude 代码评审和安全评审、只能从 main 上已通过 CI 的版本标签手动部署生产。
-3. **已经想清楚的设计**：按“句子 + 选区”缓存的查词结果、生词卡的数据结构、只保存每种模式一行进度的无会话复习算法、带租约的后台任务表。
+3. **定稿的设计**：查词按“句子 + 选区”缓存、生词卡的数据结构、只保存每种模式一行进度的无会话复习算法、带租约的后台任务表、音频存储的容量控制和淘汰规则。
+4. **朗读的选型**：Supertonic F1、MP3 单声道 32 kbps。音频在哪里生成还没有验证，按它的测量，在 Vercel Hobby 上生成整篇文章的朗读 CPU 额度不够。
 
-vexto 的项目简介比 lingocurrent 窄：不生成文章朗读音频，没有 Speak、Spell、Translate 三种复习模式，账号由项目所有者创建。沿用哪些部分，在 vexto 的架构和设计步骤里逐项确认。
-
-lingocurrent 里没有调用过 OpenAI 的 Luna 模型。查词用哪个模型，它的文档写的是“满足质量的低价模型”，没有具体定下来。代码里唯一出现的 OpenAI 模型是 `gpt-realtime-2.1`，只在 spike 里作为朗读和语音判定的付费备选，从来没有真正调用过。
+lingocurrent 没有调用过 OpenAI 的 Luna 模型。查词用哪个模型，它的文档写的是“满足质量的低价模型”，没有具体定下来。代码里唯一出现的 OpenAI 模型是 `gpt-realtime-2.1`，只在 spike 里作为朗读和语音判定的付费备选，从来没有真正调用过。
 
 项目所有者打算停用 lingocurrent，由 vexto 接手它的 Vercel 项目、Neon 项目和 Clerk 应用。lingocurrent 的数据库是空的，生产从未部署过，所以接手时不需要迁移数据。
 
