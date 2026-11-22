@@ -11,7 +11,9 @@
 | C    | Supertonic F1       |
 | D    | Supertonic M1       |
 
-项目所有者选了 Supertonic F1。压缩成 MP3 32 kbps 后，大小只有 WAV 的约 4.6%。但那个 spike 没有在云上验证过：按本机的测量，在 Vercel Hobby 上生成整篇文章的朗读，CPU 额度不够；Supertonic 的模型约 400 MB，也可能超过 Vercel 的包大小上限。
+项目所有者选了 Supertonic F1。压缩成 MP3 32 kbps 后，大小只有 WAV 的约 4.6%。
+
+Supertonic 的模型是 Supertonic 3，许可证是 OpenRAIL-M：允许作为服务提供给别人使用，但要把它的使用限制写进用户要遵守的条款，生成的内容要标明是机器生成的。官方仓库已经归档，不再维护。模型不输出时间戳。
 
 ## 比较过的方案
 
@@ -23,9 +25,10 @@
 
 ## 决定
 
-- 声音用 Supertonic F1，单声道 MP3 32 kbps。
-- 每篇文章生成整篇音频和每句话的时间轴，可以逐句播放并高亮。
-- 音频在哪里生成、Speak 用什么判定，等项目所有者在 lingocurrent 那边跟进的 spike 有结论后，回到这一步再定。
+- 声音用 Supertonic 3 的 F1，单声道 MP3 32 kbps。
+- 每篇文章逐句合成，按每句的长度得出时间轴，再拼成整篇音频，可以逐句播放并高亮。
+- 在哪里生成见 0002 和 0017。
+- 播放器和读音旁边标明 “AI-generated voice”；用户第一次登录时确认使用条款，条款里包含模型的使用限制；应用里可以查看许可证全文。
 
 ## 理由
 
@@ -33,11 +36,11 @@
 
 ## 代价
 
-- Supertonic 的仓库已经归档，停止维护，许可证是 OpenRAIL-M。
-- 生成音频的地方可能要另找托管，比如 GitHub Actions 定时任务或者容器主机。
+- Supertonic 停止维护，出了问题只能自己修。
+- 逐句合成比整段合成多一些开销。
 
 ## 何时重新考虑
 
-spike 证明 Supertonic 跑不起来或者成本太高，或者它的许可证不允许这样用时。
+Supertonic 在 Cloud Run 上跑不起来或者成本太高，或者它的许可证不允许这样用时。
 
-Last changed: #1 (2026-11-21)
+Last changed: #3 (2026-11-22)
