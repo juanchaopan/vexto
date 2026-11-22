@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { GET, OPTIONS } from './route';
+import { GET, OPTIONS } from './route.ts';
 
 // connection() needs the request scope that only the Next.js server sets up; outside it the
 // handler would throw, so the test lets the call resolve the way it does for a real request.

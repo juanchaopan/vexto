@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
@@ -21,9 +20,6 @@ const namedNodeTests = nodeTestKinds.map(([kind]) => `**/*.${kind}.test.ts`);
 const phoneViewport = { width: 390, height: 844 };
 
 export default defineConfig({
-  resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
-  },
   test: {
     projects: [
       {

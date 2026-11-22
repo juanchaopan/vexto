@@ -1,4 +1,4 @@
-import { getHealthStatus } from '../domain/health-status';
+import { getHealthStatus } from '../domain/health-status.ts';
 
 /** JSON health response; `no-store` keeps caches from answering for a service that is down. */
 export function createHealthResponse(): Response {
