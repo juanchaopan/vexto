@@ -9,11 +9,13 @@
 #              arrived, so an approval never covers commits pushed after it, even when the run that
 #              should have removed the label was cancelled or failed.
 #
-# The rules and the classifier are read from the target branch, so a pull request's edits to
-# them take effect only once it is merged. This workflow file is not: on pull_request GitHub runs
-# the version in the pull request, so a pull request that edits this file runs its own risk job
-# and its own gate. Such a pull request is always high risk (.github/**), and its reviewer checks
-# the changes to the gate before adding human-reviewed.
+# The rules, the classifier and the Node version it runs on (.nvmrc) are read from the target
+# branch, so a pull request's edits to them take effect only once it is merged. A target branch
+# that lacks any of the three cannot classify, so every pull request into it counts as high risk.
+# This workflow file is not read from the target branch: on pull_request GitHub runs the version
+# in the pull request, so a pull request that edits this file runs its own risk job and its own
+# gate. Such a pull request is always high risk (.github/**), and its reviewer checks the changes
+# to the gate before adding human-reviewed.
 #
 # Adding or removing a label reruns both jobs. Label changes made with the workflow token start
 # no new runs, so the risk job's own labels do not loop.
@@ -52,7 +54,21 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Find the classifier
+        id: classifier
+        run: |
+          ready=true
+          for file in .github/risk-rules.txt scripts/risk-tier.ts .nvmrc; do
+            if [ ! -f "$file" ]; then
+              echo "The target branch has no $file."
+              ready=false
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+      # Node is set up only when the target branch can classify, because its .nvmrc decides the
+      # version.
+      - if: steps.classifier.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           package-manager-cache: false
@@ -80,21 +96,26 @@ jobs:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           LISTED: ${{ steps.files.outputs.listed }}
           EXPECTED: ${{ steps.files.outputs.expected }}
+          CLASSIFIER_READY: ${{ steps.classifier.outputs.ready }}
         run: |
           # The files API stops at 3000 files, and the pull request may change between the two
           # calls above; an incomplete list cannot show that no high-risk file is changed.
-          # Before the target branch has the rules and the classifier, every pull request counts
-          # as high risk.
+          # A target branch without the rules, the classifier or .nvmrc cannot classify, so every
+          # pull request into it counts as high risk. Any other value of CLASSIFIER_READY means
+          # the step that sets it misbehaved, and the job fails rather than guess.
           if ! [[ "$LISTED" =~ ^[0-9]+$ && "$EXPECTED" =~ ^[0-9]+$ ]] \
             || [ "$LISTED" -ge 3000 ] || [ "$LISTED" -ne "$EXPECTED" ]; then
             echo "The list of changed files may be incomplete, so the pull request counts as high risk."
             tier=high
-          elif [ -f .github/risk-rules.txt ] && [ -f scripts/risk-tier.ts ]; then
+          elif [ "$CLASSIFIER_READY" = true ]; then
             tier=$(node scripts/risk-tier.ts --rules .github/risk-rules.txt --branch "$HEAD_REF" \
               --files-from "$RUNNER_TEMP/changed-files.txt")
-          else
-            echo "The target branch has no risk rules yet, so the pull request counts as high risk."
+          elif [ "$CLASSIFIER_READY" = false ]; then
+            echo "The target branch has no risk rules or classifier yet, so the pull request counts as high risk."
             tier=high
+          else
+            echo "::error::Whether the target branch can classify is unknown."
+            exit 1
           fi
           echo "Risk tier: $tier"
           echo "tier=$tier" >> "$GITHUB_OUTPUT"
