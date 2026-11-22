@@ -46,7 +46,8 @@ vexto 是一个网页应用：用户阅读预置英文订阅源里的文章，�
 
 ## 参考项目
 
-- lingocurrent（https://github.com/juanchaopan/lingocurrent）：一个英文阅读、生词和练习工具。项目搭建完成后，通过 /change 单独开一个 issue 来分析它。
+- **lingocurrent**（https://github.com/juanchaopan/lingocurrent）：英文阅读、AI 查词、生词本和三种间隔复习（Speak、Spell、Translate）的网页应用。Next.js 应用部署在 Vercel，数据库和文件放在 Neon，用 Clerk 做受邀 Google 登录。它只完成了工程骨架、设计和一个朗读选型 spike，没有产品功能，生产也从未部署。分析见 `.docs/reference/lingocurrent/`。
+- vexto 接替 lingocurrent：lingocurrent 停用，vexto 接手它的 Vercel 项目、Neon 项目和 Clerk 应用。
 
 ## 语言
 
@@ -63,4 +64,4 @@ vexto 是一个网页应用：用户阅读预置英文订阅源里的文章，�
 - 公开仓库在 GitHub 的任何套餐下都强制执行分支规则和必过检查，也支持按环境保存密钥。
 - issue 的引用格式是 `#12`。
 
-Last changed: initial commit (2026-11-21)
+Last changed: #1 (2026-11-21)
