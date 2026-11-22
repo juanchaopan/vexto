@@ -33,6 +33,7 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 | 命令                                            | 做什么                                                                                   |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `task setup`                                    | 安装依赖、组件测试用的 Chromium 和 WebKit，以及 git hook                                 |
+| `task env-pull`                                 | 链接 Vercel 项目 `vexto-staging`，把它 Development 环境的值拉到 `.env.local`             |
 | `task dev`                                      | 启动开发服务器（`next dev`）                                                             |
 | `task format`                                   | 用 Prettier 格式化文件（默认全部）                                                       |
 | `task format-check`                             | 用 Prettier 检查格式（默认全部）                                                         |
@@ -55,7 +56,7 @@ vexto 是一个手机网页应用，用来听读英文文章、AI 查词和间�
 | `task test-migration`                           | 迁移测试                                                                                 |
 | `task test-e2e`                                 | 在固定版本的 Playwright Linux 容器里构建应用并跑端到端测试和截图对比（需要 Docker）      |
 | `task test-smoke -- <地址> [--production-safe]` | 对运行中的应用跑打了 `@smoke` 标签的测试；生产只跑同时打了 `@production-safe` 的         |
-| `task migrate`                                  | 把 `DATABASE_URL` 指向的数据库迁移到 `drizzle/` 里最新的脚本                             |
+| `task migrate`                                  | 迁移 `DATABASE_URL_UNPOOLED`（没有时用 `DATABASE_URL`）指向的数据库到最新脚本            |
 
 ## 改动怎样检查
 
@@ -85,6 +86,8 @@ CI 总是跑全部检查。PR 上的每一项都是必过检查：
 风险和人工审批：`risk` 按目标分支上的 `.github/risk-rules.txt` 给 PR 打上 `risk:low`、`risk:medium` 或 `risk:high`。中、高风险的 PR 要有人看过之后加上 `human-reviewed` 标签，`risk-gate` 才会通过；有新提交时这个标签会被去掉。
 
 合并到 main 后，`ci` 再完整跑一遍，全部通过后自动部署 staging，并跑冒烟测试。手动部署用工作流 `deploy`：选目标 staging 或 production，填版本标签（如 `v1.2.3`），staging 也可以填 main 上的提交 SHA；这个提交必须在 main 上并且通过了 CI。
+
+环境变量和密钥：每个部署目标（staging，以后还有 production）的变量和密钥只存在同名的 GitHub 环境里。应用在运行时读的值列在 `scripts/lib/runtime-env.ts` 里，密钥存成 GitHub 环境的 secret，其余存成 variable。每次部署在拉取、构建和部署之前，把这些值写进目标 Vercel 项目的 Production 环境，覆盖 Vercel 上原有的副本；密钥在 Vercel 上存成 Sensitive。GitHub 环境里没有设置的名字会跳过，Vercel 上原有的值不动，所以一个目标可以逐个设置。新增运行时值时，在这个列表里加一行，再到每个 GitHub 环境里设置，工作流不用改。本机开发用的值在 Vercel 项目 `vexto-staging` 的 Development 环境里，用 `task env-pull` 拉到 `.env.local`；要换项目或团队时传 `VERCEL_PROJECT=<项目>`、`VERCEL_SCOPE=<团队>`。
 
 ## 分支和提交
 

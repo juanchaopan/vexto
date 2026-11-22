@@ -4,6 +4,10 @@
 #
 # Local actions and workflows are referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on those lines.
+# The staging deployment gets the secrets with `secrets: inherit`, because the secrets of the
+# staging GitHub environment reach a reusable workflow only when the caller passes them, and
+# inheriting keeps the runtime names in scripts/lib/runtime-env.ts only; zizmor's
+# secrets-inherit finding is ignored on that line too (see deploy-target.yml).
 name: ci
 
 on:
@@ -393,7 +397,8 @@ jobs:
       - test-e2e
     permissions:
       contents: read
-    uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository]
+    uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository,secrets-inherit]
     with:
       target: staging
       ref: ${{ github.sha }}
+    secrets: inherit

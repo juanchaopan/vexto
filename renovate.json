@@ -66,8 +66,11 @@
     },
     {
       "customType": "regex",
-      "description": "Tool versions in workflows and actions written under a `# renovate: datasource=<datasource> depName=<name>` comment, such as Task, gitleaks, actionlint, zizmor and the Vercel CLI.",
-      "managerFilePatterns": ["/^\\.github/(workflows|actions)/.+\\.ya?ml$/"],
+      "description": "Tool versions in workflows, actions and Taskfile.yml written under a `# renovate: datasource=<datasource> depName=<name>` comment, such as Task, gitleaks, actionlint, zizmor and the Vercel CLI.",
+      "managerFilePatterns": [
+        "/^\\.github/(workflows|actions)/.+\\.ya?ml$/",
+        "/^Taskfile\\.ya?ml$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+[A-Za-z0-9_-]+: ['\"]?(?<currentValue>[^'\"\\s]+)"
       ],

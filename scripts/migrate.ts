@@ -1,4 +1,7 @@
-// Brings the database at DATABASE_URL up to the latest migration script in drizzle/.
+// Brings the database up to the latest migration script in drizzle/. Migrations need a direct
+// connection, so DATABASE_URL_UNPOOLED is used when it is set; otherwise DATABASE_URL, which is
+// what a local database has. drizzle.config.ts reads DATABASE_URL, so the chosen address is
+// handed to drizzle-kit under that name.
 // Usage: node scripts/migrate.ts [drizzle-kit migrate arguments...]
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -14,14 +17,18 @@ if (!existsSync(journal)) {
   process.exit(0);
 }
 
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is not set; it must point at the database to migrate.');
+const databaseUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.error(
+    'Neither DATABASE_URL_UNPOOLED nor DATABASE_URL is set; one must point at the database to migrate.',
+  );
   process.exit(1);
 }
 
-process.exitCode = await runPackageBin('drizzle-kit', 'drizzle-kit', [
-  'migrate',
-  '--config',
-  'drizzle.config.ts',
-  ...process.argv.slice(2),
-]);
+process.exitCode = await runPackageBin(
+  'drizzle-kit',
+  'drizzle-kit',
+  ['migrate', '--config', 'drizzle.config.ts', ...process.argv.slice(2)],
+  { env: { ...process.env, DATABASE_URL: databaseUrl } },
+);

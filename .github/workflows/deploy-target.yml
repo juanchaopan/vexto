@@ -1,16 +1,29 @@
-# Deploys one commit to one target: applies the database migrations, builds and deploys with the
-# Vercel CLI, then runs the smoke tests against the target's address. Called by ci for staging
-# after every passing push to main, and by the manual deploy workflow.
+# Deploys one commit to one target: copies the runtime values into the target's Vercel project,
+# applies the database migrations, builds and deploys with the Vercel CLI, then runs the smoke
+# tests against the target's address. Called by ci for staging after every passing push to main,
+# and by the manual deploy workflow.
 #
-# The job runs in the GitHub environment named after the target and reads from it:
+# The job runs in the GitHub environment named after the target, which is the only place the
+# target's values are kept. It reads from it:
 #   secret   VERCEL_TOKEN       Vercel token for this target only; the CLI reads it from the
 #                               environment, so it never appears on a command line
-#   secret   DATABASE_URL       database to migrate; only needed once drizzle/ has scripts
 #   variable VERCEL_ORG_ID      Vercel team of the project
 #   variable VERCEL_PROJECT_ID  Vercel project of the target
 #   variable APP_URL            address the smoke tests visit
+#   the runtime values listed in scripts/lib/runtime-env.ts, secrets as environment secrets and
+#   the rest as environment variables. Before every deployment they overwrite the copies in the
+#   Production environment of the Vercel project, which every target deploys to with --prod; a
+#   value not set yet is skipped. Migrations use DATABASE_URL_UNPOOLED, or DATABASE_URL when
+#   that is not set, and need neither until drizzle/ has scripts.
 # The production environment is not set up yet, so a production deployment stops at the
 # settings check until its environment, variables and token exist.
+#
+# Environment secrets reach a reusable workflow only when the caller passes the secrets, so both
+# callers use `secrets: inherit`; the environment's value wins over a repository secret of the
+# same name. The sync step takes the whole secrets and vars contexts as JSON, so a new runtime
+# value is added to the list in scripts/lib/runtime-env.ts only; the script picks the listed names
+# and starts the Vercel CLI without the JSON. zizmor's overprovisioned-secrets finding is ignored
+# on that line for this reason.
 #
 # The local setup action is referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on that line.
@@ -89,9 +102,21 @@ jobs:
         with:
           cache: 'false'
 
+      # Runs before the migrations, so a value stored under the wrong kind stops the deployment
+      # before the database changes. Each value goes to the CLI on standard input.
+      - name: Copy the runtime values to the Vercel project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          ENVIRONMENT_SECRETS: ${{ toJSON(secrets) }} # zizmor: ignore[overprovisioned-secrets]
+          ENVIRONMENT_VARS: ${{ toJSON(vars) }}
+        run: node scripts/sync-vercel-env.ts
+
       - name: Apply the database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: task migrate
 
       - name: Pull the Vercel project settings
