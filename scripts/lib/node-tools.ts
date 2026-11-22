@@ -32,12 +32,30 @@ function spawnOptions(options: RunOptions): SpawnOptions {
   };
 }
 
+// A command that exits or closes its standard input before reading all of the input makes the
+// write fail (EPIPE on POSIX, EOF on Windows). The failure is reported as the command failing,
+// with the error code only, since the input may hold a secret. The exit code is taken on `close`,
+// which comes after the input stream's error.
 function exitCodeOf(child: ChildProcess, input: string | undefined) {
   return new Promise<number>((resolve, reject) => {
+    let inputError: NodeJS.ErrnoException | undefined;
     child.on('error', reject);
-    child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
-    if (input !== undefined) {
-      child.stdin?.end(input);
+    child.on('close', (code, signal) => {
+      const exitCode = code ?? (signal ? 1 : 0);
+      if (inputError) {
+        console.error(
+          `The command stopped reading its standard input (${inputError.code ?? inputError.message}).`,
+        );
+        resolve(exitCode === 0 ? 1 : exitCode);
+        return;
+      }
+      resolve(exitCode);
+    });
+    if (input !== undefined && child.stdin) {
+      child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+        inputError ??= error;
+      });
+      child.stdin.end(input);
     }
   });
 }
@@ -48,7 +66,8 @@ export function run(command: string, args: readonly string[], options: RunOption
 }
 
 // pnpm is a .cmd shim on Windows, which only starts through a shell, so pnpm commands go to the
-// shell as one command line. The arguments are fixed names and flags, never values.
+// shell as one command line. The arguments are fixed names and flags, or values checked to be
+// plain names by the caller.
 function pnpmCommandLine(args: readonly string[]) {
   return ['pnpm', ...args].join(' ');
 }

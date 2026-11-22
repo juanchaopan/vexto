@@ -21,16 +21,17 @@ tasks:
     cmds:
       - pnpm exec playwright install {{.CLI_ARGS}} chromium webkit
 
-  # Local development reads its values from the Development environment of a Vercel project;
-  # the project and its team can be overridden on the command line.
+  # Local development reads its values from the Development environment of the Vercel project
+  # named in scripts/env-pull.json. VERCEL_PROJECT and VERCEL_SCOPE, given on the command line or
+  # in the environment, override the project and its team.
   env-pull:
-    desc: 'Link a Vercel project and pull its Development values into .env.local: task env-pull [VERCEL_PROJECT=<name>] [VERCEL_SCOPE=<team>]'
-    vars:
-      VERCEL_PROJECT: '{{.VERCEL_PROJECT | default "vexto-staging"}}'
-      VERCEL_SCOPE: '{{.VERCEL_SCOPE | default "juanchaopan1"}}'
+    desc: 'Link the Vercel project in scripts/env-pull.json and pull its Development values into .env.local: task env-pull [VERCEL_PROJECT=<name>] [VERCEL_SCOPE=<team>]'
+    env:
+      VERCEL_CLI_VERSION: '{{.VERCEL_CLI_VERSION}}'
+      VERCEL_PROJECT: '{{.VERCEL_PROJECT}}'
+      VERCEL_SCOPE: '{{.VERCEL_SCOPE}}'
     cmds:
-      - pnpm dlx vercel@{{.VERCEL_CLI_VERSION}} link --yes --project {{.VERCEL_PROJECT}} --scope {{.VERCEL_SCOPE}}
-      - pnpm dlx vercel@{{.VERCEL_CLI_VERSION}} env pull .env.local --environment development --yes
+      - node scripts/env-pull.ts
 
   dev:
     desc: Start the development server

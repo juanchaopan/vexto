@@ -33,13 +33,13 @@ task setup
 
 ### 本机的环境变量
 
-本机开发用的环境变量和密钥放在 Vercel 项目 `vexto-staging` 的 Development 环境里。第一次运行时，以及这些值有变化后，运行：
+本机开发用的环境变量和密钥放在 Vercel 项目 `vexto-staging` 的 Development 环境里；项目和它所在的团队写在 `scripts/env-pull.json` 里。第一次运行时，以及这些值有变化后，运行：
 
 ```sh
 task env-pull
 ```
 
-它用 Vercel CLI 把仓库链接到这个项目（写进 `.vercel/`），再把 Development 环境的值拉到 `.env.local`。`.vercel/` 和 `.env.local` 都不进 git。第一次用时 Vercel CLI 会先让你登录 Vercel。要用别的项目或团队时传参数，例如 `task env-pull VERCEL_PROJECT=<项目> VERCEL_SCOPE=<团队>`。
+它用 Vercel CLI 把仓库链接到这个项目（写进 `.vercel/`），再把 Development 环境的值拉到 `.env.local`。`.vercel/` 和 `.env.local` 都不进 git。第一次用时 Vercel CLI 会先让你登录 Vercel。要用别的项目或团队时，改 `scripts/env-pull.json`，或者只在这一次传参数，例如 `task env-pull VERCEL_PROJECT=<项目> VERCEL_SCOPE=<团队>`；设成同名的环境变量也可以。
 
 ### 日常命令
 

@@ -13,8 +13,12 @@ pre-commit:
     - name: lint
       glob: '**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'
       run: task lint -- --no-warn-ignored {staged_files}
+    # The globs are the `globs` of .markdownlint-cli2.jsonc, so the hook lints the staged files
+    # among those CI's docs-lint lints; the config's `ignores` still apply with --no-globs.
     - name: docs-lint
-      glob: '**/*.md'
+      glob:
+        - '.docs/**/*.md'
+        - '*.md'
       run: task docs-lint -- --no-globs {staged_files}
     - name: secrets
       run: task secrets-scan -- --staged
