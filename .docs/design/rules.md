@@ -151,7 +151,7 @@
 
 1. 建这篇文章的音频行（`pending`，规则见“朗读和存储上限”）。
 2. 用 Supertonic 3 的 F1 声音逐句合成；模型不输出时间戳，按每句音频的长度得出时间轴。
-3. 拼成整篇，用 ffmpeg 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，上传到音频行的对象键。
+3. 拼成整篇，用 lame 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，上传到音频行的对象键。
 4. 在一个事务里把音频行标成 `ready`、写入每句的起止毫秒、把文章标成 `ready`：`collected_at` 设为这一刻，清空 `retry_at`。它就出现在列表里；推迟到下个月才合成的文章也按合成完的时间排在最前面。
 5. 每篇文章的合成写一条用量记录（模型版本、CPU 时间、音频时长），并记进当月的合成用量。
 

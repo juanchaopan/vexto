@@ -307,7 +307,7 @@ Cloud Run 服务，按需合成单词和例句的读音。只有 Web 应用和�
 | 路径     | `POST /synthesize`                                                                                                                                                                                                                     |
 | 认证     | Cloud Run 的 IAM 认证，只有 Run Invoker 能调用。Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取身份令牌，放在 `Authorization` 头里                                                                                                |
 | 请求     | `{ key, text, voice, modelRevision, encodingVersion }`；`key` 是要写的对象键，只接受 `speech/<UUID>.mp3` 和冒烟测试的 `smoke/check.mp3`；`text` 是规范文字，1–300 字符                                                                 |
-| 处理     | 用 F1 合成，ffmpeg 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，写到 Neon 存储桶的 `key`，已有对象时覆盖                                                                                                  |
+| 处理     | 用 F1 合成，lame 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，写到 Neon 存储桶的 `key`，已有对象时覆盖                                                                                                    |
 | 响应     | 200 `{ key, byteSize, durationMs, usage: { cpuMs } }`                                                                                                                                                                                  |
 | 错误     | 正文和 Web 应用的相同：`{ error: { code, message, retryable } }`。422 `INVALID_INPUT`：对象键或文字不合格，或声音、模型版本、编码版本不是服务加载的那一套；503 `UNAVAILABLE`：合成或写桶失败。认证失败由 Cloud Run 直接返回 401 或 403 |
 | 超时     | Web 应用等 30 秒，足够冷启动（读约 400 MB 的模型，大约十几秒）；超时时把这次用量记成 `unknown`，对客户端返回 503                                                                                                                       |

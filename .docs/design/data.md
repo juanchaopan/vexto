@@ -55,7 +55,7 @@
 
 CHECK：`state = 'ready'` 时 `audio_asset_id` 和 `collected_at` 都非空。
 
-`last_error_code` 的取值：`tts_error`（模型推理出错）、`encode_error`（ffmpeg 编码失败）、`upload_error`（写存储桶失败）、`interrupted`（上一次执行在合成中途退出）。
+`last_error_code` 的取值：`tts_error`（模型推理出错）、`encode_error`（lame 编码失败）、`upload_error`（写存储桶失败）、`interrupted`（上一次执行在合成中途退出）。
 
 索引：
 
