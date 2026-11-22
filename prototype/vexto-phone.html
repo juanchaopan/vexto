@@ -680,23 +680,6 @@
         gap: 9px;
         margin-top: 12px;
       }
-      .voice-label {
-        display: inline-flex;
-        align-items: center;
-        flex: none;
-        min-height: 44px;
-        padding: 0 2px;
-        color: var(--muted);
-        font-size: 11px;
-        white-space: nowrap;
-        text-decoration: underline;
-        text-decoration-color: color-mix(in srgb, var(--muted), transparent 50%);
-        text-underline-offset: 2px;
-      }
-      .reader-tools .voice-label,
-      .lemma-row .voice-label {
-        margin-left: auto;
-      }
       .text-area {
         padding: 9px 8px;
         user-select: text;
@@ -932,12 +915,6 @@
         justify-content: space-between;
         gap: 6px;
         margin: 0 0 3px;
-      }
-      .example-lead {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-width: 0;
       }
       .example-controls {
         display: flex;
@@ -2269,7 +2246,6 @@
             queue: [],
             queueIndex: 0,
             blocked: false,
-            readerClose: 'back',
             layers: [],
             dialog: null,
             notice: '',
@@ -2459,8 +2435,6 @@
             return `<div class="load-more"><button disabled aria-busy="true">${icon('loader-circle', 'spin')}Loading…</button></div>`;
           return `<div class="load-more">${loaded < total ? '<button data-action="more">Load more</button>' : '<span class="muted small" role="status">All loaded</span>'}</div>`;
         }
-        const voiceLabel = () =>
-          '<a class="voice-label" href="#license" data-action="open-license">AI-generated voice</a>';
         const selectionButton = (context) =>
           `<button class="icon flat" data-action="select-text" data-selection-context="${context}" aria-label="Select words for lookup">${icon('text-cursor-input')}</button>`;
 
@@ -2589,6 +2563,7 @@
         }
 
         // ---------------------------------------------------------------- Reader
+        // The top play button is icon-only in every state; its accessible name says what it will do.
         function readerPage() {
           const a = activeArticle();
           const f = feedOf(a);
@@ -2599,14 +2574,11 @@
           const topLabel = playingArticle
             ? 'Pause article'
             : s.single != null
-              ? `Play from sentence ${s.single + 1}`
+              ? `Play article from sentence ${s.single + 1}`
               : s.position
                 ? 'Resume article'
                 : 'Play article';
-          const back =
-            s.readerClose === 'x'
-              ? `<div class="detail-controls"><button class="icon flat" data-action="close-article" aria-label="Close article and return to Articles">${icon('x')}</button></div>`
-              : `<div class="page-head"><button class="flat" data-action="close-article">${icon('arrow-left')}Articles</button></div>`;
+          const back = `<div class="page-head"><button class="flat" data-action="close-article">${icon('arrow-left')}Articles</button></div>`;
           const highlight = s.playing || s.position || s.single != null;
           const sentences = rows
             .map((row, i) => {
@@ -2619,7 +2591,7 @@
             (a.author ? ` By ${esc(a.author)}.` : '') +
             (f.license ? ` <a href="${esc(f.license.url)}">${esc(f.license.name)}</a>` : '');
           const attribution = `<footer class="attribution" aria-label="Source">${sourceMark(f)}<p>${credit}</p><div class="attribution-row"><a class="original-link" href="${esc(f.site)}" target="_blank" rel="noopener noreferrer">Original${icon('external-link')}</a><time aria-label="Collected ${fmtLong(a.collected)}">${fmtLong(a.collected)}</time></div></footer>`;
-          return `${back}<article class="reader"><header class="reader-head"><div class="item-meta">${sourceMark(f)}<span>${esc(f.category)}</span></div><h1>${esc(a.title)}</h1><div class="small muted">${words} words · ${minutes} min listening</div><div class="reader-tools"><button class="primary icon" data-action="toggle" aria-label="${topLabel}">${icon(playingArticle ? 'pause' : 'play')}</button>${selectionButton('article')}${voiceLabel()}</div></header><div class="text-area" data-select-scope="article">${sentences}</div>${attribution}${player(a, rows.length)}</article>`;
+          return `${back}<article class="reader"><header class="reader-head"><div class="item-meta">${sourceMark(f)}<span>${esc(f.category)}</span></div><h1>${esc(a.title)}</h1><div class="small muted">${words} words · ${minutes} min listening</div><div class="reader-tools"><button class="primary icon" data-action="toggle" aria-label="${topLabel}">${icon(playingArticle ? 'pause' : 'play')}</button>${selectionButton('article')}</div></header><div class="text-area" data-select-scope="article">${sentences}</div>${attribution}${player(a, rows.length)}</article>`;
         }
         function player(a, total) {
           const playingArticle = s.playing && s.playMode === 'article';
@@ -2659,7 +2631,7 @@
           let lead = '<span class="small muted">Example</span>';
           let controls = selectionButton(context === 'lookup' ? 'example' : context);
           if (reviewing && s.review.mode === 'Spell') {
-            lead = `<div class="example-lead"><button data-action="play-review-example" aria-label="Play the full example">${icon('volume-2')}Play example</button>${voiceLabel()}</div>`;
+            lead = `<button data-action="play-review-example" aria-label="Play the full example">${icon('volume-2')}Play example</button>`;
           } else if (!reviewing) {
             controls += `<button class="icon" data-action="play-example" ${data} aria-label="Play example">${icon('volume-2')}</button><button class="icon" data-action="refresh-example" ${data} aria-label="Refresh this example">${icon('refresh-cw')}</button>`;
           }
@@ -2668,15 +2640,11 @@
             : wordMarkup(rows[index], reviewing ? [] : forms);
           return `<section class="example-carousel" ${data} role="group" aria-label="Examples"><div class="example-actions">${lead}<div class="example-controls">${controls}</div></div><p class="example-text ${hidden ? 'cloze' : 'selectable'}" data-select-scope="${reviewing ? 'review' : 'example'}">${text}</p><button class="icon flat example-arrow example-prev" data-action="example-prev" ${data} aria-label="Previous example" ${index === 0 ? 'disabled' : ''}>${icon('chevron-left')}</button><span class="example-count" role="status" aria-live="polite">${index + 1} / ${rows.length}</span><button class="icon flat example-arrow example-next" data-action="example-next" ${data} aria-label="Next example" ${index === rows.length - 1 ? 'disabled' : ''}>${icon('chevron-right')}</button></section>`;
         }
-        // While word audio is being generated the label gives way to a status; it returns afterwards.
-        const audioLabel = (audio) =>
-          audio === 'generating'
-            ? '<span class="voice-label" role="status">Generating…</span>'
-            : voiceLabel();
         const audioError = (audio) =>
           audio === 'error'
             ? `<div class="inline-status error" role="alert">${icon('circle-alert')}<span>Audio isn't available right now.</span><button data-action="retry-audio">Retry</button></div>`
             : '';
+        // While word audio is being generated the speaker icon gives way to a spinner.
         function playWordButton(action, audio) {
           return audio === 'generating'
             ? `<button class="icon flat" data-action="${action}" aria-label="Generating word audio" aria-busy="true">${icon('loader-circle', 'spin')}</button>`
@@ -2695,7 +2663,7 @@
           } else if (layer.kind === 'error') {
             body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div><div class="inline-status error" role="alert">${icon('circle-alert')}<span>Couldn't explain this.</span><button data-action="retry-lookup">${icon('refresh-cw')}Retry</button></div></div>`;
           } else {
-            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.word)}</h2>${playWordButton('play-word', layer.audio)}${audioLabel(layer.audio)}</div>${audioError(layer.audio)}<p class="pos">${esc(layer.pos)}</p><p class="meaning">${esc(layer.zh)}</p>${examplePanel('lookup', n)}</div>`;
+            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.word)}</h2>${playWordButton('play-word', layer.audio)}</div>${audioError(layer.audio)}<p class="pos">${esc(layer.pos)}</p><p class="meaning">${esc(layer.zh)}</p>${examplePanel('lookup', n)}</div>`;
           }
           return `<section class="float ${back ? 'back-layer' : ''}"${style} aria-label="Explanation of ${esc(layer.word || layer.text)}" ${back ? 'inert' : ''}><header class="float-head"><span>Word explanation</span>${add}<button class="icon flat" data-action="close-lookup" aria-label="Close this explanation">${icon('x')}</button></header>${body}</section>`;
         }
@@ -2744,7 +2712,7 @@
         const detailWord = () => s.words.find((w) => w.id === s.detailId) || s.words[0];
         function detailPage() {
           const w = detailWord();
-          return `<div class="detail-controls"><button class="icon flat" data-action="close-detail" aria-label="Close word and return to Vocabulary">${icon('x')}</button></div><div class="reader card"><div class="reader-head"><div class="lemma-row"><h2>${esc(w.word)}</h2>${playWordButton('detail-word', s.detailAudio)}${audioLabel(s.detailAudio)}</div>${audioError(s.detailAudio)}<p class="pos">${esc(w.pos)}</p><p class="meaning">${esc(w.zh)}</p></div><div style="padding:16px">${examplePanel('detail')}${progressGroups(w)}</div></div>`;
+          return `<div class="detail-controls"><button class="icon flat" data-action="close-detail" aria-label="Close word and return to Vocabulary">${icon('x')}</button></div><div class="reader card"><div class="reader-head"><div class="lemma-row"><h2>${esc(w.word)}</h2>${playWordButton('detail-word', s.detailAudio)}</div>${audioError(s.detailAudio)}<p class="pos">${esc(w.pos)}</p><p class="meaning">${esc(w.zh)}</p></div><div style="padding:16px">${examplePanel('detail')}${progressGroups(w)}</div></div>`;
         }
 
         // ---------------------------------------------------------------- Review
@@ -4062,7 +4030,6 @@
               queueIndex: 1,
             }),
           ],
-          ['reader-close-x', 'Reader: close button variant', reader({ readerClose: 'x' })],
           [
             'lookup-loading',
             'Explanation: loading',
