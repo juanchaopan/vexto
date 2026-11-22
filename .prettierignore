@@ -1,0 +1,4 @@
+# Generated output and dependencies; .gitignore entries are ignored by Prettier as well.
+pnpm-lock.yaml
+drizzle/meta/
+**/*-snapshots/

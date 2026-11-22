@@ -1,0 +1,42 @@
+# Risk tiers of pull requests, read from the target branch by the CI job `risk` and applied by
+# scripts/risk-tier.ts. One pattern per line, relative to the repository root:
+# `**` matches any number of directories and `*` matches within one directory level.
+# Any changed file matching a high pattern makes the pull request high risk; when every changed
+# file matches a low pattern it is low risk; otherwise it is medium risk. High wins over low, and
+# a pull request from a release/* branch is always high risk.
+
+[high]
+# Repository automation, agent instructions and the task runner.
+.github/**
+lefthook.yml
+.claude/**
+AGENTS.md
+CLAUDE.md
+REVIEW.md
+Taskfile.yml
+# Configuration of the check tools.
+eslint.config.mjs
+.prettierrc.json
+.prettierignore
+.dependency-cruiser.cjs
+.jscpd.json
+commitlint.config.mjs
+.markdownlint-cli2.jsonc
+.gitleaks.toml
+tsconfig.json
+vitest.config.ts
+playwright.config.ts
+# Screenshot baselines.
+**/*-snapshots/**
+# Sign-in, database schema and migrations, environment files and hosting configuration.
+**/auth/**
+drizzle/**
+**/*.sql
+**/.env*
+vercel.json
+
+[low]
+.docs/**
+**/*.md
+**/*.txt
+LICENSE

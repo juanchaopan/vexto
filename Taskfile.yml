@@ -1,0 +1,162 @@
+# Project commands. They run the same on Windows, macOS and Linux: Task's built-in shell runs each
+# line, and anything beyond a single tool call lives in a Node script under scripts/.
+# Extra arguments go after `--`, for example `task test-unit -- src/features/health`.
+version: '3'
+
+vars:
+  # The Vercel CLI runs through pnpm dlx at the version the deployment workflow uses.
+  # renovate: datasource=npm depName=vercel
+  VERCEL_CLI_VERSION: 66.6.0
+
+tasks:
+  setup:
+    desc: Install dependencies, the browsers the component and smoke tests use, and the git hooks
+    cmds:
+      - pnpm install --frozen-lockfile
+      - task: browsers
+      - pnpm exec lefthook install
+
+  browsers:
+    desc: Install the browsers the component and smoke tests use (CI adds --with-deps for their system libraries)
+    cmds:
+      - pnpm exec playwright install {{.CLI_ARGS}} chromium webkit
+
+  # Local development reads its values from the Development environment of the Vercel project
+  # named in scripts/env-pull.json. VERCEL_PROJECT and VERCEL_SCOPE, given on the command line or
+  # in the environment, override the project and its team.
+  env-pull:
+    desc: 'Link the Vercel project in scripts/env-pull.json and pull its Development values into .env.local: task env-pull [VERCEL_PROJECT=<name>] [VERCEL_SCOPE=<team>]'
+    env:
+      VERCEL_CLI_VERSION: '{{.VERCEL_CLI_VERSION}}'
+      VERCEL_PROJECT: '{{.VERCEL_PROJECT}}'
+      VERCEL_SCOPE: '{{.VERCEL_SCOPE}}'
+    cmds:
+      - node scripts/env-pull.ts
+
+  dev:
+    desc: Start the development server
+    cmds:
+      - pnpm exec next dev {{.CLI_ARGS}}
+
+  format:
+    desc: Format files with Prettier (default all)
+    cmds:
+      - pnpm exec prettier --write {{.CLI_ARGS | default "."}}
+
+  format-check:
+    desc: Check formatting with Prettier (default all)
+    cmds:
+      - pnpm exec prettier --check {{.CLI_ARGS | default "."}}
+
+  lint:
+    desc: Lint with ESLint (default all)
+    cmds:
+      - pnpm exec eslint --max-warnings 0 {{.CLI_ARGS | default "."}}
+
+  typecheck:
+    desc: Type-check with tsc after generating the Next.js route types
+    cmds:
+      - pnpm exec next typegen
+      - pnpm exec tsc --noEmit {{.CLI_ARGS}}
+
+  build:
+    desc: Build the application for production
+    cmds:
+      - pnpm exec next build {{.CLI_ARGS}}
+
+  arch:
+    desc: Check the dependency rules with dependency-cruiser (default src)
+    cmds:
+      - node scripts/check-architecture.ts {{.CLI_ARGS}}
+
+  duplication:
+    desc: Look for duplicated code with jscpd (default all)
+    cmds:
+      - pnpm exec jscpd {{.CLI_ARGS | default "."}}
+
+  licenses:
+    desc: Fail when a runtime dependency has a license outside scripts/lib/license-policy.ts
+    cmds:
+      - node scripts/check-licenses.ts
+
+  audit:
+    desc: Fail on dependencies with high or critical vulnerabilities
+    cmds:
+      - pnpm audit --audit-level high
+
+  docs-lint:
+    desc: Lint the Markdown in .docs/ and the repository root
+    cmds:
+      - pnpm exec markdownlint-cli2 {{.CLI_ARGS}}
+
+  secrets-scan:
+    desc: Scan every commit of the repository history for secrets with gitleaks (pass --staged to scan the staged changes instead)
+    cmds:
+      - gitleaks git --config .gitleaks.toml --redact --no-banner {{.CLI_ARGS}} .
+
+  workflows-lint:
+    desc: Lint the GitHub Actions workflows and local actions with actionlint and zizmor (default all)
+    cmds:
+      - node scripts/lint-workflows.ts {{.CLI_ARGS}}
+
+  commits-check:
+    desc: 'Check commit messages and steps: task commits-check [FROM=<ref>] [TO=<ref>] [BRANCH=<name>]'
+    vars:
+      FROM: '{{.FROM | default "origin/main"}}'
+      TO: '{{.TO | default "HEAD"}}'
+    cmds:
+      - pnpm exec commitlint --from {{.FROM}} --to {{.TO}}
+      - node scripts/check-commits.ts --range {{.FROM}}..{{.TO}} {{if .BRANCH}}--branch {{.BRANCH}}{{end}}
+
+  check:
+    desc: Run every static check that runs locally
+    cmds:
+      - task: format-check
+      - task: lint
+      - task: docs-lint
+      - task: typecheck
+      - task: arch
+      - task: duplication
+      - task: licenses
+      - task: audit
+      - task: secrets-scan
+
+  test-unit:
+    desc: Run unit tests (pass files or Vitest options to narrow the run)
+    cmds:
+      - pnpm exec vitest run --project unit {{.CLI_ARGS}}
+
+  test-component:
+    desc: Run component tests in Chromium and WebKit
+    cmds:
+      - pnpm exec vitest run --project component --passWithNoTests {{.CLI_ARGS}}
+
+  test-integration:
+    desc: Run integration tests
+    cmds:
+      - pnpm exec vitest run --project integration --passWithNoTests {{.CLI_ARGS}}
+
+  test-security:
+    desc: Run security tests
+    cmds:
+      - pnpm exec vitest run --project security --passWithNoTests {{.CLI_ARGS}}
+
+  test-migration:
+    desc: Run migration tests
+    cmds:
+      - pnpm exec vitest run --project migration --passWithNoTests {{.CLI_ARGS}}
+
+  test-e2e:
+    desc: Run end-to-end tests in the pinned Playwright container (pass Playwright options to narrow the run)
+    cmds:
+      - node scripts/test-e2e.ts {{.CLI_ARGS}}
+
+  test-smoke:
+    desc: 'Run @smoke tests against a running application: task test-smoke -- <url> [--production-safe]'
+    cmds:
+      - node scripts/test-smoke.ts {{.CLI_ARGS}}
+
+  migrate:
+    desc: Apply the migration scripts in drizzle/ to the database at DATABASE_URL_UNPOOLED, or DATABASE_URL when it is unset
+    cmds:
+      - node scripts/migrate.ts {{.CLI_ARGS}}

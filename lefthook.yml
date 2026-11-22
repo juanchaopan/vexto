@@ -1,0 +1,47 @@
+# Git hooks managed by lefthook and installed into .git/hooks by `task setup`. Hooks can be
+# skipped, so CI runs every one of these checks again. Each job runs the project task CI runs,
+# narrowed to what the hook is about, so a hook and its CI check cannot drift apart.
+# Globs use doublestar matching: `**` spans directories and `*` stays within one.
+glob_matcher: doublestar
+
+# Checks on the staged files only.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      run: task format-check -- --ignore-unknown {staged_files}
+    - name: lint
+      glob: '**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'
+      run: task lint -- --no-warn-ignored {staged_files}
+    # The globs are the `globs` of .markdownlint-cli2.jsonc, so the hook lints the staged files
+    # among those CI's docs-lint lints; the config's `ignores` still apply with --no-globs.
+    - name: docs-lint
+      glob:
+        - '.docs/**/*.md'
+        - '*.md'
+      run: task docs-lint -- --no-globs {staged_files}
+    - name: secrets
+      run: task secrets-scan -- --staged
+    - name: workflows
+      glob:
+        - '.github/workflows/*.{yml,yaml}'
+        - '.github/actions/*/action.{yml,yaml}'
+      run: task workflows-lint -- {staged_files}
+
+# Commit message format, and the workflow rules for the message and the staged files.
+commit-msg:
+  parallel: true
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
+    - name: workflow rules
+      run: node scripts/check-commits.ts --message-file {1}
+
+# Type check and the unit tests affected by the changes since origin/main.
+pre-push:
+  parallel: true
+  jobs:
+    - name: typecheck
+      run: task typecheck
+    - name: unit tests
+      run: task test-unit -- --changed origin/main --passWithNoTests

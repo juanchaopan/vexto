@@ -1,0 +1,75 @@
+# Publishes a release after its release pull request is merged: the squash commit on main is
+# titled `chore(release): <version>`, optionally followed by GitHub's ` (#<number>)`. The workflow
+# checks the version against the VERSION file, then creates the tag v<version> on that commit and
+# the GitHub release with the version's section of CHANGELOG.md as its notes.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+# A concurrency group holds one running and one waiting run, and a newer run cancels the waiting
+# one, so every pushed commit gets a group of its own: a later push never cancels the release of
+# an earlier one, and reruns of one commit take turns.
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    if: "startsWith(github.event.head_commit.message, 'chore(release): ')"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # creates the tag and the GitHub release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The notes script uses only Node.js built-ins, so no dependencies are installed.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Read the version
+        id: version
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          subject=${MESSAGE%%$'\n'*}
+          pattern='^chore\(release\): ([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)( \(#[0-9]+\))?$'
+          if ! [[ "$subject" =~ $pattern ]]; then
+            echo "::error::The release commit is titled \"chore(release): <version>\"."
+            exit 1
+          fi
+          version=${BASH_REMATCH[1]}
+          file_version=$(tr -d '[:space:]' < VERSION)
+          if [ "$file_version" != "$version" ]; then
+            echo "::error::The commit releases $version but the VERSION file says $file_version."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Write the release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/release-notes.ts "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+      - name: Create the tag and the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh api "repos/$REPO/git/ref/tags/$tag" --silent 2>/dev/null; then
+            echo "::error::The tag $tag already exists."
+            exit 1
+          fi
+          prerelease=()
+          if [[ "$VERSION" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$tag" --repo "$REPO" --target "$GITHUB_SHA" --title "$tag" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" "${prerelease[@]}"

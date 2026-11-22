@@ -1,0 +1,44 @@
+name: Install a release binary
+description: >-
+  Downloads a Linux x64 release archive of a tool from GitHub, checks it against the checksum file
+  published with the release and installs the tool into /usr/local/bin, which is already on the
+  runner's PATH, so no environment file is written. Tools that publish no checksum file are
+  installed by their own step.
+inputs:
+  repository:
+    description: GitHub repository that publishes the releases, such as gitleaks/gitleaks
+    required: true
+  version:
+    description: Release version without the leading v
+    required: true
+  archive:
+    description: File name of the release archive; {version} stands for the version
+    required: true
+  checksums:
+    description: File name of the release's checksum file; {version} stands for the version
+    required: true
+  binary:
+    description: Name of the executable inside the archive
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download, verify and install ${{ inputs.binary }}
+      shell: bash
+      env:
+        REPOSITORY: ${{ inputs.repository }}
+        VERSION: ${{ inputs.version }}
+        ARCHIVE: ${{ inputs.archive }}
+        CHECKSUMS: ${{ inputs.checksums }}
+        BINARY: ${{ inputs.binary }}
+      run: |
+        download=$(mktemp -d)
+        cd "$download"
+        release="https://github.com/$REPOSITORY/releases/download/v$VERSION"
+        archive="${ARCHIVE//\{version\}/$VERSION}"
+        checksums="${CHECKSUMS//\{version\}/$VERSION}"
+        curl --fail --silent --show-error --location \
+          --remote-name "$release/$archive" --remote-name "$release/$checksums"
+        grep " ${archive}\$" "$checksums" | sha256sum --check --strict
+        tar -xzf "$archive" "$BINARY"
+        sudo install -m 0755 "$BINARY" /usr/local/bin/

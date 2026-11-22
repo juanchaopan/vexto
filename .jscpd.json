@@ -1,0 +1,23 @@
+{
+  "threshold": 2,
+  "minTokens": 60,
+  "minLines": 8,
+  "reporters": ["console"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/.git/**",
+    "**/coverage/**",
+    "**/playwright-report/**",
+    "**/test-results/**",
+    "**/*-snapshots/**",
+    "**/fixtures/**",
+    "**/__fixtures__/**",
+    "**/*.md",
+    "**/*.json",
+    "**/*.jsonc",
+    "**/*.yml",
+    "**/*.yaml",
+    "next-env.d.ts"
+  ]
+}
