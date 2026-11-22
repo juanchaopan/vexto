@@ -154,9 +154,9 @@ scripts/                  检查、测试、迁移和部署用的脚本
 | staging    | Vercel 团队 `juanchaopan1`（ID `team_6WBQUpNIhHEGrjeEWxoFyN62`，Hobby）的项目 `vexto-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`）；函数地区 cle1；不连 Git | https://vexto-staging.vercel.app | Neon 组织 `juanchao` 的项目 `vexto-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `lingocurrent-staging-audio`（私有） |
 | production | Vercel 项目 `lingocurrent-production`                                                                                                                           | 待定                             | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有）                                              |
 
-- staging 在每次合并到 main 且 CI 通过后由 CD 自动部署，部署后跑全部冒烟测试。
-- 每个目标都有一个手动启动的部署任务；生产只部署 main 上通过 CI 的版本标签。
-- 生产的改名、地址、环境和密钥以后单独搭建，在那之前运行生产部署任务会在检查设置的一步失败。
+- staging 在每次合并到 main 且 CI 通过后由 CD 自动部署，部署后跑全部冒烟测试。main 上每个提交各自跑一次 CI，互不取消；部署一次只跑一个，轮到某个提交部署时，如果它已经不是 main 的最新提交，就跳过部署，留给更新的提交。
+- 每个目标都有一个手动启动的部署任务；生产只部署 main 上通过 CI 的版本标签。手动部署不检查是不是最新提交，可以有意部署旧版本。
+- 生产的改名、地址、环境和密钥以后单独搭建，在那之前运行生产部署任务会在检查设置的一步失败。搭建时先建 GitHub 环境 `production` 并限定只允许 main 部署，再放密钥。
 - 资源用 `vercel`、`neon` 和 `gh` 命令行直接创建和修改，不用基础设施即代码。#1 执行过的操作：
   - lingocurrent 仓库的变量 `DEPLOY_ENABLED` 设为 `false`，它不再部署到这些资源；
   - `vercel project rename lingocurrent-staging vexto-staging`；
@@ -187,26 +187,26 @@ scripts/                  检查、测试、迁移和部署用的脚本
 
 ## 静态检查
 
-| 检查         | 工具                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 格式         | Prettier（每行 100 字符，单引号，LF 换行），也覆盖 Markdown、YAML 和 JSON                                                                                                                                                                                                                                                                                                                                                         |
-| Lint         | ESLint + typescript-eslint + eslint-config-next；圈复杂度不超过 10，嵌套不超过 3 层，函数不超过 100 行，禁止 `any`                                                                                                                                                                                                                                                                                                                |
-| 类型检查     | `next typegen` 加 `tsc --noEmit`                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 编译和构建   | `next build`                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| 架构规则     | dependency-cruiser                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 重复代码     | jscpd，阈值 2%，至少 60 个 token、8 行才算重复；忽略 Markdown、JSON、YAML 和测试夹具                                                                                                                                                                                                                                                                                                                                              |
-| 代码安全扫描 | CodeQL（TypeScript 和 GitHub Actions 工作流）；不开 GitHub 的 CodeQL 默认配置，否则会和这个工作流冲突                                                                                                                                                                                                                                                                                                                             |
-| 依赖漏洞     | `pnpm audit`，有高危或严重漏洞就失败；打开 Dependabot 漏洞提醒                                                                                                                                                                                                                                                                                                                                                                    |
-| 密钥泄露     | gitleaks；打开 GitHub 密钥扫描和推送保护                                                                                                                                                                                                                                                                                                                                                                                          |
-| 许可证       | 检查运行时依赖（license-checker-rseidelsohn 加 `pnpm licenses list`，后者能看到可选依赖）：允许 MIT、MIT-0、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD、Unlicense、CC0-1.0、BlueOak-1.0.0；遇到 GPL、AGPL、其他 LGPL 或未知许可就失败。例外只有两项：sharp 的平台包 `@img/sharp-*` 和 `@img/sharp-libvips-*` 可以是 LGPL-3.0-or-later（动态链接的库，应用自己运行、不分发）；`caniuse-lite` 可以是 CC-BY-4.0（只要求署名） |
-| 工作流配置   | actionlint、zizmor                                                                                                                                                                                                                                                                                                                                                                                                                |
-| 提交信息     | commitlint 检查 Conventional Commits 格式和长度；项目自己的脚本检查提交类型和分支的 issue 类型对应、issue 号、`Step:` 尾行                                                                                                                                                                                                                                                                                                        |
-| 步骤检查     | 项目自己的脚本：按 `Step:` 尾行检查每个提交只改了该步骤允许改的文件，跳过把 main 合进来的提交                                                                                                                                                                                                                                                                                                                                     |
-| PR 标题      | 项目自己的脚本：类型和分支名对应                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 文档格式     | Prettier + markdownlint-cli2，覆盖 `.docs/` 和根目录的 Markdown                                                                                                                                                                                                                                                                                                                                                                   |
-| AI 精简      | 开 PR 前在本机跑 `/simplify`                                                                                                                                                                                                                                                                                                                                                                                                      |
-| AI 评审      | 开 PR 前在本机跑 `/code-review medium`，不在 CI 里跑                                                                                                                                                                                                                                                                                                                                                                              |
-| AI 安全评审  | 开 PR 前在本机跑 `/security-review`                                                                                                                                                                                                                                                                                                                                                                                               |
+| 检查         | 工具                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 格式         | Prettier（每行 100 字符，单引号，LF 换行），也覆盖 Markdown、YAML 和 JSON                                                                                                                                                                                                                                                                                                                               |
+| Lint         | ESLint + typescript-eslint + eslint-config-next；圈复杂度不超过 10，嵌套不超过 3 层，函数不超过 100 行，禁止 `any`                                                                                                                                                                                                                                                                                      |
+| 类型检查     | `next typegen` 加 `tsc --noEmit`                                                                                                                                                                                                                                                                                                                                                                        |
+| 编译和构建   | `next build`                                                                                                                                                                                                                                                                                                                                                                                            |
+| 架构规则     | dependency-cruiser                                                                                                                                                                                                                                                                                                                                                                                      |
+| 重复代码     | jscpd，阈值 2%，至少 60 个 token、8 行才算重复；忽略 Markdown、JSON、YAML 和测试夹具                                                                                                                                                                                                                                                                                                                    |
+| 代码安全扫描 | CodeQL（TypeScript 和 GitHub Actions 工作流）；不开 GitHub 的 CodeQL 默认配置，否则会和这个工作流冲突                                                                                                                                                                                                                                                                                                   |
+| 依赖漏洞     | `pnpm audit`，有高危或严重漏洞就失败；打开 Dependabot 漏洞提醒                                                                                                                                                                                                                                                                                                                                          |
+| 密钥泄露     | gitleaks；打开 GitHub 密钥扫描和推送保护                                                                                                                                                                                                                                                                                                                                                                |
+| 许可证       | 检查运行时依赖（license-checker-rseidelsohn 加 `pnpm licenses list`，后者能看到可选依赖）：允许 MIT、MIT-0、Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、0BSD、Unlicense、CC0-1.0、BlueOak-1.0.0；遇到 GPL、AGPL、其他 LGPL 或未知许可就失败。例外只有两项：sharp 的平台包 `@img/sharp-*` 可以是 LGPL-3.0-or-later（动态链接的库，应用自己运行、不分发）；`caniuse-lite` 可以是 CC-BY-4.0（只要求署名） |
+| 工作流配置   | actionlint、zizmor                                                                                                                                                                                                                                                                                                                                                                                      |
+| 提交信息     | commitlint 检查 Conventional Commits 格式和长度；项目自己的脚本检查提交类型和分支的 issue 类型对应、issue 号、`Step:` 尾行                                                                                                                                                                                                                                                                              |
+| 步骤检查     | 项目自己的脚本：按 `Step:` 尾行检查每个提交只改了该步骤允许改的文件，跳过把 main 合进来的提交                                                                                                                                                                                                                                                                                                           |
+| PR 标题      | 项目自己的脚本：类型和分支名对应                                                                                                                                                                                                                                                                                                                                                                        |
+| 文档格式     | Prettier + markdownlint-cli2，覆盖 `.docs/` 和根目录的 Markdown                                                                                                                                                                                                                                                                                                                                         |
+| AI 精简      | 开 PR 前在本机跑 `/simplify`                                                                                                                                                                                                                                                                                                                                                                            |
+| AI 评审      | 开 PR 前在本机跑 `/code-review medium`，不在 CI 里跑                                                                                                                                                                                                                                                                                                                                                    |
+| AI 安全评审  | 开 PR 前在本机跑 `/security-review`                                                                                                                                                                                                                                                                                                                                                                     |
 
 git hook 由 lefthook 管理。hook 可以被跳过，所以 hook 里的每项检查在 CI 里都会再跑一遍。
 
@@ -234,18 +234,18 @@ git hook 由 lefthook 管理。hook 可以被跳过，所以 hook 里的每项�
 
 运行时机：
 
-| 时机                     | 跑什么                                                                                                                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 提交前（只查暂存的文件） | Prettier、ESLint、markdownlint、gitleaks；改了工作流时跑 actionlint 和 zizmor                                                                                                                                                        |
-| 写提交信息时             | commitlint、步骤检查                                                                                                                                                                                                                 |
-| 推送前                   | 类型检查、受影响的单元测试                                                                                                                                                                                                           |
-| 开 PR 前                 | 架构规则、重复代码；受影响的单元、组件、集成（含安全用例）和端到端测试；改了迁移脚本时跑迁移测试；`/simplify`、`/code-review medium`、`/security-review`                                                                             |
-| PR CI                    | 格式、lint、文档格式、密钥泄露、工作流配置、提交信息和步骤检查、PR 标题、类型检查、构建、架构规则、重复代码、CodeQL、依赖漏洞、许可证、全部单元、组件、集成和安全测试，两种浏览器的端到端测试，改了迁移脚本时的迁移测试，`risk-gate` |
-| 合并到 main 后           | 完整再跑一遍 CI，通过后部署 staging                                                                                                                                                                                                  |
-| 部署到 staging 后        | 全部冒烟测试                                                                                                                                                                                                                         |
-| 发版前                   | CodeQL、依赖漏洞、许可证、两种浏览器的端到端测试、迁移测试                                                                                                                                                                           |
+| 时机                     | 跑什么                                                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 提交前（只查暂存的文件） | Prettier、ESLint、markdownlint、gitleaks；改了工作流时跑 actionlint 和 zizmor                                                                                                                                                              |
+| 写提交信息时             | commitlint、步骤检查                                                                                                                                                                                                                       |
+| 推送前                   | 类型检查、受影响的单元测试                                                                                                                                                                                                                 |
+| 开 PR 前                 | 架构规则、重复代码；受影响的单元、组件、集成（含安全用例）和端到端测试；改了迁移相关的文件时跑迁移测试；`/simplify`、`/code-review medium`、`/security-review`                                                                             |
+| PR CI                    | 格式、lint、文档格式、密钥泄露、工作流配置、提交信息和步骤检查、PR 标题、类型检查、构建、架构规则、重复代码、CodeQL、依赖漏洞、许可证、全部单元、组件、集成和安全测试，两种浏览器的端到端测试，改了迁移相关的文件时的迁移测试，`risk-gate` |
+| 合并到 main 后           | 完整再跑一遍 CI，通过后部署 staging                                                                                                                                                                                                        |
+| 部署到 staging 后        | 全部冒烟测试                                                                                                                                                                                                                               |
+| 发版前                   | CodeQL、依赖漏洞、许可证、两种浏览器的端到端测试、迁移测试                                                                                                                                                                                 |
 
-PR CI 里的每一项都是必过检查。一项检查被路径过滤跳过时，它的任务在工作流内部判断，仍然报告成功。
+PR CI 里的每一项都是必过检查。一项检查被路径过滤跳过时，它的任务在工作流内部判断，仍然报告成功。迁移测试由 CI 任务判断要不要跑：`drizzle/`、`*.migration.test.ts`、各功能的表定义、`drizzle.config.ts` 或迁移命令有改动时才跑；`task test-migration` 本身总是跑全部迁移测试。
 
 本机范围：CI 总是跑全部。本机开 PR 前，单元、组件、集成、端到端测试都只跑代理判断受影响的部分。这样有风险：代理漏判的测试要等 CI 才发现失败。
 
@@ -266,7 +266,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 - **每个用户只碰自己的数据**：每个查询都按当前用户过滤；访问别人的数据返回 404；每次请求都确认用户仍在允许名单里。
 - **评论语言**：评审评论用中文，标明 [Important]、[Nit] 或 [Pre-existing]。
 
-风险规则写在 `.github/risk-rules.txt`。CI 任务 `risk` 检出目标分支，用目标分支上的规则文件和分级脚本来分级，所以 PR 改不了自己的级别；目标分支上还没有规则文件时一律算高风险。
+风险规则写在 `.github/risk-rules.txt`。CI 任务 `risk` 检出目标分支，用目标分支上的规则文件和分级脚本来分级，PR 里改动的规则文件和分级脚本对自己不起作用。以下情况一律算高风险：目标分支上还没有规则文件；PR 改动的文件达到 3000 个（接口最多只返回 3000 个），或者列出的数目和 PR 的改动文件数对不上。工作流 `risk.yml` 本身按 PR 里的版本运行，改了它的 PR 能改掉这道门槛；这类 PR 改的是 `.github/**`，一定是高风险，审批时要专门检查对门槛的改动。
 
 - 高风险：
   - `.github/**`、`lefthook.yml`、`.claude/**`、`AGENTS.md`、`CLAUDE.md`、`REVIEW.md`、`Taskfile.yml`；
@@ -284,6 +284,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
   - npm 包发布满 3 天后才升级。
   - 每周维护锁文件，开启依赖看板。
   - 用正则规则同时更新 Playwright 容器镜像，以及工作流和 `Taskfile.yml` 里写死的工具版本（Task、gitleaks、actionlint、zizmor、Vercel CLI）。
+  - Playwright 的容器镜像和 npm 包放在同一组，任何级别的更新都一起升，保持版本一致。
 - 每周一开 PR：所有非大版本的升级合并成一个 PR，每个大版本单独一个 PR；安全更新随时开。
 - PR 标题：产品运行时用的依赖用 `fix(deps): ...`，开发依赖和 CI action 用 `chore(deps): ...`，不带 issue 号，也不带 `Step:` 尾行。合并成组的 PR 可能是两种类型中的任意一种，都能通过检查。
 - Dependabot 的漏洞提醒保持打开，Renovate 据此开安全 PR；不配 Dependabot 的版本更新，避免重复的 PR。
@@ -299,7 +300,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 - 只允许 squash 合并。
 - 禁止强推和删除 main。
 - 没有旁路用户，项目所有者也不能绕过。
-- 人工审批：中、高风险的 PR 需要 `human-reviewed` 标签，由 `risk-gate` 检查；有新提交时，CI 任务会去掉这个标签。来自 fork 的 PR 只拿到只读令牌，打不了标签，`risk-gate` 会失败。
+- 人工审批：中、高风险的 PR 需要 `human-reviewed` 标签，而且标签要在当前最新提交推上来之后才加，由 `risk-gate` 按 GitHub 服务器记录的时间检查；有新提交时，CI 任务还会去掉这个标签。来自 fork 的 PR 只拿到只读令牌，打不了标签，`risk` 失败，`risk-gate` 跟着失败。
 
 其他设置：
 
@@ -311,7 +312,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 环境变量和密钥按环境存放，每个值只在一个地方修改：
 
 - **staging 和 production**：以 GitHub 环境 `staging`、`production` 为准，这两个环境各自保存该目标的全部变量和密钥，只允许从 main 部署。应用运行在 Vercel 上，只能读 Vercel 项目里的环境变量，所以部署任务在构建之前，把运行时要用的值从 GitHub 环境经标准输入写进该目标 Vercel 项目的 Production 环境：密钥写成 Sensitive，变量写成普通类型；GitHub 环境里没有值的名字跳过。Vercel 里的值只是副本，每次部署都会覆盖。运行时变量的名字只在 `scripts/lib/runtime-env.ts` 里列一次。
-- **本机开发**：保存在 Vercel 项目 `vexto-staging` 的 Development 环境，用 `task env-pull` 生成不提交的 `.env.local`。本机的 `DATABASE_URL` 指向本机的 PostgreSQL 容器。
+- **本机开发**：保存在 Vercel 项目 `vexto-staging` 的 Development 环境，用 `task env-pull` 生成不提交的 `.env.local`。拉取哪个项目和团队写在 `scripts/env-pull.json` 里，可以用环境变量覆盖。本机的 `DATABASE_URL` 指向本机的 PostgreSQL 容器。
 
 | 名称                                       | 用途                       | 类型 | 谁读                 | 值从哪来                                                                            | 由谁设置                     |
 | ------------------------------------------ | -------------------------- | ---- | -------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
@@ -339,4 +340,4 @@ Vercel 项目 `vexto-staging` 的 Production 环境里，现在还有 Neon 集�
 - 订阅源的定时收集用什么触发：由收集功能的 issue 决定。
 - 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、Clerk 生产实例的邮件问题，以及两个 Clerk 实例共用一个 Google OAuth 客户端的问题。
 
-Last changed: #1 (2026-11-21)
+Last changed: #1 (2026-11-22)
