@@ -48,3 +48,6 @@ secrets.local.env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# speech model files downloaded by `task model-download`
+/.models/

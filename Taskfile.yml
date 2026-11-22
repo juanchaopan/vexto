@@ -36,6 +36,18 @@ tasks:
     cmds:
       - node scripts/env-pull.ts
 
+  # The speech model is pinned in config/speech-model.json; the files are checked against the
+  # checksums recorded there and kept in .models/, which is not committed.
+  model-download:
+    desc: Download the speech model in config/speech-model.json into .models/ and check its checksums
+    cmds:
+      - node scripts/model.ts download
+
+  model-upload:
+    desc: "Copy the downloaded speech model to a target's model bucket with gcloud: task model-upload -- <project-id>"
+    cmds:
+      - node scripts/model.ts upload {{.CLI_ARGS}}
+
   dev:
     desc: Start the development server
     cmds:
