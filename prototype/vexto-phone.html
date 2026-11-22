@@ -458,6 +458,12 @@
         padding: 25px 14px;
         color: var(--muted);
       }
+      /* Content that failed to load shows the failure and Retry where the content would be. */
+      .empty .inline-status,
+      .load-more .inline-status {
+        flex: 1;
+        margin-top: 0;
+      }
 
       /* Vocabulary. */
       .tabs {
@@ -1023,6 +1029,16 @@
         border-color: var(--blue);
         background: var(--soft);
       }
+      /* A wrong choice stays fully visible among the locked options, in red with a cross. */
+      .option-list button.is-wrong {
+        border-color: var(--red);
+        background: color-mix(in srgb, var(--red) 10%, var(--surface));
+        color: var(--red);
+        opacity: 1;
+      }
+      .option-mark {
+        margin-left: auto;
+      }
       .option-list small {
         display: block;
         color: var(--muted);
@@ -1071,6 +1087,9 @@
       .review-empty p:first-child {
         font-size: 15px;
         font-weight: 500;
+      }
+      .review > .reader.card {
+        margin-top: 8px;
       }
 
       /* Popovers, dialogs and status messages. */
@@ -1230,6 +1249,8 @@
         font-size: 12px;
         line-height: 1.5;
       }
+      /* Inside an open modal dialog the notice is rendered in the dialog, so it stays above the
+         backdrop and its Retry button stays usable. */
       .notice {
         position: fixed;
         z-index: 40;
@@ -1246,6 +1267,18 @@
       }
       .notice:empty {
         display: none;
+      }
+      /* With Retry the notice sizes to its content (up to the maximum width) instead of shrinking
+         to the space right of its left edge, so a short message stays on one line. */
+      .notice.has-retry {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: max-content;
+        padding: 4px 4px 4px 12px;
+      }
+      .notice.has-retry button {
+        flex: none;
       }
 
       /* Pages outside the app shell: sign-in, no access, terms and license. */
@@ -1738,13 +1771,19 @@
         const MAX_SELECTION_CHARS = 80;
         const MAX_BATCH_DELETE = 100;
         const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+        const ARTICLE_GONE = 'This article is no longer available.';
 
         // Fixed clock: every time is a local time in November 2026; "now" is Nov 22, 10:00.
         const at = (d, t) => ({ d, t });
         const NOW = at(22, '10:00');
+        const YEAR = 2026;
         const stamp = (x) => x.d * 10000 + Number(x.t.replace(':', ''));
         const fmtShort = (x) => `Nov ${x.d}, ${x.t}`;
         const fmtLong = (x) => `Nov ${x.d}, 2026, ${x.t}`;
+        // A date leaves out its year when it is the current year.
+        const fmtDay = (x, year = YEAR) => `Nov ${x.d}${year === YEAR ? '' : `, ${year}`}`;
+        // When the demo account accepted the current terms.
+        const TERMS_ACCEPTED = at(21, '18:20');
 
         // ---------------------------------------------------------------- demo articles
         // Titles and texts are written for this prototype; they are not copied from the sources.
@@ -2144,6 +2183,37 @@
             m: [p(0, null), p(7, null), p(7, null)],
           },
         ];
+        // More saved words for states whose list runs past one batch; none of them is due or new.
+        const MORE_WORDS = [
+          ['abundant', 'adjective', '丰富的；充裕的'],
+          ['benchmark', 'noun', '基准；参照标准'],
+          ['coherent', 'adjective', '连贯的；有条理的'],
+          ['deploy', 'verb', '部署；调动'],
+          ['emerge', 'verb', '出现；浮现'],
+          ['feasible', 'adjective', '可行的'],
+          ['generate', 'verb', '产生；生成'],
+          ['hazard', 'noun', '危险；隐患'],
+          ['implement', 'verb', '实施；执行'],
+          ['justify', 'verb', '证明……合理'],
+          ['landmark', 'noun', '地标；里程碑'],
+          ['moderate', 'adjective', '适度的；中等的'],
+          ['notion', 'noun', '概念；想法'],
+          ['obtain', 'verb', '获得；得到'],
+          ['precise', 'adjective', '精确的；准确的'],
+          ['retain', 'verb', '保留；保持'],
+        ];
+        const moreWords = (firstId) =>
+          MORE_WORDS.map(([word, pos, zh], i) => ({
+            id: firstId + i,
+            word,
+            pos,
+            zh,
+            forms: [word],
+            examples: [`In this situation, ${word} is a useful word to remember.`],
+            options: [zh, '拒绝；回绝', '收集；采集', '修理；修复'],
+            correct: 0,
+            m: [p(0, null), p(2, 4320), p(1, 300)],
+          }));
 
         // Explanations the demo "AI" returns for words in the articles and examples.
         const LOOKUPS = {
@@ -2213,6 +2283,10 @@
         let suppressExampleLookupUntil = 0;
         let afterRender = null;
 
+        // noticeRetry is { action, data, page } while the notice offers Retry: the action runs with
+        // data as its dataset, and the notice goes away once the page changes.
+        // loadError names what failed to load: 'articles', 'articles-more', 'words', 'words-more',
+        // 'article', 'word' or 'review'; its page shows the failure with Retry in place of it.
         function freshState() {
           return {
             frozen: false,
@@ -2229,6 +2303,7 @@
             dir: -1,
             loaded: BATCH,
             loadingMore: false,
+            loadError: null,
             popover: null,
             draft: [],
             accountOpen: false,
@@ -2249,6 +2324,7 @@
             layers: [],
             dialog: null,
             notice: '',
+            noticeRetry: null,
             tab: 'All',
             vq: '',
             roundValues: [[], [], []],
@@ -2320,6 +2396,7 @@
         // ---------------------------------------------------------------- text helpers
         const feedOf = (a) => feedByKey[a.feed];
         const activeArticle = () => s.articles.find((a) => a.id === s.articleId) || s.articles[0];
+        const articleExists = (id) => s.articles.some((a) => a.id === id);
         const sentencesOf = (a) =>
           a.body.flatMap((para, pi) =>
             para.map((text, si) => ({ text, start: pi > 0 && si === 0 })),
@@ -2430,7 +2507,13 @@
         }
         const searchBox = (field, placeholder) =>
           `<form class="search" data-search="${field}" role="search"><input aria-label="${esc(placeholder)}" value="${esc(s[field])}" placeholder="${esc(placeholder)}" enterkeyhint="search"><button type="submit" class="icon" aria-label="Search">${icon('search')}</button></form>`;
-        function loadMore(total, loaded, loading) {
+        // A failure that can be retried in place: alert icon, message and a Retry button.
+        const retryStatus = (text, action) =>
+          `<div class="inline-status error" role="alert">${icon('circle-alert')}<span>${esc(text)}</span><button data-action="${action}">${icon('refresh-cw')}Retry</button></div>`;
+        // Content that failed to load: the failure and Retry stand where the content would be.
+        const loadFailure = (text) => `<div class="empty">${retryStatus(text, 'retry-load')}</div>`;
+        function loadMore(total, loaded, loading, failure = '') {
+          if (failure) return `<div class="load-more">${retryStatus(failure, 'retry-load')}</div>`;
           if (loading)
             return `<div class="load-more"><button disabled aria-busy="true">${icon('loader-circle', 'spin')}Loading…</button></div>`;
           return `<div class="load-more">${loaded < total ? '<button data-action="more">Load more</button>' : '<span class="muted small" role="status">All loaded</span>'}</div>`;
@@ -2538,13 +2621,18 @@
               .map((b) => [b.text.slice(0, 3), b.text.slice(3).trim()]),
           };
         }
+        // Opened from the account menu the terms are read-only: a close button, the date they were
+        // accepted, and no Log out or I agree.
         function termsPage(viewOnly) {
           const r = useRestrictions();
           const head = `<header class="doc-head"><div class="brand"><b aria-hidden="true">v</b><span>vexto</span></div>${viewOnly ? `<button class="icon flat" data-action="close-doc" aria-label="Close terms">${icon('x')}</button>` : ''}</header>`;
           const actions = viewOnly
             ? ''
             : `<div class="doc-actions"><button data-action="sign-out">${icon('log-out')}Log out</button><button class="primary" data-action="agree-terms">I agree</button></div>`;
-          return `<div class="doc-page">${head}<div class="doc-body"><h1>Terms of use</h1><p class="small muted">Version ${TERMS.version} · ${TERMS.date}${viewOnly ? ' · Accepted Nov 21, 2026' : ''}</p><p>${viewOnly ? 'You accepted these terms to use vexto.' : 'Please read and accept these terms to use vexto.'}</p><h2>The voice is AI-generated</h2><p>Every voice in vexto, for articles, words and example sentences, is generated by Supertonic 3, an AI text-to-speech model. Supertonic 3 is licensed under the BigScience Open RAIL-M License.</p><a class="doc-link" href="#license" data-action="open-license">${icon('scale')}Read the full license</a><h2>Use restrictions</h2><p>The license requires everyone who uses the model to follow its use restrictions (Attachment A). By using vexto, you agree to them:</p><p>${esc(r.intro)}</p><ol class="restrictions">${r.items.map(([letter, text]) => `<li><span>${esc(letter)}</span><span>${esc(text)}</span></li>`).join('')}</ol><h2>Sharing audio</h2><p>If you share audio from vexto, state clearly that it is machine-generated.</p><h2>Articles</h2><p>Articles come from public sources and are provided for language learning only. They are not medical advice.</p></div>${actions}</div>`;
+          const accepted = viewOnly
+            ? `<p class="small muted">Accepted ${fmtDay(TERMS_ACCEPTED)}.</p>`
+            : '';
+          return `<div class="doc-page">${head}<div class="doc-body"><h1>Terms of use</h1><p class="small muted">Version ${TERMS.version} · ${TERMS.date}</p>${accepted}<p>${viewOnly ? 'You accepted these terms to use vexto.' : 'Please read and accept these terms to use vexto.'}</p><h2>The voice is AI-generated</h2><p>Every voice in vexto, for articles, words and example sentences, is generated by Supertonic 3, an AI text-to-speech model. Supertonic 3 is licensed under the BigScience Open RAIL-M License.</p><a class="doc-link" href="#license" data-action="open-license">${icon('scale')}Read the full license</a><h2>Use restrictions</h2><p>The license requires everyone who uses the model to follow its use restrictions (Attachment A). By using vexto, you agree to them:</p><p>${esc(r.intro)}</p><ol class="restrictions">${r.items.map(([letter, text]) => `<li><span>${esc(letter)}</span><span>${esc(text)}</span></li>`).join('')}</ol><h2>Sharing audio</h2><p>If you share audio from vexto, state clearly that it is machine-generated.</p><h2>Articles</h2><p>Articles come from public sources and are provided for language learning only. They are not medical advice.</p></div>${actions}</div>`;
         }
         function licensePage() {
           const blocks = licenseBlocks();
@@ -2556,15 +2644,34 @@
           const f = feedOf(a);
           return `<article class="item-card article-card" data-article-item="${a.id}"><div class="item-head"><div><button class="article-link" data-read="${a.id}" data-target="card">${esc(a.title)}</button><span class="excerpt">${esc(a.body[0][0])}</span></div><button class="icon" data-play="${a.id}" aria-label="Play ${esc(a.title)}">${icon('play')}</button></div><div class="item-meta">${sourceMark(f)}<span>${esc(f.category)}</span></div><div class="visit-meta"><span>Collected ${fmtShort(a.collected)}</span>${a.visited ? `<span>Last visited ${fmtShort(a.visited)}</span>` : ''}</div></article>`;
         }
+        // When the list itself failed to load there is no count, Play all is off and the failure
+        // takes the place of the rows.
         function articlesPage() {
-          const rows = filteredArticles();
+          const unavailable = s.loadError === 'articles';
+          const rows = unavailable ? [] : filteredArticles();
           const empty = s.articles.length ? 'No articles match.' : 'No articles yet.';
-          return `<div class="page-head"><h1>Articles</h1><button class="primary icon" data-action="play-all" aria-label="Play all articles" ${rows.length ? '' : 'disabled'}>${icon('play')}</button></div><div class="toolbar">${searchBox('aq', 'Search article text')}<span class="count">${countText(rows.length, 'article')}</span></div><div class="toolbar touch-controls">${filterTrigger('source')}${filterTrigger('category')}${sortTrigger()}</div><div class="grid-frame"><div class="cards">${rows.slice(0, s.loaded).map(articleCard).join('') || `<div class="empty">${empty}</div>`}${rows.length ? loadMore(rows.length, s.loaded, s.loadingMore) : ''}</div></div>`;
+          const list = unavailable
+            ? loadFailure("Couldn't load articles.")
+            : rows.slice(0, s.loaded).map(articleCard).join('') ||
+              `<div class="empty">${empty}</div>`;
+          const more = rows.length
+            ? loadMore(
+                rows.length,
+                s.loaded,
+                s.loadingMore,
+                s.loadError === 'articles-more' ? "Couldn't load more articles." : '',
+              )
+            : '';
+          return `<div class="page-head"><h1>Articles</h1><button class="primary icon" data-action="play-all" aria-label="Play all articles" ${rows.length ? '' : 'disabled'}>${icon('play')}</button></div><div class="toolbar">${searchBox('aq', 'Search article text')}<span class="count">${unavailable ? '' : countText(rows.length, 'article')}</span></div><div class="toolbar touch-controls">${filterTrigger('source')}${filterTrigger('category')}${sortTrigger()}</div><div class="grid-frame"><div class="cards">${list}${more}</div></div>`;
         }
 
         // ---------------------------------------------------------------- Reader
         // The top play button is icon-only in every state; its accessible name says what it will do.
+        // When the article fails to load only the way back and the failure show.
         function readerPage() {
+          const back = `<div class="page-head"><button class="flat" data-action="close-article">${icon('arrow-left')}Articles</button></div>`;
+          if (s.loadError === 'article')
+            return `${back}<article class="reader card">${loadFailure("Couldn't load this article.")}</article>`;
           const a = activeArticle();
           const f = feedOf(a);
           const rows = sentencesOf(a);
@@ -2578,7 +2685,6 @@
               : s.position
                 ? 'Resume article'
                 : 'Play article';
-          const back = `<div class="page-head"><button class="flat" data-action="close-article">${icon('arrow-left')}Articles</button></div>`;
           const highlight = s.playing || s.position || s.single != null;
           const sentences = rows
             .map((row, i) => {
@@ -2650,6 +2756,7 @@
             ? `<button class="icon flat" data-action="${action}" aria-label="Generating word audio" aria-busy="true">${icon('loader-circle', 'spin')}</button>`
             : `<button class="icon flat" data-action="${action}" aria-label="Play word">${icon('volume-2')}</button>`;
         }
+        // A layer is 'loading', 'ready', 'error' (the AI failed) or 'offline' (no network to ask).
         function floatHTML(layer, n, back) {
           const depth = s.layers.length - n - 1;
           const style = back ? ` style="transform:translateX(${-8 * depth}px);z-index:${n}"` : '';
@@ -2660,8 +2767,12 @@
           let body;
           if (layer.kind === 'loading') {
             body = `<div class="float-body" aria-busy="true"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div><div class="skeleton" style="width:28%"></div><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:92%"></div><div class="skeleton" style="width:64%"></div><p class="inline-status" role="status">${icon('loader-circle', 'spin')}Explaining…</p></div>`;
-          } else if (layer.kind === 'error') {
-            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div><div class="inline-status error" role="alert">${icon('circle-alert')}<span>Couldn't explain this.</span><button data-action="retry-lookup">${icon('refresh-cw')}Retry</button></div></div>`;
+          } else if (layer.kind === 'error' || layer.kind === 'offline') {
+            const message =
+              layer.kind === 'offline'
+                ? "You're offline. Connect to look up words."
+                : "Couldn't explain this.";
+            body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.text)}</h2></div>${retryStatus(message, 'retry-lookup')}</div>`;
           } else {
             body = `<div class="float-body"><div class="lemma-row"><h2>${esc(layer.word)}</h2>${playWordButton('play-word', layer.audio)}</div>${audioError(layer.audio)}<p class="pos">${esc(layer.pos)}</p><p class="meaning">${esc(layer.zh)}</p>${examplePanel('lookup', n)}</div>`;
           }
@@ -2701,18 +2812,34 @@
           const all = rows.length && rows.every((w) => s.selectedIds.includes(w.id));
           return `<div class="selection-bar" role="region" aria-label="Selected words"><div class="select-visible-label"><label class="selection-check"><input type="checkbox" data-select-visible aria-label="Select loaded words" ${all ? 'checked' : ''} ${rows.length ? '' : 'disabled'}></label><span>Loaded</span></div><span class="selection-count" role="status">${s.selectedIds.length} selected</span><button class="icon delete-icon" data-action="delete-selected" aria-label="Delete ${s.selectedIds.length} selected words" ${s.selectedIds.length ? '' : 'disabled'}>${icon('trash-2')}</button><button class="icon flat" data-action="clear-selection" aria-label="Cancel selection">${icon('x')}</button></div>`;
         }
+        // When the word list failed to load there is no count and the failure takes the place of the cards.
         function vocabularyPage() {
-          const rows = filteredWords();
+          const unavailable = s.loadError === 'words';
+          const rows = unavailable ? [] : filteredWords();
           const shown = rows.slice(0, s.vloaded);
           const empty = s.words.length
             ? 'No words match.'
             : 'No words yet. Select a word while reading to look it up.';
-          return `<div class="page-head"><h1>Vocabulary</h1><button class="icon" data-action="selection-mode" aria-label="${s.selectMode ? 'Finish selecting' : 'Select words'}" aria-pressed="${s.selectMode}">${icon(s.selectMode ? 'x' : 'list-checks')}</button></div>${modeButtons()}<div class="tabs" role="group" aria-label="Word state">${['All', 'New', 'Ongoing', 'Archived'].map((t) => `<button data-tab="${t}" aria-pressed="${s.tab === t}">${t}</button>`).join('')}</div><div class="toolbar">${searchBox('vq', 'Search words, examples, 中文')}<span class="count">${countText(rows.length, 'word')}</span></div><div class="toolbar touch-controls">${[0, 1, 2].map((i) => filterTrigger('round' + i)).join('')}${sortTrigger()}</div>${selectionBar(shown)}<div class="grid-frame"><div class="cards">${shown.map(wordCard).join('') || `<div class="empty">${empty}</div>`}${rows.length ? loadMore(rows.length, s.vloaded, s.vloadingMore) : ''}</div></div>`;
+          const list = unavailable
+            ? loadFailure("Couldn't load words.")
+            : shown.map(wordCard).join('') || `<div class="empty">${empty}</div>`;
+          const more = rows.length
+            ? loadMore(
+                rows.length,
+                s.vloaded,
+                s.vloadingMore,
+                s.loadError === 'words-more' ? "Couldn't load more words." : '',
+              )
+            : '';
+          return `<div class="page-head"><h1>Vocabulary</h1><button class="icon" data-action="selection-mode" aria-label="${s.selectMode ? 'Finish selecting' : 'Select words'}" aria-pressed="${s.selectMode}">${icon(s.selectMode ? 'x' : 'list-checks')}</button></div>${modeButtons()}<div class="tabs" role="group" aria-label="Word state">${['All', 'New', 'Ongoing', 'Archived'].map((t) => `<button data-tab="${t}" aria-pressed="${s.tab === t}">${t}</button>`).join('')}</div><div class="toolbar">${searchBox('vq', 'Search words, examples, 中文')}<span class="count">${unavailable ? '' : countText(rows.length, 'word')}</span></div><div class="toolbar touch-controls">${[0, 1, 2].map((i) => filterTrigger('round' + i)).join('')}${sortTrigger()}</div>${selectionBar(shown)}<div class="grid-frame"><div class="cards">${list}${more}</div></div>`;
         }
         const detailWord = () => s.words.find((w) => w.id === s.detailId) || s.words[0];
         function detailPage() {
+          const close = `<div class="detail-controls"><button class="icon flat" data-action="close-detail" aria-label="Close word and return to Vocabulary">${icon('x')}</button></div>`;
+          if (s.loadError === 'word')
+            return `${close}<div class="reader card">${loadFailure("Couldn't load this word.")}</div>`;
           const w = detailWord();
-          return `<div class="detail-controls"><button class="icon flat" data-action="close-detail" aria-label="Close word and return to Vocabulary">${icon('x')}</button></div><div class="reader card"><div class="reader-head"><div class="lemma-row"><h2>${esc(w.word)}</h2>${playWordButton('detail-word', s.detailAudio)}</div>${audioError(s.detailAudio)}<p class="pos">${esc(w.pos)}</p><p class="meaning">${esc(w.zh)}</p></div><div style="padding:16px">${examplePanel('detail')}${progressGroups(w)}</div></div>`;
+          return `${close}<div class="reader card"><div class="reader-head"><div class="lemma-row"><h2>${esc(w.word)}</h2>${playWordButton('detail-word', s.detailAudio)}</div>${audioError(s.detailAudio)}<p class="pos">${esc(w.pos)}</p><p class="meaning">${esc(w.zh)}</p></div><div style="padding:16px">${examplePanel('detail')}${progressGroups(w)}</div></div>`;
         }
 
         // ---------------------------------------------------------------- Review
@@ -2744,9 +2871,12 @@
             result: null,
           };
         }
+        // After a wrong Translate answer the chosen option is marked wrong; the feedback names the right one.
         function reviewPage() {
           const r = s.review;
           const top = `<div class="review-controls"><span>${r.mode}</span><button class="icon flat" data-action="close-review" aria-label="Close review and return to Vocabulary">${icon('x')}</button></div>`;
+          if (s.loadError === 'review')
+            return `<section class="review">${top}<div class="reader card">${loadFailure("Couldn't load the next review.")}</div></section>`;
           if (r.empty) {
             return `<section class="review">${top}<div class="review-empty" role="status"><p>No reviews due.</p>${r.nextDue != null ? `<p class="muted">Next review in ${duration(r.nextDue)}.</p>` : ''}</div></section>`;
           }
@@ -2756,8 +2886,12 @@
           const target = translate
             ? `<div class="target" lang="en">${esc(w.word)}</div>`
             : `<div class="target">${esc(w.zh)}</div>`;
+          const option = (o, i) => {
+            const wrong = r.feedback === 'incorrect' && r.option === i;
+            return `<button data-option="${i}" aria-pressed="${r.option === i}" ${locked ? 'disabled' : ''}${wrong ? ' class="is-wrong"' : ''}><span>${esc(o)}<small>${esc(w.pos)}</small></span>${wrong ? icon('x', 'option-mark') : ''}</button>`;
+          };
           const input = translate
-            ? `<div class="option-list">${w.options.map((o, i) => `<button data-option="${i}" aria-pressed="${r.option === i}" ${locked ? 'disabled' : ''}><span>${esc(o)}<small>${esc(w.pos)}</small></span></button>`).join('')}</div>`
+            ? `<div class="option-list">${w.options.map(option).join('')}</div>`
             : `<label class="small muted answer-label">Your answer<input class="answer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-answer ${locked ? 'disabled' : ''} value="${esc(r.answer)}"></label>`;
           const feedback = {
             correct: ['', r.result],
@@ -2837,7 +2971,8 @@
               .join('');
           return `<section class="compact-popover selection-popover" role="dialog" aria-label="Select words"><div class="popover-title"><strong>Select words</strong><button class="icon flat" data-action="close-selection" aria-label="Close selection">${icon('x')}</button></div>${segments.length > 1 ? `<label class="select-field">Sentence<select data-selection-segment>${segments.map((t, i) => `<option value="${i}" ${s.selectionSegment === i ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : ''}<div class="selection-fields"><label class="select-field">From<select data-selection-start>${options(s.selectionStart, 0)}</select></label><label class="select-field">To<select data-selection-end>${options(s.selectionEnd, s.selectionStart)}</select></label></div><button class="primary" data-action="lookup-chosen">Look up</button></section>`;
         }
-        function dialogHTML() {
+        // The notice markup goes inside an open dialog so a failure there stays visible and usable.
+        function dialogHTML(notice) {
           const d = s.dialog;
           if (!d) return '';
           if (d.kind === 'delete') {
@@ -2847,13 +2982,13 @@
                 .slice(0, 3)
                 .map((w) => w.word)
                 .join(', ') + (entries.length > 3 ? ` +${entries.length - 3}` : '');
-            return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">${entries.length === 1 ? 'Delete word?' : `Delete ${entries.length} words?`}</h2><p>${esc(names)}. Review progress will also be deleted.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="danger" data-action="confirm-dialog">Delete</button></div></dialog>`;
+            return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">${entries.length === 1 ? 'Delete word?' : `Delete ${entries.length} words?`}</h2><p>${esc(names)}. Review progress will also be deleted.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="danger" data-action="confirm-dialog">Delete</button></div>${notice}</dialog>`;
           }
           const layer = s.layers[d.layer];
           const saved = savedCardFor(layer);
           const column = (title, cls, meaning, examples) =>
             `<section class="${cls}"><h3>${title}</h3><p class="meaning">${esc(meaning)}</p><ol>${examples.map((e) => `<li>${esc(e)}</li>`).join('')}</ol></section>`;
-          return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">Replace saved word?</h2><p class="muted" style="margin:6px 0 0">${esc(saved.word)} · ${esc(saved.pos)}</p><div class="compare">${column('Saved', '', saved.zh, saved.examples)}${column('New', 'is-new', layer.zh, layer.examples)}</div><p>Review progress stays the same.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="primary" data-action="confirm-dialog">Replace</button></div></dialog>`;
+          return `<dialog aria-labelledby="dialog-title"><h2 id="dialog-title">Replace saved word?</h2><p class="muted" style="margin:6px 0 0">${esc(saved.word)} · ${esc(saved.pos)}</p><div class="compare">${column('Saved', '', saved.zh, saved.examples)}${column('New', 'is-new', layer.zh, layer.examples)}</div><p>Review progress stays the same.</p><div class="dialog-actions"><button data-action="cancel-dialog">Cancel</button><button class="primary" data-action="confirm-dialog">Replace</button></div>${notice}</dialog>`;
         }
         const savedCardFor = (layer) =>
           s.words.find(
@@ -2907,9 +3042,19 @@
           if (s.page === 'review') return reviewPage();
           return articlesPage();
         }
+        const noticeContent = () =>
+          s.noticeRetry
+            ? `<span>${esc(s.notice)}</span><button data-action="retry-notice">${icon('refresh-cw')}Retry</button>`
+            : esc(s.notice);
+        const noticeHTML = () =>
+          `<div class="notice${s.noticeRetry ? ' has-retry' : ''}" role="status" aria-live="polite">${noticeContent()}</div>`;
         // The license page is public; everything else needs a member who accepted the current terms.
         function render() {
           observer?.disconnect();
+          if (s.noticeRetry && s.noticeRetry.page !== s.page) {
+            s.notice = '';
+            s.noticeRetry = null;
+          }
           let html;
           if (s.page === 'license') html = licensePage();
           else if (s.auth === 'signedout') html = signInPage();
@@ -2918,7 +3063,8 @@
           else if (s.page === 'terms') html = termsPage(true);
           else
             html = `${rail()}<main class="main ${s.page === 'reader' ? 'is-reader' : ''}">${pageBody()}</main>${floatHost()}`;
-          app.innerHTML = `${html}<div class="overlay-host">${overlay()}</div><div class="notice" role="status" aria-live="polite">${esc(s.notice)}</div>${dialogHTML()}`;
+          const notice = noticeHTML();
+          app.innerHTML = `${html}<div class="overlay-host">${overlay()}</div>${dialogHTML(notice) || notice}`;
           positionOverlay();
           const dialog = app.querySelector('dialog');
           if (dialog) {
@@ -2958,12 +3104,24 @@
           );
           observer.observe(more);
         }
-        function notify(text) {
+        // A plain notice fades after 3.5 s; one with Retry ({ action, data }) stays until it is used,
+        // replaced or the page changes.
+        function notify(text, retry = null) {
           s.notice = text;
+          s.noticeRetry = text && retry ? { ...retry, page: s.page } : null;
           const el = app.querySelector('.notice');
-          if (el) el.textContent = text;
+          if (el) {
+            el.classList.toggle('has-retry', Boolean(s.noticeRetry));
+            el.innerHTML = noticeContent();
+          }
           clearTimeout(noticeTimer);
-          if (text && !s.frozen) noticeTimer = setTimeout(() => notify(''), 3500);
+          if (text && !retry && !s.frozen) noticeTimer = setTimeout(() => notify(''), 3500);
+        }
+        // Actions that need the server fail offline with a notice whose Retry runs the action again.
+        function online(text, action, data = {}) {
+          if (navigator.onLine) return true;
+          notify(text, { action, data });
+          return false;
         }
         function focusVisible(selector) {
           const el = [...app.querySelectorAll(selector)].find(
@@ -2973,9 +3131,15 @@
         }
 
         // ---------------------------------------------------------------- behaviour: lists
+        // Offline the next batch fails in place of Load more.
         function loadNextBatch(manual) {
           const vocab = s.page === 'vocabulary';
           const before = vocab ? s.vloaded : s.loaded;
+          if (!navigator.onLine) {
+            s.loadError = vocab ? 'words-more' : 'articles-more';
+            render();
+            return;
+          }
           if (vocab) s.vloadingMore = true;
           else s.loadingMore = true;
           render();
@@ -3034,6 +3198,7 @@
           s.selectMode = false;
           s.selectedIds = [];
           s.swipeId = null;
+          s.loadError = null;
           if (page === 'vocabulary') {
             s.vq = '';
             s.vsort = 'word';
@@ -3051,7 +3216,16 @@
           render();
           window.scrollTo({ top: 0, behavior: 'instant' });
         }
+        // An article that storage cleanup removed does not open: the list shows and says so.
+        // Returns whether the reader opened.
         function openArticle(id, keepQueue = false) {
+          if (!articleExists(id)) {
+            s.page = 'articles';
+            s.layers = [];
+            render();
+            notify(ARTICLE_GONE);
+            return false;
+          }
           if (s.page === 'articles') s.returnArticles = articleContext();
           if (!keepQueue) {
             s.queue = [];
@@ -3064,10 +3238,12 @@
           s.single = null;
           s.layers = [];
           s.blocked = false;
+          s.loadError = null;
           // The visit is recorded when the reader opens.
           activeArticle().visited = NOW;
           render();
           window.scrollTo({ top: 0, behavior: 'instant' });
+          return true;
         }
         function openWord(id) {
           if (s.page !== 'vocabulary' || Date.now() < s.suppressClickUntil) return;
@@ -3082,6 +3258,7 @@
           s.page = 'detail';
           s.layers = [];
           s.swipeId = null;
+          s.loadError = null;
           render();
           window.scrollTo({ top: 0, behavior: 'instant' });
           focusVisible('[data-action="close-detail"]');
@@ -3103,11 +3280,16 @@
           s.dialog = { kind: 'delete', ids: [...new Set(ids)] };
           render();
         }
-        function commitDelete() {
-          const ids = new Set(s.dialog.ids);
-          const count = s.words.filter((w) => ids.has(w.id)).length;
-          s.words = s.words.filter((w) => !ids.has(w.id));
+        // A failed delete closes the dialog and keeps the selection, so Retry deletes the same words.
+        function deleteWords(ids) {
           s.dialog = null;
+          if (!online("Couldn't delete. Try again.", 'retry-delete', { ids: ids.join(',') })) {
+            render();
+            return;
+          }
+          const set = new Set(ids);
+          const count = s.words.filter((w) => set.has(w.id)).length;
+          s.words = s.words.filter((w) => !set.has(w.id));
           s.selectedIds = [];
           s.selectMode = false;
           s.swipeId = null;
@@ -3175,20 +3357,24 @@
           }, 1800 / s.speed);
         }
         // In the foreground an article end returns to the list, then the next article opens after 500 ms.
+        // Queued articles that storage cleanup removed are skipped, and the list says so.
         function nextArticle() {
           clearTimeout(timer);
-          if (s.queue.length && s.queueIndex + 1 < s.queue.length) {
-            s.queueIndex++;
-            const id = s.queue[s.queueIndex];
+          let next = s.queueIndex + 1;
+          while (next < s.queue.length && !articleExists(s.queue[next])) next++;
+          const skipped = next > s.queueIndex + 1;
+          if (s.queue.length && next < s.queue.length) {
+            s.queueIndex = next;
+            const id = s.queue[next];
             const position = filteredArticles().findIndex((a) => a.id === id);
             if (position >= s.loaded) s.loaded = Math.ceil((position + 1) / BATCH) * BATCH;
             s.page = 'articles';
             s.layers = [];
             s.playing = false;
             render();
+            if (skipped) notify(ARTICLE_GONE);
             timer = setTimeout(() => {
-              openArticle(id, true);
-              startArticle(0);
+              if (openArticle(id, true)) startArticle(0);
             }, 500);
           } else {
             stopPlayback();
@@ -3196,7 +3382,7 @@
             s.page = 'articles';
             s.layers = [];
             render();
-            notify('Playback finished.');
+            notify(skipped ? ARTICLE_GONE : 'Playback finished.');
           }
         }
         function updateMediaSession() {
@@ -3250,6 +3436,16 @@
             }
           );
         }
+        // Offline the layer says so at once; online the demo explanation arrives after 0.7 s.
+        function fetchExplanation(layer) {
+          layer.kind = navigator.onLine ? 'loading' : 'offline';
+          render();
+          if (layer.kind === 'offline') return;
+          setTimeout(() => {
+            Object.assign(layer, explain(layer.text), { kind: 'ready' });
+            if (s.layers.includes(layer)) render();
+          }, 700);
+        }
         function openLookup(raw) {
           const text = raw.trim().replace(/^[\s.,;:!?“”"']+|[\s.,;:!?“”"']+$/g, '');
           if (!text) return;
@@ -3259,11 +3455,7 @@
           }
           const layer = { kind: 'loading', text, idx: 0, audio: 'idle', saved: false };
           s.layers.push(layer);
-          render();
-          setTimeout(() => {
-            Object.assign(layer, explain(text), { kind: 'ready' });
-            if (s.layers.includes(layer)) render();
-          }, 700);
+          fetchExplanation(layer);
         }
         function addWord() {
           const layer = s.layers.at(-1);
@@ -3273,6 +3465,7 @@
             render();
             return;
           }
+          if (!online("Couldn't save the word.", 'add-word')) return;
           s.words.push({
             id: Math.max(0, ...s.words.map((w) => w.id)) + 1,
             word: layer.word,
@@ -3289,6 +3482,7 @@
           notify('Saved to Vocabulary.');
         }
         function confirmReplace() {
+          if (!online("Couldn't replace the word.", 'confirm-dialog')) return;
           const layer = s.layers[s.dialog.layer];
           const card = savedCardFor(layer);
           card.zh = layer.zh;
@@ -3324,8 +3518,10 @@
           render();
           notify(`Example ${next + 1} of ${rows.length}`);
         }
-        // Refresh replaces only the visible example and keeps the others.
+        // Refresh replaces only the visible example and keeps the others; when it fails the old one stays.
         function refreshExample(context, layer) {
+          const retryData = { exampleContext: context, exampleLayer: String(layer) };
+          if (!online("Couldn't get a new example.", 'refresh-example', retryData)) return;
           const { index } = exampleRecord(context, layer);
           const owner = context === 'detail' ? detailWord() : s.layers[layer];
           const current = owner.examples[index];
@@ -3343,6 +3539,7 @@
           stopPlayback();
           s.popover = null;
           s.layers = [];
+          s.loadError = null;
           s.page = 'review';
           s.review = nextQuestion(mode);
           render();
@@ -3404,6 +3601,7 @@
             window.scrollTo({ top: 0, behavior: 'instant' });
           },
           'agree-terms': () => {
+            if (!online("Couldn't save your answer.", 'agree-terms')) return;
             s.termsAccepted = true;
             s.page = 'articles';
             render();
@@ -3417,6 +3615,21 @@
             s.auth = 'member';
             s.page = 'articles';
             render();
+          },
+          'retry-notice': () => {
+            const retry = s.noticeRetry;
+            notify('');
+            if (retry) ACTIONS[retry.action]?.({ dataset: retry.data });
+          },
+          // A failed batch loads again; anything else that failed to load is asked for again.
+          'retry-load': () => {
+            const failed = s.loadError;
+            s.loadError = null;
+            if (failed === 'articles-more' || failed === 'words-more') loadNextBatch(true);
+            else {
+              if (failed === 'review') s.review = nextQuestion(s.review.mode);
+              render();
+            }
           },
           'sort-options': () => {
             s.popover = s.popover === 'sort' ? null : 'sort';
@@ -3451,10 +3664,7 @@
           'play-all': () => {
             s.queue = filteredArticles().map((a) => a.id);
             s.queueIndex = 0;
-            if (s.queue.length) {
-              openArticle(s.queue[0], true);
-              startArticle(0);
-            }
+            if (s.queue.length && openArticle(s.queue[0], true)) startArticle(0);
           },
           // The top play button continues from the selected sentence, else from the paused position.
           toggle: () => {
@@ -3463,6 +3673,7 @@
               render();
               return;
             }
+            if (!online("Couldn't play this article.", 'toggle')) return;
             startArticle(s.single ?? (s.position ? s.sentence : 0));
           },
           continue: () => startArticle(s.sentence),
@@ -3495,15 +3706,7 @@
             render();
           },
           'add-word': () => addWord(),
-          'retry-lookup': () => {
-            const l = s.layers.at(-1);
-            l.kind = 'loading';
-            render();
-            setTimeout(() => {
-              Object.assign(l, explain(l.text), { kind: 'ready' });
-              render();
-            }, 700);
-          },
+          'retry-lookup': () => fetchExplanation(s.layers.at(-1)),
           'play-word': () => playWordAudio('lookup'),
           'detail-word': () => playWordAudio('detail'),
           'retry-audio': () => playWordAudio(s.page === 'detail' ? 'detail' : 'lookup'),
@@ -3519,7 +3722,9 @@
             s.dialog = null;
             render();
           },
-          'confirm-dialog': () => (s.dialog.kind === 'delete' ? commitDelete() : confirmReplace()),
+          'confirm-dialog': () =>
+            s.dialog.kind === 'delete' ? deleteWords(s.dialog.ids) : confirmReplace(),
+          'retry-delete': (b) => deleteWords(b.dataset.ids.split(',').map(Number)),
           'selection-mode': () => {
             s.selectMode = !s.selectMode;
             s.selectedIds = [];
@@ -3584,8 +3789,7 @@
             const start = rows.findIndex((a) => a.id === Number(d.play));
             s.queue = rows.slice(start).map((a) => a.id);
             s.queueIndex = 0;
-            openArticle(Number(d.play), true);
-            startArticle(0);
+            if (openArticle(Number(d.play), true)) startArticle(0);
           } else if (d.card) openWord(Number(d.card));
           else if (d.deleteId) requestDelete([Number(d.deleteId)]);
           else if (d.sentence) playSentence(Number(d.sentence));
@@ -3889,6 +4093,14 @@
             st.page = 'review';
             st.review = Object.assign(nextQuestionFor(st, mode), extra);
           };
+        // A state after a failed action: the notice with Retry over the screen the action left.
+        const withFailure =
+          (apply, text, action, data = {}) =>
+          (st) => {
+            apply(st);
+            st.notice = text;
+            st.noticeRetry = { action, data, page: st.page };
+          };
         function nextQuestionFor(st, mode) {
           const saved = s;
           s = st;
@@ -4187,6 +4399,156 @@
             (st) => {
               st.accountOpen = true;
             },
+          ],
+          [
+            'articles-load-failed',
+            'Articles: list failed to load',
+            (st) => {
+              st.loadError = 'articles';
+            },
+          ],
+          [
+            'articles-load-more-failed',
+            'Articles: next batch failed',
+            (st) => {
+              st.loadError = 'articles-more';
+            },
+          ],
+          [
+            'reader-play-failed',
+            'Reader: playback failed',
+            withFailure(reader(), "Couldn't play this article.", 'toggle'),
+          ],
+          [
+            'reader-article-gone',
+            'Articles: article removed by storage cleanup',
+            (st) => {
+              st.articles = st.articles.filter((a) => a.id !== 23);
+              st.notice = ARTICLE_GONE;
+            },
+          ],
+          [
+            'lookup-offline',
+            'Explanation: offline',
+            reader({
+              layers: [{ kind: 'offline', text: 'resilient', idx: 0, audio: 'idle', saved: false }],
+            }),
+          ],
+          [
+            'lookup-refresh-failed',
+            'Explanation: new example failed',
+            withFailure(
+              reader({ layers: [lookupLayer('resilient')] }),
+              "Couldn't get a new example.",
+              'refresh-example',
+              { exampleContext: 'lookup', exampleLayer: '0' },
+            ),
+          ],
+          [
+            'save-failed',
+            'Save failed',
+            withFailure(
+              reader({ layers: [lookupLayer('adapt')] }),
+              "Couldn't save the word.",
+              'add-word',
+            ),
+          ],
+          [
+            'replace-failed',
+            'Replace failed',
+            withFailure(
+              reader({ layers: [lookupLayer('resilient')], dialog: { kind: 'replace', layer: 0 } }),
+              "Couldn't replace the word.",
+              'confirm-dialog',
+            ),
+          ],
+          [
+            'vocabulary-delete-failed',
+            'Batch delete failed',
+            withFailure(
+              vocabulary({ selectMode: true, selectedIds: [2, 6, 4] }),
+              "Couldn't delete. Try again.",
+              'retry-delete',
+              { ids: '2,6,4' },
+            ),
+          ],
+          [
+            'terms-accept-failed',
+            'Terms: answer not saved',
+            withFailure(
+              (st) => {
+                st.termsAccepted = false;
+              },
+              "Couldn't save your answer.",
+              'agree-terms',
+            ),
+          ],
+          [
+            'terms-read-only',
+            'Terms: read-only',
+            (st) => {
+              st.page = 'terms';
+              st.back = ['articles'];
+            },
+          ],
+          [
+            'review-translate-wrong',
+            'Translate: wrong',
+            review('Translate', { option: 0, feedback: 'incorrect' }),
+          ],
+          [
+            'reader-select-words-helper',
+            'Reader: select words',
+            reader({
+              selectionTool: 'article',
+              selectionSegment: 2,
+              selectionStart: 5,
+              selectionEnd: 5,
+            }),
+          ],
+          [
+            'vocabulary-round-filter',
+            'Vocabulary: round filter',
+            vocabulary({ popover: 'round1', draft: ['3'] }),
+          ],
+          ['vocabulary-sort', 'Vocabulary: sort', vocabulary({ popover: 'sort' })],
+          [
+            'vocabulary-load-failed',
+            'Vocabulary: list failed to load',
+            vocabulary({ loadError: 'words' }),
+          ],
+          [
+            'vocabulary-load-more-failed',
+            'Vocabulary: next batch failed',
+            (st) => {
+              vocabulary({ loadError: 'words-more' })(st);
+              st.words.push(...moreWords(11));
+            },
+          ],
+          [
+            'reader-load-failed',
+            'Reader: article failed to load',
+            reader({ loadError: 'article' }),
+          ],
+          [
+            'card-detail-load-failed',
+            'Word card: failed to load',
+            (st) => Object.assign(st, { page: 'detail', detailId: 1, loadError: 'word' }),
+          ],
+          [
+            'review-load-failed',
+            'Review: next question failed to load',
+            (st) =>
+              Object.assign(st, { page: 'review', review: { mode: 'Spell' }, loadError: 'review' }),
+          ],
+          [
+            'review-submit-failed',
+            'Review: answer not saved by the server',
+            withFailure(
+              review('Spell', { answer: 'resilient' }),
+              "Couldn't save your answer.",
+              'submit-answer',
+            ),
           ],
         ].map(([name, title, apply, after]) => ({ name, title, apply, after }));
 

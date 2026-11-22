@@ -8,16 +8,23 @@
 
 ## 原型里的数据
 
-- 演示数据和时间都是固定的：“现在”是 2026 年 11 月 22 日 10:00（设备本地时间）。
+- 演示数据和时间都是固定的：“现在”是 2026 年 11 月 22 日 10:00（设备本地时间）。日期在当年时不写年份。
 - 文章来自五个订阅源：NASA Technology、NASA Aeronautics、NIH Research Matters、NIST News、Library of Congress 的 Inside Adams。标题和正文是为原型写的，不是原文。来源图标是配置里的一两个字母和颜色。
 - 当前用户是演示账号 Alex Chen，头像字母由姓名算出。
 - 播放是模拟的，每句 1.8 秒（1× 时），没有接真实音频；查词结果来自页面里的演示词典，约 0.7 秒后出现。
 - 许可证全文按原文放在页面的 `<script type="text/plain" id="license-text">` 里（来自 `https://huggingface.co/Supertone/supertonic-3/raw/main/LICENSE`），条款页的使用限制从其中的 Attachment A 读出。许可证页按手机宽度重排段落，文字不变。
 - 图标是 Lucide 图标的形状，直接写在页面里，离线也能显示。
 
+## 失败的画法
+
+- 操作失败用顶栏下方的白色小提示框（和 `28-save-saved.png` 同一个位置和样式）。能重试的失败在提示框里带 Retry 按钮；带 Retry 的提示框不会自动消失，点 Retry、出现新提示或换页时才消失。对话框开着时提示框画在对话框里，盖在遮罩上面，Retry 仍能点。
+- 列表、文章、词卡或下一道复习题加载失败时，失败信息和 Retry 画在内容本来的位置；下一批加载失败时画在 Load more 的位置。
+- 提示文字是英文短句，句首大写，以句号结尾。
+
 ## 怎样进入某个状态
 
 - 直接操作：打开 `vexto-phone.html`，像在手机上一样点按。左滑词卡露出 Delete、长按词卡进入选择模式、横滑例句切换，需要触摸输入（浏览器开发者工具的手机模拟即可）。
+- 断网：在浏览器开发者工具里把网络切到 Offline，再查词、换例句、收藏、替换、删除、同意条款、播放文章或加载下一批，会看到对应的失败画面。
 - 用地址：在地址后面加 `#状态名`，例如 `vexto-phone.html#lookup-nested`。每个状态都从一份新的演示数据开始，动画和过渡关闭。
 - 用脚本：`window.vexto.presets` 列出全部状态（顺序和名字），`window.vexto.show('状态名')` 切换到某个状态。
 
@@ -89,3 +96,24 @@ node prototype/render.mjs --only reader,lookup    # 只渲染列出的状态
 | `49-review-offline.png`               | 复习           | 断网提交：Not saved. Reconnect to check the result.，答案保留只读，Retry                                                                                                            | 离线时 Submit                                                               |
 | `50-review-changed.png`               | 复习           | 别的设备改了这个词：This word changed on another device.，Next                                                                                                                      | 只能用 `#review-changed`                                                    |
 | `51-account-menu.png`                 | 账号菜单       | 右上头像打开：Terms、License、Log out                                                                                                                                               | 点右上的头像字母                                                            |
+| `52-articles-load-failed.png`         | Articles       | 列表第一次加载失败：列表位置显示 Couldn't load articles. 和 Retry，不显示篇数，Play all 禁用                                                                                        | 只能用 `#articles-load-failed`                                              |
+| `53-articles-load-more-failed.png`    | Articles       | 下一批加载失败：已加载的 20 篇保留，Load more 位置显示 Couldn't load more articles. 和 Retry                                                                                        | 离线时点 Load more（或滚到底）                                              |
+| `54-reader-play-failed.png`           | 阅读页         | 播放失败：提示 Couldn't play this article. 和 Retry，播放器停在未播放                                                                                                               | 离线时点播放键                                                              |
+| `55-reader-article-gone.png`          | Articles       | 文章已被存储清理删除：回到列表，提示 This article is no longer available.，没有 Retry；连续播放时跳过它播下一篇                                                                     | 只能用 `#reader-article-gone`                                               |
+| `56-lookup-offline.png`               | 查词浮窗       | 断网：You're offline. Connect to look up words. 和 Retry，收藏键禁用，浮窗和 AI 失败时相同                                                                                          | 离线时点正文里的一个词                                                      |
+| `57-lookup-refresh-failed.png`        | 查词浮窗       | 换例句失败：保留原例句，提示 Couldn't get a new example. 和 Retry                                                                                                                   | 离线时点例句的 Refresh                                                      |
+| `58-save-failed.png`                  | 收藏           | 收藏失败：浮窗保持打开，加号仍可点，提示 Couldn't save the word. 和 Retry                                                                                                           | 离线时点浮窗标题栏的加号                                                    |
+| `59-replace-failed.png`               | 收藏           | 替换失败：Replace saved word? 对话框保持打开，提示 Couldn't replace the word. 和 Retry 画在遮罩上面                                                                                 | 离线时在替换对话框点 Replace                                                |
+| `60-vocabulary-delete-failed.png`     | Vocabulary     | 批量删除失败：对话框关闭，仍在选择模式，3 个词保持选中，提示 Couldn't delete. Try again. 和 Retry                                                                                   | 离线时确认批量删除                                                          |
+| `61-terms-accept-failed.png`          | 使用条款       | 同意没有保存：条款页不变，提示 Couldn't save your answer. 和 Retry                                                                                                                  | 离线时点 I agree                                                            |
+| `62-terms-read-only.png`              | 使用条款       | 从账号菜单打开：只读，右上关闭，版本行下写 Accepted Nov 21.，没有 Log out / I agree                                                                                                 | 账号菜单 → Terms                                                            |
+| `63-review-translate-wrong.png`       | Translate 复习 | 选错后：所选项标红并带叉，反馈写正确的中文 · Try again in 10 mins，选项只读                                                                                                         | 选第一项 → Submit                                                           |
+| `64-reader-select-words-helper.png`   | 阅读页         | 选词辅助浮层：Sentence、From、To 三个下拉和 Look up，选了第 3 句的 resilient                                                                                                        | 阅读页点播放键旁的选词辅助键                                                |
+| `65-vocabulary-round-filter.png`      | Vocabulary     | Spell round 筛选浮层：Round 1–7 和 Complete，勾了 Round 3，Clear / Apply                                                                                                            | 点 Spell round 筛选（键盘图标）                                             |
+| `66-vocabulary-sort.png`              | Vocabulary     | 排序浮层：Word 和各模式的 round、next，默认 Word 升序                                                                                                                               | 点右侧排序图标                                                              |
+| `67-vocabulary-load-failed.png`       | Vocabulary     | 词表加载失败：词卡位置显示 Couldn't load words. 和 Retry，不显示词数                                                                                                                | 只能用 `#vocabulary-load-failed`                                            |
+| `68-vocabulary-load-more-failed.png`  | Vocabulary     | 下一批加载失败：25 个词里已加载的 20 个保留，Load more 位置显示 Couldn't load more words. 和 Retry                                                                                  | 离线时点 Load more（或滚到底）                                              |
+| `69-reader-load-failed.png`           | 阅读页         | 文章加载失败：保留 ← Articles 返回，正文位置显示 Couldn't load this article. 和 Retry，没有播放器                                                                                   | 只能用 `#reader-load-failed`                                                |
+| `70-card-detail-load-failed.png`      | 词卡详情       | 词卡加载失败：保留右上关闭，内容位置显示 Couldn't load this word. 和 Retry                                                                                                          | 只能用 `#card-detail-load-failed`                                           |
+| `71-review-load-failed.png`           | 复习           | 下一道题加载失败：保留模式名和关闭，题目位置显示 Couldn't load the next review. 和 Retry                                                                                            | 只能用 `#review-load-failed`                                                |
+| `72-review-submit-failed.png`         | Spell 复习     | 服务器没有保存答案：输入的答案保留、可再提交，提示 Couldn't save your answer. 和 Retry；断网时是 `49-review-offline.png`                                                            | 只能用 `#review-submit-failed`                                              |
