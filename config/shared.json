@@ -1,0 +1,51 @@
+{
+  "terms": { "version": 1, "date": "2026-11-22" },
+  "categories": [
+    { "key": "technology", "name": "Technology" },
+    { "key": "science", "name": "Science" },
+    { "key": "health", "name": "Health" },
+    { "key": "history", "name": "History" }
+  ],
+  "feeds": [
+    {
+      "key": "nasa-technology",
+      "name": "NASA Technology",
+      "category": "technology",
+      "mark": "NT",
+      "color": "#245ab8",
+      "attribution": "Courtesy of NASA."
+    },
+    {
+      "key": "nasa-aeronautics",
+      "name": "NASA Aeronautics",
+      "category": "science",
+      "mark": "NA",
+      "color": "#0f6f8f",
+      "attribution": "Courtesy of NASA."
+    },
+    {
+      "key": "nih-research-matters",
+      "name": "NIH Research Matters",
+      "category": "health",
+      "mark": "NH",
+      "color": "#24745a",
+      "attribution": "Courtesy of the National Institutes of Health."
+    },
+    {
+      "key": "nist-news",
+      "name": "NIST News",
+      "category": "technology",
+      "mark": "NS",
+      "color": "#7945c4",
+      "attribution": "Courtesy of the National Institute of Standards and Technology."
+    },
+    {
+      "key": "loc-inside-adams",
+      "name": "Inside Adams",
+      "category": "history",
+      "mark": "IA",
+      "color": "#a0522d",
+      "attribution": "Courtesy of the Library of Congress, Inside Adams blog."
+    }
+  ]
+}

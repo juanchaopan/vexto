@@ -28,6 +28,10 @@ const workerOnlyPackages = [
   'node_modules/onnxruntime-node/',
 ];
 
+// Configuration only the server reads. The browser bundle takes what it imports, so browser code
+// reads only config/shared.json, through src/lib/config/shared-config.ts.
+const serverOnlyConfig = ['^config/collection\\.json$', '^src/lib/config/collection-config\\.ts$'];
+
 // Runtime dependencies only the web application uses. The Cloud Run image is installed without
 // them (scripts/worker-image.json), so a Cloud Run entry that reached one would fail to start.
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -137,6 +141,14 @@ module.exports = {
       comment: 'Browser code must not import server SDKs.',
       from: { path: '^src/features/[^/]+/ui/' },
       to: { path: [...serverSdks, ...workerOnlyPackages] },
+    },
+    {
+      name: 'browser-not-to-server-config',
+      severity: 'error',
+      comment:
+        'config/collection.json is only for the server; browser code reads config/shared.json.',
+      from: { path: '^src/features/[^/]+/ui/' },
+      to: { path: serverOnlyConfig, reachable: true },
     },
     {
       name: 'browser-not-to-node-builtins',
