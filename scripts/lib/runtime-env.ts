@@ -1,8 +1,13 @@
 // The values the application reads at run time on Vercel. Each deployment target's GitHub
 // environment holds them, secrets as environment secrets and the rest as environment variables;
 // the deployment job copies them into the Production environment of the target's Vercel project
-// (scripts/sync-vercel-env.ts). A new runtime value is added to this list and to the GitHub
-// environments, nowhere else.
+// (scripts/sync-vercel-env.ts).
+//
+// The sync step of .github/workflows/deploy-target.yml names every value here in its env, so the
+// step receives these values and no other secret. This list is the source of truth for that env:
+// syncStepEnv() gives the entries the step must have, and a unit test fails when the workflow
+// differs from it. A new runtime value is added to this list, to the step's env as the test
+// prints it, and to the GitHub environments.
 
 export type RuntimeValueKind = 'secret' | 'variable';
 
@@ -22,62 +27,88 @@ export const runtimeValues: readonly RuntimeValue[] = [
   { name: 'S3_BUCKET', kind: 'variable' },
 ];
 
-/** Name and value pairs of one GitHub context, such as `toJSON(secrets)` or `toJSON(vars)`. */
-export type ContextValues = Record<string, unknown>;
+/** The sync step's environment, by name. */
+export type StepEnv = Readonly<Record<string, string | undefined>>;
 
 export type SyncPlan = {
   /** Values to write to Vercel, in list order. */
   upload: { name: string; kind: RuntimeValueKind; value: string }[];
   /** Names with no value in the GitHub environment; Vercel keeps whatever it has for them. */
   skipped: string[];
-  /** Settings that would store a value under the wrong kind; the sync must not run. */
+  /** Settings that stop the sync: a value stored under the wrong kind, or a name not passed. */
   errors: string[];
 };
 
-/** Parses the JSON of a GitHub context passed through an environment variable. */
-export function parseContext(json: string | undefined, label: string): ContextValues {
-  if (json === undefined || json.trim() === '') {
-    return {};
-  }
-  const parsed: unknown = JSON.parse(json);
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`${label} must be a JSON object of names and values.`);
-  }
-  return parsed as ContextValues;
-}
-
-function present(context: ContextValues, name: string) {
-  const value = context[name];
-  return typeof value === 'string' && value !== '' ? value : undefined;
+/**
+ * Name of the flag that tells whether the GitHub environment also holds the value under the
+ * other kind: a secret's flag reads the variables, a variable's flag reads the secrets.
+ */
+export function otherKindFlag({ name, kind }: RuntimeValue) {
+  return kind === 'secret' ? `${name}_STORED_AS_VARIABLE` : `${name}_STORED_AS_SECRET`;
 }
 
 /**
- * Decides what to write to Vercel. A secret is read only from the environment's secrets and a
- * variable only from its variables, so a value stored under the other kind stops the sync instead
- * of being uploaded as plain text or silently left out.
+ * The env entries the sync step of deploy-target.yml must have, as name and expression. A value
+ * is read by name from its own kind's context only, so a variable never reads a secret. The flag
+ * compares the other context's entry of the same name with the empty string, so the step learns
+ * whether a value is stored under the wrong kind without receiving that value.
  */
-export function planSync(
-  secrets: ContextValues,
-  variables: ContextValues,
-  values: readonly RuntimeValue[] = runtimeValues,
-): SyncPlan {
+export function syncStepEnv(values: readonly RuntimeValue[] = runtimeValues) {
+  const env: Record<string, string> = {};
+  for (const value of values) {
+    const own = value.kind === 'secret' ? 'secrets' : 'vars';
+    const other = value.kind === 'secret' ? 'vars' : 'secrets';
+    env[value.name] = `\${{ ${own}.${value.name} }}`;
+    env[otherKindFlag(value)] = `\${{ ${other}.${value.name} != '' }}`;
+  }
+  return env;
+}
+
+/**
+ * Decides what to write to Vercel. A value stored under the other kind stops the sync instead of
+ * being uploaded with the wrong sensitivity or silently left out. A flag that is neither true nor
+ * false means the step does not pass the name, which also stops the sync, so a name added to the
+ * list but not to the workflow is never skipped unnoticed.
+ */
+export function planSync(env: StepEnv, values: readonly RuntimeValue[] = runtimeValues): SyncPlan {
   const plan: SyncPlan = { upload: [], skipped: [], errors: [] };
-  for (const { name, kind } of values) {
-    const own = kind === 'secret' ? secrets : variables;
-    const other = kind === 'secret' ? variables : secrets;
-    if (present(other, name) !== undefined) {
+  for (const value of values) {
+    const { name, kind } = value;
+    const flag = env[otherKindFlag(value)];
+    if (flag === 'true') {
       const where = kind === 'secret' ? 'an environment secret' : 'an environment variable';
       plan.errors.push(`${name} is a ${kind}; store it in the GitHub environment as ${where}.`);
       continue;
     }
-    const value = present(own, name);
-    if (value === undefined) {
+    if (flag !== 'false') {
+      plan.errors.push(
+        `${name} is not passed to the sync step; add it to the step's env in .github/workflows/deploy-target.yml.`,
+      );
+      continue;
+    }
+    const content = env[name];
+    if (content === undefined || content === '') {
       plan.skipped.push(name);
     } else {
-      plan.upload.push({ name, kind, value });
+      plan.upload.push({ name, kind, value: content });
     }
   }
   return plan;
+}
+
+/**
+ * The environment the Vercel CLI runs with: the step's environment without the runtime values and
+ * their flags, so each value reaches the CLI on standard input only.
+ */
+export function cliEnv<Env extends StepEnv>(
+  env: Env,
+  values: readonly RuntimeValue[] = runtimeValues,
+): Env {
+  const result: Record<string, string | undefined> = { ...env };
+  for (const name of Object.keys(syncStepEnv(values))) {
+    delete result[name];
+  }
+  return result as Env;
 }
 
 /**

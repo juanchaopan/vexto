@@ -6,24 +6,24 @@
 //
 // Usage: node scripts/sync-vercel-env.ts [--dry-run]
 // Reads from its environment:
-//   ENVIRONMENT_SECRETS  JSON of the environment's secrets, from `toJSON(secrets)`
-//   ENVIRONMENT_VARS     JSON of the environment's variables, from `toJSON(vars)`
-//   VERCEL_CLI_VERSION   Vercel CLI version run through pnpm dlx
+//   each listed name          the value, from the environment's secret or variable of that name
+//   <name>_STORED_AS_VARIABLE true when a secret's name is also set as a variable
+//   <name>_STORED_AS_SECRET   true when a variable's name is also set as a secret
+//   VERCEL_CLI_VERSION        Vercel CLI version run through pnpm dlx
 //   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID  read by the Vercel CLI itself
+// The sync step of .github/workflows/deploy-target.yml sets these; a value under the wrong kind
+// or a name the step does not pass stops the sync before anything is written.
 // --dry-run prints what would be written, by name and kind only, and calls nothing.
 //
-// Each value reaches `vercel env add` on standard input and never on a command line. The two
-// JSON variables are removed from the CLI's environment, so the CLI sees no other value.
-import { envAddArgs, parseContext, planSync } from './lib/runtime-env.ts';
+// Each value reaches `vercel env add` on standard input and never on a command line. The runtime
+// values and their flags are removed from the CLI's environment, so the CLI sees no other value.
+import { cliEnv, envAddArgs, planSync } from './lib/runtime-env.ts';
 import { runPnpm } from './lib/node-tools.ts';
 
 const dryRun = process.argv.slice(2).includes('--dry-run');
 const cliVersion = process.env.VERCEL_CLI_VERSION ?? '';
 
-const plan = planSync(
-  parseContext(process.env.ENVIRONMENT_SECRETS, 'ENVIRONMENT_SECRETS'),
-  parseContext(process.env.ENVIRONMENT_VARS, 'ENVIRONMENT_VARS'),
-);
+const plan = planSync(process.env);
 
 if (plan.errors.length > 0) {
   for (const error of plan.errors) {
@@ -37,9 +37,7 @@ if (!dryRun && !/^\d+\.\d+\.\d+$/.test(cliVersion)) {
   process.exit(1);
 }
 
-const cliEnv: NodeJS.ProcessEnv = { ...process.env };
-delete cliEnv.ENVIRONMENT_SECRETS;
-delete cliEnv.ENVIRONMENT_VARS;
+const env = cliEnv(process.env);
 
 let failed = 0;
 for (const { name, kind, value } of plan.upload) {
@@ -48,10 +46,7 @@ for (const { name, kind, value } of plan.upload) {
   if (dryRun) {
     continue;
   }
-  const code = await runPnpm(['dlx', `vercel@${cliVersion}`, ...args], {
-    env: cliEnv,
-    input: value,
-  });
+  const code = await runPnpm(['dlx', `vercel@${cliVersion}`, ...args], { env, input: value });
   if (code !== 0) {
     console.error(`Writing ${name} to Vercel failed.`);
     failed += 1;

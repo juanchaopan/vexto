@@ -25,12 +25,14 @@
 # The production environment is not set up yet, so a production deployment stops at the
 # settings check until its environment, variables and token exist.
 #
-# Environment secrets reach a reusable workflow only when the caller passes the secrets, so both
-# callers use `secrets: inherit`; the environment's value wins over a repository secret of the
-# same name. The sync step takes the whole secrets and vars contexts as JSON, so a new runtime
-# value is added to the list in scripts/lib/runtime-env.ts only; the script picks the listed names
-# and starts the Vercel CLI without the JSON. zizmor's overprovisioned-secrets finding is ignored
-# on that line for this reason.
+# Both callers use `secrets: inherit`: the called job's environment secrets reach it only when the
+# caller passes its secrets, and the caller cannot name them, because it runs outside the
+# environment. Every step still names each secret it uses, so no step receives the others.
+#
+# The sync step names each runtime value in its env, a secret from the secrets context and a
+# variable from the vars context only, plus a flag per name telling whether the other context also
+# holds that name, so a value stored under the wrong kind stops the sync. Its env must match
+# syncStepEnv() in scripts/lib/runtime-env.ts, which a unit test checks.
 #
 # The local setup action is referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on that line.
@@ -156,8 +158,28 @@ jobs:
         if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          ENVIRONMENT_SECRETS: ${{ toJSON(secrets) }} # zizmor: ignore[overprovisioned-secrets]
-          ENVIRONMENT_VARS: ${{ toJSON(vars) }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_STORED_AS_VARIABLE: ${{ vars.DATABASE_URL != '' }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL_UNPOOLED_STORED_AS_VARIABLE: ${{ vars.DATABASE_URL_UNPOOLED != '' }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          CLERK_SECRET_KEY_STORED_AS_VARIABLE: ${{ vars.CLERK_SECRET_KEY != '' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY_STORED_AS_VARIABLE: ${{ vars.OPENAI_API_KEY != '' }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_ACCESS_KEY_ID_STORED_AS_VARIABLE: ${{ vars.S3_ACCESS_KEY_ID != '' }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_SECRET_ACCESS_KEY_STORED_AS_VARIABLE: ${{ vars.S3_SECRET_ACCESS_KEY != '' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_SECRET_STORED_AS_VARIABLE: ${{ vars.CRON_SECRET != '' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_STORED_AS_SECRET: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_ENDPOINT_STORED_AS_SECRET: ${{ secrets.S3_ENDPOINT != '' }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_REGION_STORED_AS_SECRET: ${{ secrets.S3_REGION != '' }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_BUCKET_STORED_AS_SECRET: ${{ secrets.S3_BUCKET != '' }}
         run: node scripts/sync-vercel-env.ts
 
       - name: Apply the database migrations

@@ -5,10 +5,10 @@
 #
 # The reusable workflow is referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on that line.
-# It gets the secrets with `secrets: inherit`, because the secrets of the target's GitHub
-# environment reach a reusable workflow only when the caller passes them, and inheriting keeps
-# the runtime names in scripts/lib/runtime-env.ts only; zizmor's secrets-inherit finding is
-# ignored on that line too (see deploy-target.yml).
+# It uses `secrets: inherit`: the target GitHub environment's secrets reach the reusable
+# workflow's job only when the caller passes its secrets, and the caller cannot name them,
+# because it runs outside the environment. deploy-target.yml hands each step only the secrets the
+# step names, so zizmor's secrets-inherit finding is ignored on that line too.
 name: deploy
 run-name: deploy ${{ inputs.version }} to ${{ inputs.target }}
 
