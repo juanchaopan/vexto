@@ -1,0 +1,15 @@
+{
+  "config": {
+    "default": true,
+    // Chinese prose is not hard-wrapped and table rows hold whole sentences, so line length is not limited.
+    "MD013": false,
+    // Prettier owns table layout; its aligned tables and hand-written compact tables are both accepted.
+    "MD060": false,
+    // GitHub autolinks bare URLs, and Chinese prose places them inside full-width parentheses.
+    "MD034": false,
+    // Bold lead-in lines label groups of items inside a section without adding headings to the outline.
+    "MD036": false,
+  },
+  "globs": [".docs/**/*.md", "*.md"],
+  "ignores": ["node_modules/**", ".next/**"],
+}
