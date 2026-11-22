@@ -11,5 +11,6 @@
     "MD036": false,
   },
   "globs": [".docs/**/*.md", "*.md"],
-  "ignores": ["node_modules/**", ".next/**"],
+  // CLAUDE.md is a single `@AGENTS.md` import line for Claude Code, not a document.
+  "ignores": ["node_modules/**", ".next/**", "CLAUDE.md"],
 }
