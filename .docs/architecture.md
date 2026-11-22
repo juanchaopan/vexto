@@ -1,0 +1,321 @@
+# vexto 架构
+
+vexto 是一个模块化单体：一个 Next.js 应用部署在 Vercel，页面、HTTP 接口和定时任务接口都在里面；数据和文件都在 Neon。文章朗读音频的生成和 Speak 的判定还在 spike 中，用到它们的功能 issue 要等结论。
+
+```mermaid
+flowchart LR
+  user[手机浏览器] -->|HTTPS| app
+  subgraph vercel[Vercel，函数地区 cle1]
+    app[Next.js 应用<br/>页面 · 接口 · 定时任务接口]
+  end
+  subgraph neon[Neon，aws-us-east-2]
+    db[(PostgreSQL 18)]
+    bucket[(对象存储<br/>私有存储桶)]
+  end
+  app --> db
+  app -->|S3 协议 · 预签名地址| bucket
+  user -->|播放音频| bucket
+  app -->|查词 · 选项| openai[OpenAI<br/>gpt-6-luna]
+  app -->|受邀 Google 登录| clerk[Clerk]
+  tts[朗读生成 · Speak 判定<br/>待 spike] -.-> bucket
+  feeds[RSS 订阅源和原网页] -->|收集| app
+```
+
+## 指标
+
+| 指标 | 内容 |
+|---|---|
+| 规模 | 不超过约 10 个账号，同时在线只有几个人；订阅源大约十几个 |
+| 可用性 | 尽力而为，不承诺正常运行时间，可以停机维护 |
+| 一致性 | 每个用户的数据只存在服务端的一个 PostgreSQL 里，任何设备读到的都是最新写入的数据 |
+| 成本 | 托管用 Vercel Hobby 和 Neon Free 的免费额度；AI、语音合成和语音判定按用量计费，由项目所有者承担 |
+| 维护能力 | 一个人业余维护，组件和运维尽量少 |
+| 兼容性 | iOS Safari 和 Android Chrome 的最近两个大版本，手机屏幕尺寸，触屏操作 |
+
+不设性能、资源、安全和可访问性指标。
+
+## 组件
+
+| 组件 | 种类 | 技术 | 状态 |
+|---|---|---|---|
+| Web 应用 | 网页前端 + 后端服务 | Next.js 16（App Router），TypeScript，Node.js 26 LTS | 本 issue 搭建 |
+| 数据库 | 数据库 | Neon PostgreSQL 18 | 资源已存在，由第一个用到的功能 issue 接入 |
+| 对象存储 | 对象存储 | Neon Object Storage，私有存储桶，S3 协议 | 资源已存在，由第一个用到的功能 issue 接入 |
+| AI | 第三方服务 | OpenAI `gpt-6-luna`，服务端用官方 SDK 直接调用 | 由查词功能 issue 接入 |
+| 登录 | 第三方服务 | Clerk，受邀 Google 登录，沿用 lingocurrent 的 Clerk 应用 | 由账号功能 issue 接入 |
+| 文章朗读生成 | 后台任务 | 声音 Supertonic F1，单声道 MP3 32 kbps；在哪里生成待 spike | 待 spike |
+| Speak 判定 | 后台服务或第三方服务 | 待 spike | 待 spike |
+
+定时任务（收集订阅源）由托管平台按时间调用应用里的接口，不算单独的组件；Vercel Hobby 的 cron 每天最多一次，具体的触发方式由收集功能的 issue 决定。
+
+## 技术选择和决策点
+
+| 方面 | 决定 |
+|---|---|
+| 框架 | Next.js 16，App Router，Route Handlers 提供接口 |
+| 运行时 | Node.js 26 LTS，版本写死在 `.nvmrc` 和 `package.json` 的 `engines` 里 |
+| 语言 | TypeScript 6.0.3（typescript-eslint 还不支持 7） |
+| 包管理器 | pnpm 12，版本写死在 `packageManager` 里 |
+| 构建 | Next.js 自带（Turbopack） |
+| 数据访问 | Drizzle ORM + postgres.js 驱动；接口和外部数据用 Zod 校验 |
+| 前端状态 | TanStack Query 管服务端数据，Zustand 管页面状态 |
+| 样式 | Tailwind CSS，颜色用语义化变量 |
+| AI | OpenAI 官方 TypeScript SDK，不经过网关 |
+| 登录 | Clerk 的 Next.js SDK |
+| 对象存储访问 | AWS S3 SDK（Neon 的 S3 端点，path-style） |
+| 观测 | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低 |
+| 任务运行器 | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行 |
+
+## 各组件的库
+
+库只写名字、用途和许可证，版本只在 `package.json` 和 `pnpm-lock.yaml` 里。用 create-next-app 生成的部分不单独列。
+
+Web 应用（运行时）：
+
+| 库 | 用途 | 许可证 |
+|---|---|---|
+| next、react、react-dom | 应用框架和 UI（由 create-next-app 生成） | MIT |
+| zod | 校验接口输入、AI 输出和配置 | MIT |
+| drizzle-orm | 表定义和查询 | Apache-2.0 |
+| postgres | PostgreSQL 驱动（postgres.js） | Unlicense |
+| @clerk/nextjs | 登录和会话 | MIT |
+| @aws-sdk/client-s3、@aws-sdk/s3-request-presigner | 访问对象存储、生成预签名地址 | Apache-2.0 |
+| @tanstack/react-query | 客户端读取和缓存服务端数据 | MIT |
+| zustand | 页面状态 | MIT |
+| openai | 调用 OpenAI | Apache-2.0 |
+| @vercel/otel | 链路追踪 | MIT |
+| server-only | 防止服务端代码被打进浏览器包 | MIT |
+
+开发和检查：
+
+| 库 | 用途 | 许可证 |
+|---|---|---|
+| typescript | 类型检查 | Apache-2.0 |
+| tailwindcss | 样式 | MIT |
+| drizzle-kit | 生成迁移脚本 | MIT |
+| eslint、typescript-eslint、eslint-config-next | lint | MIT |
+| prettier | 格式化 | MIT |
+| dependency-cruiser | 架构规则 | MIT |
+| jscpd | 重复代码 | MIT |
+| @commitlint/cli | 提交信息格式 | MIT |
+| markdownlint-cli2 | Markdown 规则 | MIT |
+| lefthook | git hook | MIT |
+| license-checker-rseidelsohn | 依赖许可证 | BSD-3-Clause |
+| vitest、@vitest/browser-playwright | 单元、组件和集成测试 | MIT |
+| @testing-library/react | 组件测试 | MIT |
+| testcontainers、@testcontainers/postgresql | 测试里起一次性的数据库和对象存储容器 | MIT |
+| msw | 在网络层替换第三方服务 | MIT |
+| @playwright/test | 端到端测试和截图对比 | Apache-2.0 |
+
+仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）。
+
+## 代码结构
+
+```text
+src/
+  app/                    路由和页面入口，只做入口，不放业务逻辑
+  features/<功能>/
+    domain/               纯业务逻辑，不依赖框架、数据库和外部服务
+    server/               数据库查询、外部服务调用、接口处理
+    ui/                   组件
+    index.ts              对其他功能公开的接口
+  lib/                    共用的数据库连接、环境变量读取等
+e2e/                      端到端测试
+drizzle/                  迁移脚本
+```
+
+依赖规则（由 dependency-cruiser 检查，分析到 0 个模块时直接失败）：
+
+- 方向只能是 `app` → `features` → `lib`。
+- `domain` 不依赖 `server` 和 `ui`，也不依赖框架和第三方 SDK。
+- 一个功能只能通过另一个功能的 `index.ts` 引用它。
+- `ui` 不依赖 `server`；浏览器代码不能引用服务端代码和服务端 SDK。
+- 不允许循环依赖。
+
+命名：文件和目录全部小写加连字符（如 `word-lookup.ts`、`review-card.tsx`），组件名在代码里用 PascalCase。
+
+每层的测试规则：
+
+| 层 | 测试 |
+|---|---|
+| `domain` | 每个导出的函数都有单元测试 |
+| `server` | 用真实 PostgreSQL 的集成测试；外部服务用测试替身 |
+| `ui` | 有交互的组件有组件测试 |
+| 页面流程 | 端到端测试 |
+
+测试文件放在被测文件旁边（`*.test.ts`），端到端测试放在 `e2e/`。
+
+## 部署目标
+
+| 目标 | 部署到 | 地址 | 用到的资源 |
+|---|---|---|---|
+| staging | Vercel 团队 `juanchaopan1` 的项目 `lingocurrent-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`），由 scaffold 改名为 `vexto-staging`；Hobby；函数地区 cle1；不连 Git | 改名后由 scaffold 填写 | Neon 项目 `lingocurrent-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），改名为 `vexto-staging-db`，分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `lingocurrent-staging-audio`（私有） |
+| production | Vercel 项目 `lingocurrent-production` | 待定 | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有） |
+
+- staging 在每次合并到 main 且 CI 通过后由 CD 自动部署，部署后跑全部冒烟测试。
+- 每个目标都有一个手动启动的部署任务；生产只部署 main 上通过 CI 的版本标签。
+- 生产的改名、地址、环境和密钥以后单独搭建，在那之前运行生产部署任务会失败。
+- 这些资源原来属于 lingocurrent。vexto 部署到 staging 之前，要先关掉 lingocurrent 的自动部署。
+- 资源用 `vercel` 和 `neon` 命令行直接创建和修改，不用基础设施即代码。staging 要做的操作：Vercel 项目改名、Node 版本改为 26.x、函数地区改为 cle1；Neon 项目改名。实际执行的命令和结果由 scaffold 写回这里。
+
+## 数据迁移
+
+| 数据 | 方式 | 工具 | 在哪里运行 |
+|---|---|---|---|
+| PostgreSQL | 增量迁移：带编号的 SQL 脚本，从当前版本按顺序执行；合并后的脚本不再修改，写错了就加新脚本 | drizzle-kit 从 Drizzle 表定义生成脚本 | staging：CD 部署时；生产：手动部署任务里，允许停机；开发机和测试库：建库时 |
+| 存储桶里的音频 | 完全由程序生成，不迁移；格式或声音变了，就用一个重建命令重新生成，和数据库迁移一起运行 | 由朗读功能的 issue 提供 | 同上 |
+
+一个 issue 同时改几种数据时，各自跑自己的迁移，顺序由那个 issue 提出并确认。
+
+## 各组件怎么运行
+
+| 组件 | 开发机 | CI |
+|---|---|---|
+| Next.js 应用 | 本机 Node 直接运行（`next dev`） | 运行机上直接构建和启动 |
+| PostgreSQL | 容器（`postgres:18`） | 测试命令用 Testcontainers 起一次性的容器 |
+| 对象存储 | 容器里的 S3 模拟器（具体用哪个，由第一个用到文件的功能 issue 定） | 同左，由测试命令起停 |
+| OpenAI | 真实服务，开发用密钥放在不提交的 `.env.local` 里 | MSW 测试替身 |
+| Clerk | Clerk 开发实例（`lingocurrent-staging-auth`），密钥放在 `.env.local` 里 | Clerk 官方的测试模式 |
+| 朗读生成、Speak 判定 | 待 spike | 待 spike |
+
+## 静态检查
+
+| 检查 | 工具 |
+|---|---|
+| 格式 | Prettier（每行 100 字符，单引号，LF 换行） |
+| Lint | ESLint + typescript-eslint + eslint-config-next；圈复杂度不超过 10，嵌套不超过 3 层，函数不超过 100 行，禁止 `any` |
+| 类型检查 | `tsc --noEmit` |
+| 编译和构建 | `next build` |
+| 架构规则 | dependency-cruiser |
+| 重复代码 | jscpd，阈值 2%，至少 60 个 token、8 行才算重复；忽略 Markdown、JSON、YAML 和测试夹具 |
+| 代码安全扫描 | CodeQL（TypeScript 和 GitHub Actions 工作流） |
+| 依赖漏洞 | `pnpm audit`，有高危或严重漏洞就失败；打开 Dependabot 漏洞提醒 |
+| 密钥泄露 | gitleaks；打开 GitHub 密钥扫描和推送保护 |
+| 许可证 | license-checker-rseidelsohn 检查运行时依赖：允许 MIT、Apache-2.0、BSD、ISC 等宽松许可，遇到 GPL、AGPL 或未知许可就失败 |
+| 工作流配置 | actionlint、zizmor |
+| 提交信息 | commitlint 检查 Conventional Commits 格式和长度；项目自己的脚本检查提交类型和分支的 issue 类型对应、issue 号、`Step:` 尾行 |
+| 步骤检查 | 项目自己的脚本：按 `Step:` 尾行检查每个提交只改了该步骤允许改的文件，跳过把 main 合进来的提交 |
+| PR 标题 | 项目自己的脚本：类型和分支名对应 |
+| 文档格式 | Prettier + markdownlint-cli2，覆盖 `.docs/` 和根目录的 Markdown |
+| AI 精简 | 开 PR 前在本机跑 `/simplify` |
+| AI 评审 | 开 PR 前在本机跑 `/code-review medium`，不在 CI 里跑 |
+| AI 安全评审 | 开 PR 前在本机跑 `/security-review` |
+
+git hook 由 lefthook 管理。hook 可以被跳过，所以 hook 里的每项检查在 CI 里都会再跑一遍。
+
+## 测试
+
+| 测试 | 工具 | 真实运行的部分 | 测试替身 |
+|---|---|---|---|
+| 单元 | Vitest（Node） | 一个函数或类 | 它依赖的一切 |
+| 组件 | Vitest 浏览器模式 + Testing Library | 一个组件或页面 | 后端接口 |
+| 集成 | Vitest + Testcontainers + MSW | 从接口入口到真实 PostgreSQL 和对象存储模拟器；数据库用迁移脚本从空库建起 | 前端、第三方服务 |
+| 安全 | 同集成测试 | 登录、权限、用户数据隔离、恶意输入的用例 | 第三方服务 |
+| 端到端 | Playwright，手机尺寸的 WebKit 和 Chromium；截图对比和基线固定在同一个 Playwright Linux 容器里生成 | 整个应用、数据库和对象存储 | 第三方服务 |
+| 冒烟 | 端到端测试里打了 smoke 标签的几个 | 部署好的 staging | 无 |
+| 迁移 | Vitest + Testcontainers | 用上一版格式的数据（含空值、最大长度、特殊字符）跑新的迁移脚本；只新建表的脚本不写 | 无 |
+
+不写合同测试（前后端在同一个仓库，一起部署），不做性能测试（没有性能指标），不加自动安全扫描，不设覆盖率下限。
+
+指标和测试的对应：
+
+| 指标或要求 | 测试 |
+|---|---|
+| 兼容性（iOS Safari、Android Chrome） | 端到端测试在 WebKit 和 Chromium 上各跑一遍 |
+| 只能看到自己的数据，只有受邀的人能登录 | 安全测试 |
+| 手机屏幕尺寸 | 组件测试和端到端测试的截图 |
+
+运行时机：
+
+| 时机 | 跑什么 |
+|---|---|
+| 提交前（只查暂存的文件） | Prettier、ESLint、markdownlint、gitleaks；改了工作流时跑 actionlint 和 zizmor |
+| 写提交信息时 | commitlint、步骤检查 |
+| 推送前 | 类型检查、受影响的单元测试 |
+| 开 PR 前 | 架构规则、重复代码；受影响的单元、组件、集成（含安全用例）和端到端测试；改了迁移脚本时跑迁移测试；`/simplify`、`/code-review medium`、`/security-review` |
+| PR CI | 格式、lint、文档格式、密钥泄露、工作流配置、提交信息和步骤检查、PR 标题、类型检查、构建、架构规则、重复代码、CodeQL、依赖漏洞、许可证、全部单元、组件、集成和安全测试，两种浏览器的端到端测试，改了迁移脚本时的迁移测试，`risk-gate` |
+| 合并到 main 后 | 完整再跑一遍 CI，通过后部署 staging |
+| 部署到 staging 后 | 全部冒烟测试 |
+| 发版前 | CodeQL、依赖漏洞、许可证、两种浏览器的端到端测试、迁移测试 |
+
+PR CI 里的每一项都是必过检查。一项检查被路径过滤跳过时，它的任务在工作流内部用 `if:` 判断，仍然报告成功。
+
+本机范围：CI 总是跑全部。本机开 PR 前，单元、组件、集成、端到端测试都只跑代理判断受影响的部分。这样有风险：代理漏判的测试要等 CI 才发现失败。
+
+vexto 是公开仓库，GitHub 标准运行机的 CI 分钟不限量。
+
+## 评审标准和风险规则
+
+AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-review`，不在 CI 里跑，所以不需要 Claude GitHub App 和 API 密钥。
+
+`REVIEW.md` 的内容：
+
+- **代码结构**：按功能分模块，模块内分 `domain`、`server`、`ui` 三层；业务规则放在 `domain`，路由和页面只做入口；每层有规定的测试。
+- **代码像一次写成**：注释只说明现在的代码做什么、为什么这样设计，不写修改历史（“改为”“新增”“修复”之类）；不留没用的代码和临时补丁。
+- **不写死个人情况**：订阅源、邮箱、名字、地区、模型名、价格这类具体值，都放在配置文件或环境变量里，由代码读取。
+- **外部调用不在事务里**：AI、语音合成和对象存储的调用不放在数据库事务里，提交前再检查一次状态。
+- **AI 输入输出的安全**：文章内容只当数据，里面的指令一律不执行；AI 返回的结果先用 Zod 校验格式，再检查含义，比如目标词的位置对得上、正确选项恰好一个。
+- **密钥不进命令行**：密钥不写进命令行参数、日志和构建环境，只从标准输入、文件或平台的密钥库读取。
+- **每个用户只碰自己的数据**：每个查询都按当前用户过滤；访问别人的数据返回 404；每次请求都确认用户仍在允许名单里。
+- **评论语言**：评审评论用中文，标明 [Important]、[Nit] 或 [Pre-existing]。
+
+风险规则写在 `.github/risk-rules.txt`，CI 任务 `risk` 从目标分支读取：
+
+- 高风险：
+  - `.github/**`、`lefthook.yml`、`.claude/**`、`AGENTS.md`、`CLAUDE.md`、`REVIEW.md`、`Taskfile.yml`；
+  - 所有检查工具的配置：ESLint、Prettier、dependency-cruiser、jscpd、commitlint、markdownlint、gitleaks、`tsconfig.json`、Vitest、Playwright；
+  - 截图基线 `**/*-snapshots/**`；
+  - `**/auth/**`、`drizzle/**`、`**/*.sql`、`**/.env*`、`vercel.json`。
+- 低风险：`.docs/**`、`**/*.md`、`**/*.txt`、`LICENSE`。
+- 有任何一个文件命中高风险，就是高风险；全部文件都命中低风险，才是低风险；其余都是中风险。高风险优先于低风险。`release/*` 分支的 PR 一律算高风险。
+
+## 依赖更新
+
+- 用 Renovate，通过免费的 Mend 托管 App 运行，配置基于 `config:best-practices`。
+  - 只升 Node 的 LTS 大版本。
+  - GitHub Actions 固定到提交 SHA，后面注释版本号。
+  - npm 包发布满几天后才升级。
+  - 每周维护锁文件，开启依赖看板。
+- 每周一开 PR：所有非大版本的升级合并成一个 PR，每个大版本单独一个 PR；安全更新随时开。
+- PR 标题：产品运行时用的依赖用 `fix(deps): ...`，开发依赖和 CI action 用 `chore(deps): ...`，不带 issue 号，也不带 `Step:` 尾行。
+- Dependabot 的漏洞提醒保持打开，Renovate 据此开安全 PR；关掉 Dependabot 的版本更新，避免重复的 PR。
+- 依赖更新 PR 由 `/issue next` 处理。
+
+## 平台设置、App、环境变量和密钥
+
+分支规则（GitHub 规则集，作用于 main）：
+
+- 必须走 PR。
+- 必过检查全部通过，并且分支必须和 main 同步。
+- 必须解决所有评审对话。
+- 只允许 squash 合并。
+- 禁止强推和删除 main。
+- 没有旁路用户，项目所有者也不能绕过。
+- 人工审批：中、高风险的 PR 需要 `human-reviewed` 标签，由 `risk-gate` 检查；有新提交时，CI 任务会去掉这个标签。
+
+其他设置：
+
+- 远程的 issue 分支合并后永久保留；本地分支合并后删除。
+- 打开密钥扫描、推送保护和 Dependabot 漏洞提醒。
+- App：只装 Mend Renovate。
+
+环境变量和密钥（本 issue 只设置 staging 部署要用的这几项）：
+
+| 名称 | 用途 | 类型 | 环境 | 值从哪来 |
+|---|---|---|---|---|
+| `VERCEL_TOKEN` | CI 部署到 Vercel | 密钥 | GitHub 环境 `staging` | 项目所有者新建的令牌，只给 staging 用 |
+| `VERCEL_ORG_ID` | Vercel 团队 `juanchaopan1` | 变量 | GitHub 环境 `staging` | 资源本身 |
+| `VERCEL_PROJECT_ID` | Vercel staging 项目 | 变量 | GitHub 环境 `staging` | 资源本身 |
+
+以后由用到它们的功能 issue 设置：`DATABASE_URL`、`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`、`CLERK_SECRET_KEY`、`OPENAI_API_KEY`、对象存储的 `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`，以及定时任务接口用的 `CRON_SECRET`。staging 和生产各用各的值，放在 GitHub 环境和 Vercel 项目的环境变量里。
+
+冒烟测试只访问健康检查接口，不需要外部账号。
+
+## 待定事项
+
+- 文章朗读音频在哪里生成：Vercel Hobby 的 CPU 和包大小都可能不够。候选有 GitHub Actions 定时任务、Vercel 函数和容器主机。结论来自项目所有者在 lingocurrent 那边跟进的 spike。另外，Supertonic 的仓库已经归档，许可证是 OpenRAIL-M，也要一并评估。
+- Speak 用什么判定：候选有 Vosk 和 OpenAI，同样来自那个 spike。
+- 订阅源的定时收集用什么触发：由收集功能的 issue 决定。
+- 生产环境的搭建：包括改名、地址、Clerk 生产实例的邮件问题，以及两个 Clerk 实例共用一个 Google OAuth 客户端的问题。
+
+Last changed: #1 (2026-11-21)
