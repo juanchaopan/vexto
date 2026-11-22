@@ -14,6 +14,7 @@ vexto 是一个手机网页应用：听读英文订阅源里的文章，选中�
 | pnpm       | 12.21.0 | `npm install --global pnpm@12.21.0`                         | `npm install --global pnpm@12.21.0`                |
 | Task       | 3.54.0  | `winget install --id Task.Task --version 3.54.0`            | `brew install go-task`                             |
 | Docker     | 最新版  | `winget install --id Docker.DockerDesktop`                  | `brew install --cask docker`                       |
+| ffmpeg     | 最新版  | `winget install --id Gyan.FFmpeg`                           | `brew install ffmpeg`                              |
 | gitleaks   | 8.30.1  | `winget install --id Gitleaks.Gitleaks --version 8.30.1`    | `brew install gitleaks`                            |
 | actionlint | 1.7.12  | `winget install --id rhysd.actionlint --version 1.7.12`     | `brew install actionlint`                          |
 | zizmor     | 1.32.0  | `winget install --id zizmor.zizmor --version 1.32.0`        | `brew install zizmor`                              |
@@ -21,7 +22,9 @@ vexto 是一个手机网页应用：听读英文订阅源里的文章，选中�
 - Node.js 的版本写在 `.nvmrc` 里，`fnm install` 和 `fnm use` 会读它；要让 fnm 进入仓库目录时自动切换，按 fnm 的说明在 shell 配置里加上 `fnm env --use-on-cd`。
 - pnpm 的版本写在 `package.json` 的 `packageManager` 里，其他版本的 pnpm 运行时会自动切换到这个版本。
 - Homebrew 只装最新版。装好后用 `task --version`、`gitleaks version`、`actionlint --version`、`zizmor --version` 看一下版本，和上表不一致时以上表为准，CI 用的也是上表的版本。
-- 端到端测试在 Docker 容器里运行，运行前要先启动 Docker Desktop。
+- ffmpeg 给本机运行的收集任务和朗读服务把合成的声音编码成 MP3；Cloud Run 的镜像里装的是 Debian 的 ffmpeg，不用本机的这个。
+- 集成测试、安全测试、端到端测试和 Cloud Run 镜像的构建都要用 Docker，运行前要先启动 Docker Desktop。
+- 只有把朗读模型复制到 Google Cloud 时（`task model-upload`）才要 gcloud CLI：`winget install --id Google.CloudSDK` 或 `brew install --cask google-cloud-sdk`。
 
 ### 第一次运行
 
@@ -41,20 +44,35 @@ task env-pull
 
 它用 Vercel CLI 把仓库链接到这个项目（写进 `.vercel/`），再把 Development 环境的值拉到 `.env.local`。`.vercel/` 和 `.env.local` 都不进 git。第一次用时 Vercel CLI 会先让你登录 Vercel。要用别的项目或团队时，改 `scripts/env-pull.json`，或者只在这一次传参数，例如 `task env-pull VERCEL_PROJECT=<项目> VERCEL_SCOPE=<团队>`；设成同名的环境变量也可以。
 
+### 朗读模型
+
+收集任务和朗读服务用 Supertonic 3 合成朗读。模型固定在 `config/speech-model.json` 写的 Hugging Face 版本，约 400 MB，不进 git。第一次运行它们之前下载一次：
+
+```sh
+task model-download
+```
+
+文件下载到 `.models/supertonic-3/<版本>/`，每个文件都按 `config/speech-model.json` 里的大小和 SHA-256 核对，对不上的不会留下；已经下载好、核对通过的文件不再下载。
+
 ### 日常命令
 
 ```sh
-task dev     # 启动开发服务器，地址是 http://localhost:3000
-task check   # 跑本机的全部静态检查
+task dev                        # 启动开发服务器，地址是 http://localhost:3000
+node src/worker/collect.ts      # 运行一次收集任务
+node src/worker/tts.ts          # 启动朗读服务，监听 PORT（默认 8080）
+task check                      # 跑本机的全部静态检查
+task build                      # 构建 Web 应用和 Cloud Run 的镜像
 ```
+
+本机运行收集任务和朗读服务时，`MODEL_DIR` 设成下载好的模型目录，例如 `.models/supertonic-3/<版本>`。
 
 ### 测试
 
 ```sh
 task test-unit                    # 单元测试
 task test-component               # 组件测试（Chromium 和 WebKit）
-task test-integration             # 集成测试
-task test-security                # 安全测试
+task test-integration             # 集成测试，自己起停一次性的 PostgreSQL 和 S3Mock 容器
+task test-security                # 安全测试，容器同上
 task test-migration               # 迁移测试
 task test-e2e                     # 端到端测试，在固定版本的 Playwright 容器里运行
 task test-smoke -- <地址>         # 对一个运行中的应用跑冒烟测试
