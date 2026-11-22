@@ -23,48 +23,48 @@ flowchart LR
 
 ## 指标
 
-| 指标 | 内容 |
-|---|---|
-| 规模 | 不超过约 10 个账号，同时在线只有几个人；订阅源大约十几个 |
-| 可用性 | 尽力而为，不承诺正常运行时间，可以停机维护 |
-| 一致性 | 每个用户的数据只存在服务端的一个 PostgreSQL 里，任何设备读到的都是最新写入的数据 |
-| 成本 | 托管用 Vercel Hobby 和 Neon Free 的免费额度；AI、语音合成和语音判定按用量计费，由项目所有者承担 |
-| 维护能力 | 一个人业余维护，组件和运维尽量少 |
-| 兼容性 | iOS Safari 和 Android Chrome 的最近两个大版本，手机屏幕尺寸，触屏操作 |
+| 指标     | 内容                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| 规模     | 不超过约 10 个账号，同时在线只有几个人；订阅源大约十几个                                        |
+| 可用性   | 尽力而为，不承诺正常运行时间，可以停机维护                                                      |
+| 一致性   | 每个用户的数据只存在服务端的一个 PostgreSQL 里，任何设备读到的都是最新写入的数据                |
+| 成本     | 托管用 Vercel Hobby 和 Neon Free 的免费额度；AI、语音合成和语音判定按用量计费，由项目所有者承担 |
+| 维护能力 | 一个人业余维护，组件和运维尽量少                                                                |
+| 兼容性   | iOS Safari 和 Android Chrome 的最近两个大版本，手机屏幕尺寸，触屏操作                           |
 
 不设性能、资源、安全和可访问性指标。
 
 ## 组件
 
-| 组件 | 种类 | 技术 | 状态 |
-|---|---|---|---|
-| Web 应用 | 网页前端 + 后端服务 | Next.js 16（App Router），TypeScript，Node.js 26 LTS | 本 issue 搭建 |
-| 数据库 | 数据库 | Neon PostgreSQL 18 | 资源已存在，由第一个用到的功能 issue 接入 |
-| 对象存储 | 对象存储 | Neon Object Storage，私有存储桶，S3 协议 | 资源已存在，由第一个用到的功能 issue 接入 |
-| AI | 第三方服务 | OpenAI `gpt-6-luna`，服务端用官方 SDK 直接调用 | 由查词功能 issue 接入 |
-| 登录 | 第三方服务 | Clerk，受邀 Google 登录，沿用 lingocurrent 的 Clerk 应用 | 由账号功能 issue 接入 |
-| 文章朗读生成 | 后台任务 | 声音 Supertonic F1，单声道 MP3 32 kbps；在哪里生成待 spike | 待 spike |
-| Speak 判定 | 后台服务或第三方服务 | 待 spike | 待 spike |
+| 组件         | 种类                 | 技术                                                       | 状态                                      |
+| ------------ | -------------------- | ---------------------------------------------------------- | ----------------------------------------- |
+| Web 应用     | 网页前端 + 后端服务  | Next.js 16（App Router），TypeScript，Node.js 26 LTS       | 本 issue 搭建                             |
+| 数据库       | 数据库               | Neon PostgreSQL 18                                         | 资源已存在，由第一个用到的功能 issue 接入 |
+| 对象存储     | 对象存储             | Neon Object Storage，私有存储桶，S3 协议                   | 资源已存在，由第一个用到的功能 issue 接入 |
+| AI           | 第三方服务           | OpenAI `gpt-6-luna`，服务端用官方 SDK 直接调用             | 由查词功能 issue 接入                     |
+| 登录         | 第三方服务           | Clerk，受邀 Google 登录，沿用 lingocurrent 的 Clerk 应用   | 由账号功能 issue 接入                     |
+| 文章朗读生成 | 后台任务             | 声音 Supertonic F1，单声道 MP3 32 kbps；在哪里生成待 spike | 待 spike                                  |
+| Speak 判定   | 后台服务或第三方服务 | 待 spike                                                   | 待 spike                                  |
 
 定时任务（收集订阅源）由托管平台按时间调用应用里的接口，不算单独的组件；Vercel Hobby 的 cron 每天最多一次，具体的触发方式由收集功能的 issue 决定。
 
 ## 技术选择和决策点
 
-| 方面 | 决定 |
-|---|---|
-| 框架 | Next.js 16，App Router，Route Handlers 提供接口 |
-| 运行时 | Node.js 26 LTS，版本写死在 `.nvmrc` 和 `package.json` 的 `engines` 里 |
-| 语言 | TypeScript 6.0.3（typescript-eslint 还不支持 7） |
-| 包管理器 | pnpm 12，版本写死在 `packageManager` 里 |
-| 构建 | Next.js 自带（Turbopack） |
-| 数据访问 | Drizzle ORM + postgres.js 驱动；接口和外部数据用 Zod 校验 |
-| 前端状态 | TanStack Query 管服务端数据，Zustand 管页面状态 |
-| 样式 | Tailwind CSS，颜色用语义化变量 |
-| AI | OpenAI 官方 TypeScript SDK，不经过网关 |
-| 登录 | Clerk 的 Next.js SDK |
-| 对象存储访问 | AWS S3 SDK（Neon 的 S3 端点，path-style） |
-| 观测 | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低 |
-| 任务运行器 | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行 |
+| 方面         | 决定                                                                  |
+| ------------ | --------------------------------------------------------------------- |
+| 框架         | Next.js 16，App Router，Route Handlers 提供接口                       |
+| 运行时       | Node.js 26 LTS，版本写死在 `.nvmrc` 和 `package.json` 的 `engines` 里 |
+| 语言         | TypeScript 6.0.3（typescript-eslint 还不支持 7）                      |
+| 包管理器     | pnpm 12，版本写死在 `packageManager` 里                               |
+| 构建         | Next.js 自带（Turbopack）                                             |
+| 数据访问     | Drizzle ORM + postgres.js 驱动；接口和外部数据用 Zod 校验             |
+| 前端状态     | TanStack Query 管服务端数据，Zustand 管页面状态                       |
+| 样式         | Tailwind CSS，颜色用语义化变量                                        |
+| AI           | OpenAI 官方 TypeScript SDK，不经过网关                                |
+| 登录         | Clerk 的 Next.js SDK                                                  |
+| 对象存储访问 | AWS S3 SDK（Neon 的 S3 端点，path-style）                             |
+| 观测         | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低                |
+| 任务运行器   | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行     |
 
 ## 各组件的库
 
@@ -72,40 +72,40 @@ flowchart LR
 
 Web 应用（运行时）：
 
-| 库 | 用途 | 许可证 |
-|---|---|---|
-| next、react、react-dom | 应用框架和 UI（由 create-next-app 生成） | MIT |
-| zod | 校验接口输入、AI 输出和配置 | MIT |
-| drizzle-orm | 表定义和查询 | Apache-2.0 |
-| postgres | PostgreSQL 驱动（postgres.js） | Unlicense |
-| @clerk/nextjs | 登录和会话 | MIT |
-| @aws-sdk/client-s3、@aws-sdk/s3-request-presigner | 访问对象存储、生成预签名地址 | Apache-2.0 |
-| @tanstack/react-query | 客户端读取和缓存服务端数据 | MIT |
-| zustand | 页面状态 | MIT |
-| openai | 调用 OpenAI | Apache-2.0 |
-| @vercel/otel | 链路追踪 | MIT |
-| server-only | 防止服务端代码被打进浏览器包 | MIT |
+| 库                                                | 用途                                     | 许可证     |
+| ------------------------------------------------- | ---------------------------------------- | ---------- |
+| next、react、react-dom                            | 应用框架和 UI（由 create-next-app 生成） | MIT        |
+| zod                                               | 校验接口输入、AI 输出和配置              | MIT        |
+| drizzle-orm                                       | 表定义和查询                             | Apache-2.0 |
+| postgres                                          | PostgreSQL 驱动（postgres.js）           | Unlicense  |
+| @clerk/nextjs                                     | 登录和会话                               | MIT        |
+| @aws-sdk/client-s3、@aws-sdk/s3-request-presigner | 访问对象存储、生成预签名地址             | Apache-2.0 |
+| @tanstack/react-query                             | 客户端读取和缓存服务端数据               | MIT        |
+| zustand                                           | 页面状态                                 | MIT        |
+| openai                                            | 调用 OpenAI                              | Apache-2.0 |
+| @vercel/otel                                      | 链路追踪                                 | MIT        |
+| server-only                                       | 防止服务端代码被打进浏览器包             | MIT        |
 
 开发和检查：
 
-| 库 | 用途 | 许可证 |
-|---|---|---|
-| typescript | 类型检查 | Apache-2.0 |
-| tailwindcss | 样式 | MIT |
-| drizzle-kit | 生成迁移脚本 | MIT |
-| eslint、typescript-eslint、eslint-config-next | lint | MIT |
-| prettier | 格式化 | MIT |
-| dependency-cruiser | 架构规则 | MIT |
-| jscpd | 重复代码 | MIT |
-| @commitlint/cli | 提交信息格式 | MIT |
-| markdownlint-cli2 | Markdown 规则 | MIT |
-| lefthook | git hook | MIT |
-| license-checker-rseidelsohn | 依赖许可证 | BSD-3-Clause |
-| vitest、@vitest/browser-playwright | 单元、组件和集成测试 | MIT |
-| @testing-library/react | 组件测试 | MIT |
-| testcontainers、@testcontainers/postgresql | 测试里起一次性的数据库和对象存储容器 | MIT |
-| msw | 在网络层替换第三方服务 | MIT |
-| @playwright/test | 端到端测试和截图对比 | Apache-2.0 |
+| 库                                            | 用途                                 | 许可证       |
+| --------------------------------------------- | ------------------------------------ | ------------ |
+| typescript                                    | 类型检查                             | Apache-2.0   |
+| tailwindcss                                   | 样式                                 | MIT          |
+| drizzle-kit                                   | 生成迁移脚本                         | MIT          |
+| eslint、typescript-eslint、eslint-config-next | lint                                 | MIT          |
+| prettier                                      | 格式化                               | MIT          |
+| dependency-cruiser                            | 架构规则                             | MIT          |
+| jscpd                                         | 重复代码                             | MIT          |
+| @commitlint/cli                               | 提交信息格式                         | MIT          |
+| markdownlint-cli2                             | Markdown 规则                        | MIT          |
+| lefthook                                      | git hook                             | MIT          |
+| license-checker-rseidelsohn                   | 依赖许可证                           | BSD-3-Clause |
+| vitest、@vitest/browser-playwright            | 单元、组件和集成测试                 | MIT          |
+| @testing-library/react                        | 组件测试                             | MIT          |
+| testcontainers、@testcontainers/postgresql    | 测试里起一次性的数据库和对象存储容器 | MIT          |
+| msw                                           | 在网络层替换第三方服务               | MIT          |
+| @playwright/test                              | 端到端测试和截图对比                 | Apache-2.0   |
 
 仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）。
 
@@ -136,21 +136,21 @@ drizzle/                  迁移脚本
 
 每层的测试规则：
 
-| 层 | 测试 |
-|---|---|
-| `domain` | 每个导出的函数都有单元测试 |
+| 层       | 测试                                             |
+| -------- | ------------------------------------------------ |
+| `domain` | 每个导出的函数都有单元测试                       |
 | `server` | 用真实 PostgreSQL 的集成测试；外部服务用测试替身 |
-| `ui` | 有交互的组件有组件测试 |
-| 页面流程 | 端到端测试 |
+| `ui`     | 有交互的组件有组件测试                           |
+| 页面流程 | 端到端测试                                       |
 
 测试文件放在被测文件旁边（`*.test.ts`），端到端测试放在 `e2e/`。
 
 ## 部署目标
 
-| 目标 | 部署到 | 地址 | 用到的资源 |
-|---|---|---|---|
-| staging | Vercel 团队 `juanchaopan1` 的项目 `lingocurrent-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`），由 scaffold 改名为 `vexto-staging`；Hobby；函数地区 cle1；不连 Git | 改名后由 scaffold 填写 | Neon 项目 `lingocurrent-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），改名为 `vexto-staging-db`，分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `lingocurrent-staging-audio`（私有） |
-| production | Vercel 项目 `lingocurrent-production` | 待定 | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有） |
+| 目标       | 部署到                                                                                                                                                                | 地址                   | 用到的资源                                                                                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| staging    | Vercel 团队 `juanchaopan1` 的项目 `lingocurrent-staging`（ID `prj_NgrKbNMNYpm9D2MyIdjvnNIHxHLS`），由 scaffold 改名为 `vexto-staging`；Hobby；函数地区 cle1；不连 Git | 改名后由 scaffold 填写 | Neon 项目 `lingocurrent-staging-db`（ID `bold-water-71503400`，aws-us-east-2，PostgreSQL 18，Free），改名为 `vexto-staging-db`，分支 `production`（`br-cool-king-bdzirfp0`），数据库 `neondb`；存储桶 `lingocurrent-staging-audio`（私有） |
+| production | Vercel 项目 `lingocurrent-production`                                                                                                                                 | 待定                   | Neon 项目 `lingocurrent-production-db`（ID `misty-art-39773764`，aws-us-east-2），分支 `production`（`br-mute-sea-bdqamwb7`）；存储桶 `lingocurrent-production-audio`（私有）                                                              |
 
 - staging 在每次合并到 main 且 CI 通过后由 CD 自动部署，部署后跑全部冒烟测试。
 - 每个目标都有一个手动启动的部署任务；生产只部署 main 上通过 CI 的版本标签。
@@ -160,83 +160,83 @@ drizzle/                  迁移脚本
 
 ## 数据迁移
 
-| 数据 | 方式 | 工具 | 在哪里运行 |
-|---|---|---|---|
-| PostgreSQL | 增量迁移：带编号的 SQL 脚本，从当前版本按顺序执行；合并后的脚本不再修改，写错了就加新脚本 | drizzle-kit 从 Drizzle 表定义生成脚本 | staging：CD 部署时；生产：手动部署任务里，允许停机；开发机和测试库：建库时 |
-| 存储桶里的音频 | 完全由程序生成，不迁移；格式或声音变了，就用一个重建命令重新生成，和数据库迁移一起运行 | 由朗读功能的 issue 提供 | 同上 |
+| 数据           | 方式                                                                                      | 工具                                  | 在哪里运行                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| PostgreSQL     | 增量迁移：带编号的 SQL 脚本，从当前版本按顺序执行；合并后的脚本不再修改，写错了就加新脚本 | drizzle-kit 从 Drizzle 表定义生成脚本 | staging：CD 部署时；生产：手动部署任务里，允许停机；开发机和测试库：建库时 |
+| 存储桶里的音频 | 完全由程序生成，不迁移；格式或声音变了，就用一个重建命令重新生成，和数据库迁移一起运行    | 由朗读功能的 issue 提供               | 同上                                                                       |
 
 一个 issue 同时改几种数据时，各自跑自己的迁移，顺序由那个 issue 提出并确认。
 
 ## 各组件怎么运行
 
-| 组件 | 开发机 | CI |
-|---|---|---|
-| Next.js 应用 | 本机 Node 直接运行（`next dev`） | 运行机上直接构建和启动 |
-| PostgreSQL | 容器（`postgres:18`） | 测试命令用 Testcontainers 起一次性的容器 |
-| 对象存储 | 容器里的 S3 模拟器（具体用哪个，由第一个用到文件的功能 issue 定） | 同左，由测试命令起停 |
-| OpenAI | 真实服务，开发用密钥放在不提交的 `.env.local` 里 | MSW 测试替身 |
-| Clerk | Clerk 开发实例（`lingocurrent-staging-auth`），密钥放在 `.env.local` 里 | Clerk 官方的测试模式 |
-| 朗读生成、Speak 判定 | 待 spike | 待 spike |
+| 组件                 | 开发机                                                                  | CI                                       |
+| -------------------- | ----------------------------------------------------------------------- | ---------------------------------------- |
+| Next.js 应用         | 本机 Node 直接运行（`next dev`）                                        | 运行机上直接构建和启动                   |
+| PostgreSQL           | 容器（`postgres:18`）                                                   | 测试命令用 Testcontainers 起一次性的容器 |
+| 对象存储             | 容器里的 S3 模拟器（具体用哪个，由第一个用到文件的功能 issue 定）       | 同左，由测试命令起停                     |
+| OpenAI               | 真实服务，开发用密钥放在不提交的 `.env.local` 里                        | MSW 测试替身                             |
+| Clerk                | Clerk 开发实例（`lingocurrent-staging-auth`），密钥放在 `.env.local` 里 | Clerk 官方的测试模式                     |
+| 朗读生成、Speak 判定 | 待 spike                                                                | 待 spike                                 |
 
 ## 静态检查
 
-| 检查 | 工具 |
-|---|---|
-| 格式 | Prettier（每行 100 字符，单引号，LF 换行） |
-| Lint | ESLint + typescript-eslint + eslint-config-next；圈复杂度不超过 10，嵌套不超过 3 层，函数不超过 100 行，禁止 `any` |
-| 类型检查 | `tsc --noEmit` |
-| 编译和构建 | `next build` |
-| 架构规则 | dependency-cruiser |
-| 重复代码 | jscpd，阈值 2%，至少 60 个 token、8 行才算重复；忽略 Markdown、JSON、YAML 和测试夹具 |
-| 代码安全扫描 | CodeQL（TypeScript 和 GitHub Actions 工作流） |
-| 依赖漏洞 | `pnpm audit`，有高危或严重漏洞就失败；打开 Dependabot 漏洞提醒 |
-| 密钥泄露 | gitleaks；打开 GitHub 密钥扫描和推送保护 |
-| 许可证 | license-checker-rseidelsohn 检查运行时依赖：允许 MIT、Apache-2.0、BSD、ISC 等宽松许可，遇到 GPL、AGPL 或未知许可就失败 |
-| 工作流配置 | actionlint、zizmor |
-| 提交信息 | commitlint 检查 Conventional Commits 格式和长度；项目自己的脚本检查提交类型和分支的 issue 类型对应、issue 号、`Step:` 尾行 |
-| 步骤检查 | 项目自己的脚本：按 `Step:` 尾行检查每个提交只改了该步骤允许改的文件，跳过把 main 合进来的提交 |
-| PR 标题 | 项目自己的脚本：类型和分支名对应 |
-| 文档格式 | Prettier + markdownlint-cli2，覆盖 `.docs/` 和根目录的 Markdown |
-| AI 精简 | 开 PR 前在本机跑 `/simplify` |
-| AI 评审 | 开 PR 前在本机跑 `/code-review medium`，不在 CI 里跑 |
-| AI 安全评审 | 开 PR 前在本机跑 `/security-review` |
+| 检查         | 工具                                                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 格式         | Prettier（每行 100 字符，单引号，LF 换行）                                                                                 |
+| Lint         | ESLint + typescript-eslint + eslint-config-next；圈复杂度不超过 10，嵌套不超过 3 层，函数不超过 100 行，禁止 `any`         |
+| 类型检查     | `tsc --noEmit`                                                                                                             |
+| 编译和构建   | `next build`                                                                                                               |
+| 架构规则     | dependency-cruiser                                                                                                         |
+| 重复代码     | jscpd，阈值 2%，至少 60 个 token、8 行才算重复；忽略 Markdown、JSON、YAML 和测试夹具                                       |
+| 代码安全扫描 | CodeQL（TypeScript 和 GitHub Actions 工作流）                                                                              |
+| 依赖漏洞     | `pnpm audit`，有高危或严重漏洞就失败；打开 Dependabot 漏洞提醒                                                             |
+| 密钥泄露     | gitleaks；打开 GitHub 密钥扫描和推送保护                                                                                   |
+| 许可证       | license-checker-rseidelsohn 检查运行时依赖：允许 MIT、Apache-2.0、BSD、ISC 等宽松许可，遇到 GPL、AGPL 或未知许可就失败     |
+| 工作流配置   | actionlint、zizmor                                                                                                         |
+| 提交信息     | commitlint 检查 Conventional Commits 格式和长度；项目自己的脚本检查提交类型和分支的 issue 类型对应、issue 号、`Step:` 尾行 |
+| 步骤检查     | 项目自己的脚本：按 `Step:` 尾行检查每个提交只改了该步骤允许改的文件，跳过把 main 合进来的提交                              |
+| PR 标题      | 项目自己的脚本：类型和分支名对应                                                                                           |
+| 文档格式     | Prettier + markdownlint-cli2，覆盖 `.docs/` 和根目录的 Markdown                                                            |
+| AI 精简      | 开 PR 前在本机跑 `/simplify`                                                                                               |
+| AI 评审      | 开 PR 前在本机跑 `/code-review medium`，不在 CI 里跑                                                                       |
+| AI 安全评审  | 开 PR 前在本机跑 `/security-review`                                                                                        |
 
 git hook 由 lefthook 管理。hook 可以被跳过，所以 hook 里的每项检查在 CI 里都会再跑一遍。
 
 ## 测试
 
-| 测试 | 工具 | 真实运行的部分 | 测试替身 |
-|---|---|---|---|
-| 单元 | Vitest（Node） | 一个函数或类 | 它依赖的一切 |
-| 组件 | Vitest 浏览器模式 + Testing Library | 一个组件或页面 | 后端接口 |
-| 集成 | Vitest + Testcontainers + MSW | 从接口入口到真实 PostgreSQL 和对象存储模拟器；数据库用迁移脚本从空库建起 | 前端、第三方服务 |
-| 安全 | 同集成测试 | 登录、权限、用户数据隔离、恶意输入的用例 | 第三方服务 |
-| 端到端 | Playwright，手机尺寸的 WebKit 和 Chromium；截图对比和基线固定在同一个 Playwright Linux 容器里生成 | 整个应用、数据库和对象存储 | 第三方服务 |
-| 冒烟 | 端到端测试里打了 smoke 标签的几个 | 部署好的 staging | 无 |
-| 迁移 | Vitest + Testcontainers | 用上一版格式的数据（含空值、最大长度、特殊字符）跑新的迁移脚本；只新建表的脚本不写 | 无 |
+| 测试   | 工具                                                                                              | 真实运行的部分                                                                     | 测试替身         |
+| ------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------- |
+| 单元   | Vitest（Node）                                                                                    | 一个函数或类                                                                       | 它依赖的一切     |
+| 组件   | Vitest 浏览器模式 + Testing Library                                                               | 一个组件或页面                                                                     | 后端接口         |
+| 集成   | Vitest + Testcontainers + MSW                                                                     | 从接口入口到真实 PostgreSQL 和对象存储模拟器；数据库用迁移脚本从空库建起           | 前端、第三方服务 |
+| 安全   | 同集成测试                                                                                        | 登录、权限、用户数据隔离、恶意输入的用例                                           | 第三方服务       |
+| 端到端 | Playwright，手机尺寸的 WebKit 和 Chromium；截图对比和基线固定在同一个 Playwright Linux 容器里生成 | 整个应用、数据库和对象存储                                                         | 第三方服务       |
+| 冒烟   | 端到端测试里打了 smoke 标签的几个                                                                 | 部署好的 staging                                                                   | 无               |
+| 迁移   | Vitest + Testcontainers                                                                           | 用上一版格式的数据（含空值、最大长度、特殊字符）跑新的迁移脚本；只新建表的脚本不写 | 无               |
 
 不写合同测试（前后端在同一个仓库，一起部署），不做性能测试（没有性能指标），不加自动安全扫描，不设覆盖率下限。
 
 指标和测试的对应：
 
-| 指标或要求 | 测试 |
-|---|---|
-| 兼容性（iOS Safari、Android Chrome） | 端到端测试在 WebKit 和 Chromium 上各跑一遍 |
-| 只能看到自己的数据，只有受邀的人能登录 | 安全测试 |
-| 手机屏幕尺寸 | 组件测试和端到端测试的截图 |
+| 指标或要求                             | 测试                                       |
+| -------------------------------------- | ------------------------------------------ |
+| 兼容性（iOS Safari、Android Chrome）   | 端到端测试在 WebKit 和 Chromium 上各跑一遍 |
+| 只能看到自己的数据，只有受邀的人能登录 | 安全测试                                   |
+| 手机屏幕尺寸                           | 组件测试和端到端测试的截图                 |
 
 运行时机：
 
-| 时机 | 跑什么 |
-|---|---|
-| 提交前（只查暂存的文件） | Prettier、ESLint、markdownlint、gitleaks；改了工作流时跑 actionlint 和 zizmor |
-| 写提交信息时 | commitlint、步骤检查 |
-| 推送前 | 类型检查、受影响的单元测试 |
-| 开 PR 前 | 架构规则、重复代码；受影响的单元、组件、集成（含安全用例）和端到端测试；改了迁移脚本时跑迁移测试；`/simplify`、`/code-review medium`、`/security-review` |
-| PR CI | 格式、lint、文档格式、密钥泄露、工作流配置、提交信息和步骤检查、PR 标题、类型检查、构建、架构规则、重复代码、CodeQL、依赖漏洞、许可证、全部单元、组件、集成和安全测试，两种浏览器的端到端测试，改了迁移脚本时的迁移测试，`risk-gate` |
-| 合并到 main 后 | 完整再跑一遍 CI，通过后部署 staging |
-| 部署到 staging 后 | 全部冒烟测试 |
-| 发版前 | CodeQL、依赖漏洞、许可证、两种浏览器的端到端测试、迁移测试 |
+| 时机                     | 跑什么                                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 提交前（只查暂存的文件） | Prettier、ESLint、markdownlint、gitleaks；改了工作流时跑 actionlint 和 zizmor                                                                                                                                                        |
+| 写提交信息时             | commitlint、步骤检查                                                                                                                                                                                                                 |
+| 推送前                   | 类型检查、受影响的单元测试                                                                                                                                                                                                           |
+| 开 PR 前                 | 架构规则、重复代码；受影响的单元、组件、集成（含安全用例）和端到端测试；改了迁移脚本时跑迁移测试；`/simplify`、`/code-review medium`、`/security-review`                                                                             |
+| PR CI                    | 格式、lint、文档格式、密钥泄露、工作流配置、提交信息和步骤检查、PR 标题、类型检查、构建、架构规则、重复代码、CodeQL、依赖漏洞、许可证、全部单元、组件、集成和安全测试，两种浏览器的端到端测试，改了迁移脚本时的迁移测试，`risk-gate` |
+| 合并到 main 后           | 完整再跑一遍 CI，通过后部署 staging                                                                                                                                                                                                  |
+| 部署到 staging 后        | 全部冒烟测试                                                                                                                                                                                                                         |
+| 发版前                   | CodeQL、依赖漏洞、许可证、两种浏览器的端到端测试、迁移测试                                                                                                                                                                           |
 
 PR CI 里的每一项都是必过检查。一项检查被路径过滤跳过时，它的任务在工作流内部用 `if:` 判断，仍然报告成功。
 
@@ -301,11 +301,11 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
 
 环境变量和密钥（本 issue 只设置 staging 部署要用的这几项）：
 
-| 名称 | 用途 | 类型 | 环境 | 值从哪来 |
-|---|---|---|---|---|
-| `VERCEL_TOKEN` | CI 部署到 Vercel | 密钥 | GitHub 环境 `staging` | 项目所有者新建的令牌，只给 staging 用 |
-| `VERCEL_ORG_ID` | Vercel 团队 `juanchaopan1` | 变量 | GitHub 环境 `staging` | 资源本身 |
-| `VERCEL_PROJECT_ID` | Vercel staging 项目 | 变量 | GitHub 环境 `staging` | 资源本身 |
+| 名称                | 用途                       | 类型 | 环境                  | 值从哪来                              |
+| ------------------- | -------------------------- | ---- | --------------------- | ------------------------------------- |
+| `VERCEL_TOKEN`      | CI 部署到 Vercel           | 密钥 | GitHub 环境 `staging` | 项目所有者新建的令牌，只给 staging 用 |
+| `VERCEL_ORG_ID`     | Vercel 团队 `juanchaopan1` | 变量 | GitHub 环境 `staging` | 资源本身                              |
+| `VERCEL_PROJECT_ID` | Vercel staging 项目        | 变量 | GitHub 环境 `staging` | 资源本身                              |
 
 以后由用到它们的功能 issue 设置：`DATABASE_URL`、`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`、`CLERK_SECRET_KEY`、`OPENAI_API_KEY`、对象存储的 `S3_ENDPOINT`、`S3_REGION`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`，以及定时任务接口用的 `CRON_SECRET`。staging 和生产各用各的值，放在 GitHub 环境和 Vercel 项目的环境变量里。
 

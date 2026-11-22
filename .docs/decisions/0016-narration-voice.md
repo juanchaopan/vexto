@@ -4,12 +4,12 @@
 
 文章朗读是关键功能。参考项目 lingocurrent 的 spike 比较过四个样本：
 
-| 样本 | 引擎和声音 |
-|---|---|
-| A | Kokoro `af_heart` |
-| B | Kokoro `am_michael` |
-| C | Supertonic F1 |
-| D | Supertonic M1 |
+| 样本 | 引擎和声音          |
+| ---- | ------------------- |
+| A    | Kokoro `af_heart`   |
+| B    | Kokoro `am_michael` |
+| C    | Supertonic F1       |
+| D    | Supertonic M1       |
 
 项目所有者选了 Supertonic F1。压缩成 MP3 32 kbps 后，大小只有 WAV 的约 4.6%。但那个 spike 没有在云上验证过：按本机的测量，在 Vercel Hobby 上生成整篇文章的朗读，CPU 额度不够；Supertonic 的模型约 400 MB，也可能超过 Vercel 的包大小上限。
 
