@@ -14,7 +14,7 @@
 
 ## 决定
 
-- 应用、收集任务和朗读服务：本机直接用 Node 运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录并核对校验和，ffmpeg 装在本机。本机的 Web 应用直接调用本机的朗读服务，不带身份令牌。
+- 应用、收集任务和朗读服务：本机直接用 Node 运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录并核对校验和，lame 装在本机。本机的 Web 应用直接调用本机的朗读服务，不带身份令牌。
 - PostgreSQL：用 `postgres:18` 容器，测试命令自己起停一次性的容器。
 - 对象存储：Adobe S3Mock 容器，测试命令自己起停。
 - OpenAI 和 Clerk：CI 里 OpenAI 用 MSW 测试替身、Clerk 用它的测试模式和 @clerk/testing；本机连真实的 OpenAI 和 Clerk 开发实例，密钥放在不提交的 `.env.local` 里。

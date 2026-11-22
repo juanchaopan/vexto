@@ -86,7 +86,7 @@ flowchart LR
 | 句子切分     | Node 自带的 `Intl.Segmenter`（英文，按句）                                                                                                                                                                   |
 | 朗读合成     | onnxruntime-node 运行 Supertonic 3；推理代码取自 Supertonic 官方仓库的 Node.js 版本（MIT，仓库已归档），复制进项目自己维护，保留原版权声明并标明改动                                                         |
 | 朗读模型     | Hugging Face `supertone-oss-archive/supertonic-3`，固定在提交 `aafc6e32416a594460b32413efc49d7fe4ce6d46`，按校验和核对后复制到自己的 Cloud Storage 存储桶                                                    |
-| MP3 编码     | 镜像里装的 ffmpeg 命令（libmp3lame，单声道，32 kbps）；它是系统程序，不是 npm 依赖                                                                                                                           |
+| MP3 编码     | 镜像里装的 lame 命令（libmp3lame，单声道，32 kbps）；它是系统程序，不是 npm 依赖                                                                                                                             |
 | 调用朗读服务 | Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取朗读服务的身份令牌（google-auth-library、@vercel/oidc）                                                                                                  |
 | 观测         | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低；Cloud Run 的日志进 Cloud Logging（免费额度内），日志里不写文章正文和查词内容                                                                         |
 | 任务运行器   | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行                                                                                                                                            |
@@ -94,7 +94,7 @@ flowchart LR
 
 ## 各组件的库
 
-库只写名字、用途和许可证，版本只在 `package.json` 和 `pnpm-lock.yaml` 里。用 create-next-app 生成的部分不单独列。每个库由第一个用到它的 issue 安装。Web 应用和 Cloud Run 共用一个 `package.json`。
+库只写名字、用途和许可证，版本只在 `package.json` 和 `pnpm-lock.yaml` 里。用 create-next-app 生成的部分不单独列。每个库由第一个用到它的 issue 安装。Web 应用和 Cloud Run 共用一个 `package.json`。Cloud Run 的镜像只装它的入口用到的运行时库：只给 Web 应用用的库（如 next、react、@clerk/nextjs）列在 `scripts/worker-image.json` 里，构建镜像时从 `package.json` 和 `pnpm-lock.yaml` 里一起去掉，其余的库仍按锁文件的版本安装。
 
 运行时：
 
@@ -140,7 +140,7 @@ flowchart LR
 | @playwright/test                                 | 端到端测试和截图对比                                               | Apache-2.0   |
 | @clerk/testing                                   | 端到端测试里的 Clerk 登录                                          | MIT          |
 
-仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）、Vercel CLI、gcloud CLI、Neon CLI（`neonctl`）、Docker；镜像里的 ffmpeg（GPL，只在镜像里作为系统程序调用，镜像存在私有的 Artifact Registry，不对外分发）。
+仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）、Vercel CLI、gcloud CLI、Neon CLI（`neonctl`）、Docker；镜像里的 lame（LGPL，只在镜像里作为系统程序调用，镜像存在私有的 Artifact Registry，不对外分发）。
 
 ## 代码结构
 
@@ -168,6 +168,7 @@ worker.Dockerfile         Cloud Run 镜像
 - 一个功能只能通过另一个功能的 `index.ts` 引用它。
 - `ui` 不依赖 `server`；浏览器代码不能引用服务端代码和服务端 SDK。
 - 只在收集任务和朗读服务里用的库（jsdom、@mozilla/readability、onnxruntime-node）不能被 `app` 引到，免得进 Vercel 的函数包。
+- 只给 Web 应用用的库（`scripts/worker-image.json` 里列的）不能被 `worker` 引到，因为 Cloud Run 的镜像里没有它们。
 - 不允许循环依赖。
 
 命名：文件和目录全部小写加连字符（如 `word-lookup.ts`、`review-card.tsx`），组件名在代码里用 PascalCase。
@@ -215,7 +216,7 @@ Google Cloud 必须绑定结算账户才能使用。正常使用全部在免费�
 | 出站流量          | 北美每月 1 GB                                  | 上传到 Neon 的 MP3，每月约 0.4 GB                                                 |
 | Cloud Scheduler   | 每个结算账户 3 个任务                          | 1 个                                                                              |
 | Cloud Storage     | us-central1 每月 5 GB，同地区读取不收流量费    | 模型约 400 MB                                                                     |
-| Artifact Registry | 0.5 GB                                         | 一个不含模型的镜像，只保留最近两个版本                                            |
+| Artifact Registry | 0.5 GB                                         | 一个不含模型和网页专用包的镜像，约 150–200 MB，只保留最近两个版本                 |
 | Secret Manager    | 6 个活动版本                                   | 3 个密钥，值没变就不写新版本，写了新版本就删掉旧版本                              |
 
 限量和保护：
@@ -237,17 +238,17 @@ Google Cloud 必须绑定结算账户才能使用。正常使用全部在免费�
 
 ## 各组件怎么运行
 
-| 组件               | 开发机                                                                                                            | CI                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Next.js 应用       | 本机 Node 直接运行（`next dev`）                                                                                  | 运行机上直接构建和启动                                                     |
-| 收集任务、朗读服务 | 本机 Node 直接运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录，核对校验和；ffmpeg 装在本机 | 入口的集成测试，朗读合成用测试替身，返回固定的音频夹具；镜像只构建，不推送 |
-| PostgreSQL         | 容器（`postgres:18`）                                                                                             | 测试命令用 Testcontainers 起一次性的容器                                   |
-| 对象存储           | 容器里的 Adobe S3Mock                                                                                             | 同左，由测试命令起停                                                       |
-| OpenAI             | 真实服务，用开发环境自己的密钥（见下文“本机开发”）                                                                | MSW 测试替身                                                               |
-| Clerk              | Clerk 开发实例（`lingocurrent-staging-auth`）                                                                     | Clerk 官方的测试模式，用 @clerk/testing                                    |
-| Cloud Scheduler    | 不运行，需要时手动运行收集任务                                                                                    | 不运行                                                                     |
-| Google 身份联合    | 本机的 Web 应用直接调用本机的朗读服务，不带身份令牌                                                               | 测试替身                                                                   |
-| Speak 判定         | 待 spike #4                                                                                                       | 待 spike #4                                                                |
+| 组件               | 开发机                                                                                                          | CI                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Next.js 应用       | 本机 Node 直接运行（`next dev`）                                                                                | 运行机上直接构建和启动                                                     |
+| 收集任务、朗读服务 | 本机 Node 直接运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录，核对校验和；lame 装在本机 | 入口的集成测试，朗读合成用测试替身，返回固定的音频夹具；镜像只构建，不推送 |
+| PostgreSQL         | 容器（`postgres:18`）                                                                                           | 测试命令用 Testcontainers 起一次性的容器                                   |
+| 对象存储           | 容器里的 Adobe S3Mock                                                                                           | 同左，由测试命令起停                                                       |
+| OpenAI             | 真实服务，用开发环境自己的密钥（见下文“本机开发”）                                                              | MSW 测试替身                                                               |
+| Clerk              | Clerk 开发实例（`lingocurrent-staging-auth`）                                                                   | Clerk 官方的测试模式，用 @clerk/testing                                    |
+| Cloud Scheduler    | 不运行，需要时手动运行收集任务                                                                                  | 不运行                                                                     |
+| Google 身份联合    | 本机的 Web 应用直接调用本机的朗读服务，不带身份令牌                                                             | 测试替身                                                                   |
+| Speak 判定         | 待 spike #4                                                                                                     | 待 spike #4                                                                |
 
 S3Mock 不校验预签名地址的签名，所以“过期的预签名地址不能用”这类行为由单元测试检查，真实的存储桶由 staging 的冒烟测试检查。
 

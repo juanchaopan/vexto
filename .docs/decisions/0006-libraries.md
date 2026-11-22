@@ -12,7 +12,7 @@
 - 正文提取：@mozilla/readability 加 jsdom；@mozilla/readability 加 linkedom（更轻，但 Readability 没在它上面测试过）。
 - 句子切分：Node 自带的 `Intl.Segmenter`；第三方的切分库。
 - 朗读：Supertonic 官方的 Node.js 版本加 onnxruntime-node；Python 的 supertonic 包。
-- MP3 编码：镜像里的 ffmpeg 命令；lamejs、@breezystack/lamejs（LGPL，停止维护）；@mediabunny/mp3-encoder（MPL-2.0，内含 LGPL 的 LAME）；ffmpeg-static（GPL）。
+- MP3 编码：镜像里的 ffmpeg 命令；镜像里的 lame 命令；lamejs、@breezystack/lamejs（LGPL，停止维护）；@mediabunny/mp3-encoder（MPL-2.0，内含 LGPL 的 LAME）；ffmpeg-static（GPL）。
 - 端到端测试里的登录：@clerk/testing；自己写。
 
 ## 决定
@@ -27,7 +27,8 @@
   - `server-only`。
 - 再加上 OpenAI 官方 SDK。
 - 收集和朗读：fast-xml-parser、@mozilla/readability 加 jsdom、`Intl.Segmenter`、onnxruntime-node；Supertonic 官方仓库的 Node.js 推理代码（MIT）复制进项目，保留版权声明并标明改动。
-- MP3 用镜像里的 ffmpeg 命令编码。
+- MP3 用镜像里的 lame 命令编码。
+- Cloud Run 的镜像只装它的入口用到的库，只给 Web 应用用的库不进镜像。
 - 调用朗读服务：google-auth-library 和 @vercel/oidc。
 - 端到端测试里的登录用 @clerk/testing。
 - 各个库由第一个用到它的 issue 安装。
@@ -38,7 +39,8 @@
 - 沿用 lingocurrent 的库，就能直接借用它定稿的设计和架构规则。
 - Readability 就是 Firefox 阅读模式用的库，jsdom 是它官方测试用的 DOM。
 - 全项目只用 TypeScript 一种语言，收集和整理的代码可以和 Web 应用共用测试和检查。
-- Node 里能编码 MP3 的库都是 GPL 或 LGPL，过不了许可证检查；ffmpeg 作为系统程序装在私有镜像里，由代码调用，不是项目的依赖。
+- Node 里能编码 MP3 的库都是 GPL 或 LGPL，过不了许可证检查；lame 作为系统程序装在私有镜像里，由代码调用，不是项目的依赖。
+- Artifact Registry 免费存 0.5 GB，要放下最近两个版本的镜像。Debian 的 ffmpeg 包连同它带进来的库压缩后约 170 MB，装 ffmpeg 的镜像约 390 MB，两个版本就超出免费额度；lame 只做 MP3 编码，连同它的库不到 10 MB。Web 应用的库（Next.js 和它的平台编译器、React、Clerk 等）在 Cloud Run 里用不到，不装它们，压缩后的镜像又少约 100 MB。
 
 ## 代价
 
