@@ -1,0 +1,399 @@
+# Every static check and test subject runs as its own job with a stable name, and each job runs
+# the same task command developers run locally. The job names are the required checks of main.
+# After a push to main passes every check, staging is deployed.
+#
+# Local actions and workflows are referenced as ./...: actionlint cannot parse GitHub's
+# self-repository form $/... yet, so zizmor's self-repository finding is ignored on those lines.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions: {}
+
+# A new push to a pull request replaces the run in progress; runs on main finish in order.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  format-check:
+    name: format-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task format-check
+
+  lint:
+    name: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task lint
+
+  docs-lint:
+    name: docs-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task docs-lint
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task typecheck
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task build
+
+  arch:
+    name: arch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task arch
+
+  duplication:
+    name: duplication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task duplication
+
+  licenses:
+    name: licenses
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task licenses
+
+  audit:
+    name: audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task audit
+
+  secrets-scan:
+    name: secrets-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # gitleaks scans every commit, so the whole history is fetched.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Install gitleaks
+        env:
+          # renovate: datasource=github-releases depName=gitleaks/gitleaks
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          dir="$RUNNER_TEMP/gitleaks"
+          mkdir -p "$dir"
+          cd "$dir"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          checksums="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          curl --fail --silent --show-error --location \
+            --remote-name "$release/$archive" --remote-name "$release/$checksums"
+          grep " ${archive}\$" "$checksums" | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+          echo "$dir" >> "$GITHUB_PATH"
+      - run: task secrets-scan
+
+  workflows-lint:
+    name: workflows-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Install actionlint
+        env:
+          # renovate: datasource=github-releases depName=rhysd/actionlint
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          dir="$RUNNER_TEMP/actionlint"
+          mkdir -p "$dir"
+          cd "$dir"
+          release="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          checksums="actionlint_${ACTIONLINT_VERSION}_checksums.txt"
+          curl --fail --silent --show-error --location \
+            --remote-name "$release/$archive" --remote-name "$release/$checksums"
+          grep " ${archive}\$" "$checksums" | sha256sum --check --strict
+          tar -xzf "$archive" actionlint
+          echo "$dir" >> "$GITHUB_PATH"
+      # zizmor publishes no checksum file; its release archives carry build provenance
+      # attestations, which `gh attestation verify` checks against the zizmor repository.
+      - name: Install zizmor
+        env:
+          # renovate: datasource=github-releases depName=zizmorcore/zizmor
+          ZIZMOR_VERSION: 1.32.0
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dir="$RUNNER_TEMP/zizmor"
+          mkdir -p "$dir"
+          cd "$dir"
+          archive="zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --silent --show-error --location --remote-name \
+            "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/$archive"
+          gh attestation verify "$archive" --repo zizmorcore/zizmor
+          tar -xzf "$archive" zizmor
+          echo "$dir" >> "$GITHUB_PATH"
+      - run: task workflows-lint
+
+  test-unit:
+    name: test-unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task test-unit
+
+  test-component:
+    name: test-component
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Install the browsers and their system libraries
+        run: pnpm exec playwright install --with-deps chromium webkit
+      - run: task test-component
+
+  test-integration:
+    name: test-integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task test-integration
+
+  test-security:
+    name: test-security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task test-security
+
+  # Migration tests run only when a file under drizzle/ changed. The decision is made inside the
+  # job, so the required check still reports success when there is nothing to test.
+  test-migration:
+    name: test-migration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Look for changed migration scripts
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          # A pull request is compared from where it left its base; a push from the previous tip of
+          # main. A push without a usable previous tip runs the tests.
+          if [ "$EVENT_NAME" = pull_request ]; then
+            range="$BASE_SHA...$HEAD_SHA"
+          elif [[ "$BEFORE_SHA" =~ ^[0-9a-f]{40}$ && ! "$BEFORE_SHA" =~ ^0+$ ]] \
+            && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            range="$BEFORE_SHA..$GITHUB_SHA"
+          else
+            range=""
+          fi
+          if [ -z "$range" ]; then
+            echo "No earlier commit to compare with; running the migration tests."
+            changed=true
+          elif [ -n "$(git diff --name-only "$range" -- drizzle/)" ]; then
+            echo "Files under drizzle/ changed; running the migration tests."
+            changed=true
+          else
+            echo "No file under drizzle/ changed; the migration tests are not needed."
+            changed=false
+          fi
+          echo "migrations=$changed" >> "$GITHUB_OUTPUT"
+      - if: steps.changes.outputs.migrations == 'true'
+        uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - if: steps.changes.outputs.migrations == 'true'
+        run: task test-migration
+
+  # Runs Playwright in the pinned container through Docker on the runner. The container's named
+  # volumes start empty on every runner, so each run installs the Linux dependencies afresh.
+  test-e2e:
+    name: test-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - run: task test-e2e
+      - name: Keep the report and screenshot differences of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Commits of the pull request, from where it leaves its base branch to its head.
+  commits:
+    name: commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Check commit messages and steps
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # The branch names become part of Task's command line, so only the characters workflow
+          # branch names use are let through.
+          for name in "$BASE_REF" "$HEAD_REF"; do
+            if ! [[ "$name" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "::error::Branch names may use only letters, digits, '.', '_', '/' and '-'."
+              exit 1
+            fi
+          done
+          task commits-check FROM="origin/$BASE_REF" TO="$HEAD_SHA" BRANCH="$HEAD_REF"
+
+  deploy-staging:
+    name: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - format-check
+      - lint
+      - docs-lint
+      - typecheck
+      - build
+      - arch
+      - duplication
+      - licenses
+      - audit
+      - secrets-scan
+      - workflows-lint
+      - test-unit
+      - test-component
+      - test-integration
+      - test-security
+      - test-migration
+      - test-e2e
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository]
+    with:
+      target: staging
+      ref: ${{ github.sha }}

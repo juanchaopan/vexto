@@ -73,7 +73,7 @@ tasks:
       - gitleaks git --config .gitleaks.toml --redact --no-banner .
 
   workflows-lint:
-    desc: Lint the GitHub Actions workflows with actionlint and zizmor (default all)
+    desc: Lint the GitHub Actions workflows and local actions with actionlint and zizmor (default all)
     cmds:
       - node scripts/lint-workflows.ts {{.CLI_ARGS}}
 

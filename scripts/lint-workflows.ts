@@ -1,23 +1,41 @@
-// Lints the GitHub Actions workflows with actionlint and zizmor, two standalone programs that are
-// installed outside the repository and found on PATH.
-// Usage: node scripts/lint-workflows.ts [workflow files...]   (default: every file in .github/workflows)
+// Lints the GitHub Actions workflows and the repository's own actions with actionlint and zizmor,
+// two standalone programs that are installed outside the repository and found on PATH.
+// actionlint reads workflows only; it checks the inputs passed to a local action from the
+// workflow side. zizmor audits both workflows and action definitions.
+// Usage: node scripts/lint-workflows.ts [files...]
+//   default: every workflow in .github/workflows and every .github/actions/<name>/action.yml
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { normalizePath } from './lib/path-patterns.ts';
 import { repoRoot, run } from './lib/node-tools.ts';
 
-const workflowsDir = path.join(repoRoot, '.github', 'workflows');
-const requested = process.argv.slice(2);
-const files =
-  requested.length > 0
-    ? requested
-    : existsSync(workflowsDir)
-      ? readdirSync(workflowsDir)
-          .filter((name) => /\.ya?ml$/.test(name))
-          .map((name) => path.posix.join('.github', 'workflows', name))
-      : [];
+const yamlFile = /\.ya?ml$/;
+const workflowFile = /^\.github\/workflows\/[^/]+\.ya?ml$/;
+
+function listDir(dir: string) {
+  const absolute = path.join(repoRoot, dir);
+  return existsSync(absolute) ? readdirSync(absolute, { withFileTypes: true }) : [];
+}
+
+function defaultFiles() {
+  const workflows = listDir('.github/workflows')
+    .filter((entry) => entry.isFile() && yamlFile.test(entry.name))
+    .map((entry) => path.posix.join('.github', 'workflows', entry.name));
+  const actions = listDir('.github/actions')
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) =>
+      ['action.yml', 'action.yaml']
+        .map((name) => path.posix.join('.github', 'actions', entry.name, name))
+        .filter((file) => existsSync(path.join(repoRoot, file))),
+    );
+  return [...workflows, ...actions];
+}
+
+const requested = process.argv.slice(2).map(normalizePath);
+const files = requested.length > 0 ? requested : defaultFiles();
 
 if (files.length === 0) {
-  console.log('No workflow files in .github/workflows; nothing to lint.');
+  console.log('No workflow or action files; nothing to lint.');
   process.exit(0);
 }
 
@@ -33,6 +51,7 @@ async function lint(command: string, args: readonly string[]) {
   }
 }
 
-const actionlintCode = await lint('actionlint', files);
+const workflows = files.filter((file) => workflowFile.test(file));
+const actionlintCode = workflows.length > 0 ? await lint('actionlint', workflows) : 0;
 const zizmorCode = await lint('zizmor', files);
 process.exitCode = actionlintCode !== 0 || zizmorCode !== 0 ? 1 : 0;

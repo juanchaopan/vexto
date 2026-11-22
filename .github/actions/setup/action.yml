@@ -1,0 +1,32 @@
+name: Set up the project
+description: >-
+  Installs Task, pnpm from packageManager and Node.js from .nvmrc, then the dependencies from the
+  lockfile, so CI jobs run the same task commands developers run.
+inputs:
+  cache:
+    description: >-
+      Restore and save the pnpm store between runs. Workflows that deploy or release turn it off,
+      so a cache written by pull request code cannot reach them.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Install Task
+      uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+      with:
+        # renovate: datasource=github-releases depName=go-task/task
+        version: 3.54.0
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+    - name: Install Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        package-manager-cache: false
+        cache: ${{ inputs.cache == 'true' && 'pnpm' || '' }}
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

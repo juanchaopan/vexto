@@ -1,0 +1,130 @@
+# Risk tier and human approval of pull requests.
+#   risk       classifies the changed files with the risk rules and the classifier of the target
+#              branch, so a pull request cannot lower its own tier; labels the pull request with
+#              exactly one of risk:low, risk:medium and risk:high; and removes human-reviewed
+#              when new commits arrive, so every approval covers the latest commits.
+#   risk-gate  the required check: passes for low risk, or when the pull request carries
+#              human-reviewed at the time the gate runs.
+# Adding or removing a label reruns both jobs. Label changes made with the workflow token start
+# no new runs, so the risk job's own labels do not loop.
+# Pull requests from forks get a read-only token: changing labels fails there, so the risk job
+# fails with the API error and the gate fails with it. Such pull requests need a maintainer to
+# bring the commits onto a branch of this repository.
+name: risk
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+# Runs of one pull request take turns, so label changes are applied in event order.
+concurrency:
+  group: risk-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  risk:
+    name: risk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # sets the risk label and removes human-reviewed
+    outputs:
+      tier: ${{ steps.classify.outputs.tier }}
+    steps:
+      # Only the target branch is checked out; the pull request's own code never runs here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: List the changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # A renamed file counts under its old path as well as its new one.
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" \
+            --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/changed-files.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/changed-files.txt") changed paths."
+      - name: Classify the risk
+        id: classify
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Before the target branch has the rules and the classifier, every pull request counts
+          # as high risk.
+          if [ -f .github/risk-rules.txt ] && [ -f scripts/risk-tier.ts ]; then
+            tier=$(node scripts/risk-tier.ts --rules .github/risk-rules.txt --branch "$HEAD_REF" \
+              --files-from "$RUNNER_TEMP/changed-files.txt")
+          else
+            echo "The target branch has no risk rules yet, so the pull request counts as high risk."
+            tier=high
+          fi
+          echo "Risk tier: $tier"
+          echo "tier=$tier" >> "$GITHUB_OUTPUT"
+      - name: Update the labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+          TIER: ${{ steps.classify.outputs.tier }}
+        run: |
+          labels_url="repos/$REPO/issues/$PR_NUMBER/labels"
+          labels=$(gh api --paginate "$labels_url" --jq '.[].name')
+          has_label() { grep --quiet --line-regexp --fixed-strings "$1" <<< "$labels"; }
+          if [ "$ACTION" = synchronize ] && has_label human-reviewed; then
+            gh api --method DELETE "$labels_url/human-reviewed" --silent
+            echo "New commits arrived, so human-reviewed was removed; add it again after reviewing them."
+          fi
+          for label in risk:low risk:medium risk:high; do
+            if [ "$label" != "risk:$TIER" ] && has_label "$label"; then
+              gh api --method DELETE "$labels_url/$label" --silent
+            fi
+          done
+          if ! has_label "risk:$TIER"; then
+            gh api --method POST "$labels_url" --field "labels[]=risk:$TIER" --silent
+          fi
+
+  risk-gate:
+    name: risk-gate
+    needs: risk
+    # A skipped job would count as a passing check, so the gate always runs and fails on its own
+    # when the risk job did not succeed.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read # reads the current labels of the pull request
+    steps:
+      - name: Check the approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RISK_RESULT: ${{ needs.risk.result }}
+          TIER: ${{ needs.risk.outputs.tier }}
+        run: |
+          if [ "$RISK_RESULT" != success ] || [ -z "$TIER" ]; then
+            echo "::error::The risk job did not succeed, so the risk tier is unknown."
+            exit 1
+          fi
+          if [ "$TIER" = low ]; then
+            echo "Low risk: no human approval is needed."
+            exit 0
+          fi
+          # Labels are read now rather than from the event, which may predate the latest change.
+          labels=$(gh api --paginate "repos/$REPO/issues/$PR_NUMBER/labels" --jq '.[].name')
+          if grep --quiet --line-regexp --fixed-strings human-reviewed <<< "$labels"; then
+            echo "Risk $TIER, approved by a person (human-reviewed)."
+          else
+            echo "::error::Risk $TIER: a person must review the pull request and add the human-reviewed label."
+            exit 1
+          fi
