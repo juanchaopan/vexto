@@ -1782,8 +1782,8 @@
         const fmtLong = (x) => `Nov ${x.d}, 2026, ${x.t}`;
         // A date leaves out its year when it is the current year.
         const fmtDay = (x, year = YEAR) => `Nov ${x.d}${year === YEAR ? '' : `, ${year}`}`;
-        // When the demo account accepted the current terms.
-        const TERMS_ACCEPTED = at(21, '18:20');
+        // The demo account accepted the current terms on the day that version is dated, before "now".
+        const TERMS_ACCEPTED = at(22, '09:15');
 
         // ---------------------------------------------------------------- demo articles
         // Titles and texts are written for this prototype; they are not copied from the sources.
