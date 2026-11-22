@@ -69,7 +69,7 @@ git hook 由 lefthook 管理，`task setup` 会装好。hook 调用和 CI 相同
 | 写提交信息 | commitlint 和项目的提交规则（类型、issue 号、`Step:` 尾行、步骤允许改的文件）                                                                                          |
 | 推送前     | 类型检查，以及相对 `origin/main` 受影响的单元测试                                                                                                                      |
 
-迁移相关的文件是：`drizzle/` 下的迁移脚本、`*.migration.test.ts`、表定义 `src/features/*/server/schema.ts`、`drizzle.config.ts` 和 `scripts/migrate.ts`。
+迁移相关的文件是：`drizzle/` 下的迁移脚本、`*.migration.test.ts`、各功能的表定义 `src/features/*/server/schema.ts`、跨功能共用的表定义 `src/lib/db/schema.ts`、`drizzle.config.ts` 和 `scripts/migrate.ts`。
 
 开 PR 前，在本机依次做：
 

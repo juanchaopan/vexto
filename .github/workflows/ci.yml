@@ -272,9 +272,10 @@ jobs:
       - run: task test-security
 
   # Migration tests run only when a change touches the migrations: the scripts in drizzle/, the
-  # migration tests, the table definitions they are generated from, the drizzle-kit configuration
-  # or the migration program. The decision is made inside the job, so the required check still
-  # reports success when there is nothing to test.
+  # migration tests, the table definitions they are generated from (each feature's, and the
+  # shared ones in src/lib/db/schema.ts), the drizzle-kit configuration or the migration program.
+  # The decision is made inside the job, so the required check still reports success when there
+  # is nothing to test.
   test-migration:
     name: test-migration
     runs-on: ubuntu-24.04
@@ -298,6 +299,7 @@ jobs:
             drizzle/
             ':(glob)**/*.migration.test.ts'
             ':(glob)src/features/*/server/schema.ts'
+            src/lib/db/schema.ts
             drizzle.config.ts
             scripts/migrate.ts
           )
