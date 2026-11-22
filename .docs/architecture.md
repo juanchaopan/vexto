@@ -140,7 +140,7 @@ flowchart LR
 | @playwright/test                                 | 端到端测试和截图对比                                               | Apache-2.0   |
 | @clerk/testing                                   | 端到端测试里的 Clerk 登录                                          | MIT          |
 
-仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）、Vercel CLI、gcloud CLI、Docker；镜像里的 ffmpeg（GPL，只在镜像里作为系统程序调用，镜像存在私有的 Artifact Registry，不对外分发）。
+仓库外的工具：Task、gitleaks、actionlint、zizmor、CodeQL（GitHub 代码扫描）、Vercel CLI、gcloud CLI、Neon CLI（`neonctl`）、Docker；镜像里的 ffmpeg（GPL，只在镜像里作为系统程序调用，镜像存在私有的 Artifact Registry，不对外分发）。
 
 ## 代码结构
 
@@ -350,7 +350,7 @@ AI 评审只在本机做：开 PR 前跑 `/code-review medium` 和 `/security-re
   - GitHub Actions 固定到提交 SHA，后面注释版本号。
   - npm 包发布满 3 天后才升级。
   - 每周维护锁文件，开启依赖看板。
-  - 用正则规则同时更新 Playwright 容器镜像，以及工作流和 `Taskfile.yml` 里写死的工具版本（Task、gitleaks、actionlint、zizmor、Vercel CLI）。
+  - 用正则规则同时更新 Playwright 容器镜像，以及工作流和 `Taskfile.yml` 里写死的工具版本（Task、gitleaks、actionlint、zizmor、Vercel CLI、Neon CLI）。
   - Playwright 的容器镜像和 npm 包放在同一组，任何级别的更新都一起升，保持版本一致。
   - `worker.Dockerfile` 的基础镜像固定到摘要，由 Renovate 更新。
 - 每周一开 PR：所有非大版本的升级合并成一个 PR，每个大版本单独一个 PR；安全更新随时开。
@@ -411,6 +411,8 @@ Google Cloud 的身份：不用任何长期的服务账号密钥。
 上表的密钥都存在 GitHub 环境里，Cloud Run 用到的那几个（`DATABASE_URL`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`）在部署时另写一份副本进 Secret Manager。定时触发由 Cloud Scheduler 用 Google 自己的认证启动收集任务，所以没有 `CRON_SECRET`。
 
 Vercel 项目 `vexto-staging` 的 Production 环境里，现在还有 Neon 集成接入时自动加的 `DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`，Development 环境里还有 lingocurrent 留下的 Clerk 开发实例的两个值。#3 把数据库地址存进 GitHub 环境后，以 GitHub 的为准；如果 Vercel 不允许覆盖集成管理的变量，#3 回到这一步重新决定。
+
+成员名单：`task member -- add|revoke|list <邮箱> --target <环境>` 修改目标环境数据库里的成员表。数据库连接地址由 Neon CLI（`neonctl`，用 `pnpm dlx` 临时运行，版本写死在 `Taskfile.yml` 里）按配置里写的该目标的 Neon 项目和分支取得，项目所有者事先在本机用它登录一次；地址只在内存里交给脚本，不显示，也不写进文件。不用 GitHub 工作流做这件事，因为公开仓库的运行日志和输入谁都能看，会暴露成员的邮箱。
 
 冒烟测试访问健康检查接口，并用部署任务的 Google 身份请朗读服务合成一个单词，不需要外部账号。
 
