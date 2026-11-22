@@ -1,5 +1,7 @@
 // Runs the end-to-end tests inside the pinned Playwright Linux container, so local runs and CI
-// use the same browsers, fonts and screenshot baselines.
+// use the same browsers, fonts and screenshot baselines. The application runs against its own
+// throwaway PostgreSQL and S3Mock containers (scripts/lib/test-services.ts), which share a Docker
+// network with the Playwright container and are removed when the run ends.
 // Usage: node scripts/test-e2e.ts [playwright test arguments...]
 //
 // The repository is mounted at /work. Linux dependencies live in named volumes, so the host's
@@ -7,6 +9,7 @@
 // lives in an anonymous volume that is removed with the container.
 import { randomBytes } from 'node:crypto';
 import { readManifest, repoRoot, run } from './lib/node-tools.ts';
+import { startTestServices } from './lib/test-services.ts';
 
 // The image version must equal the installed @playwright/test version; the digest pins the image.
 const PLAYWRIGHT_IMAGE =
@@ -33,6 +36,12 @@ const ownerEnv =
 const ciEnv = process.env.CI ? ['--env', `CI=${process.env.CI}`] : [];
 const colorEnv = process.stdout.isTTY ? ['--env', 'FORCE_COLOR=1'] : [];
 
+const services = await startTestServices({ onNetwork: true });
+
+// The services' values reach the container by name only: docker copies each value from its own
+// environment, so none of them appears on the command line.
+const serviceEnvArgs = Object.keys(services.networkEnv).flatMap((name) => ['--env', name]);
+
 const dockerArgs = [
   'run',
   '--rm',
@@ -40,6 +49,8 @@ const dockerArgs = [
   '--ipc=host',
   '--name',
   containerName,
+  '--network',
+  services.network ?? '',
   '--volume',
   `${repoRoot}:/work`,
   '--volume',
@@ -52,6 +63,7 @@ const dockerArgs = [
   '/work',
   '--env',
   'E2E_CONTAINER=1',
+  ...serviceEnvArgs,
   ...ciEnv,
   ...colorEnv,
   ...ownerEnv,
@@ -61,11 +73,18 @@ const dockerArgs = [
   ...process.argv.slice(2),
 ];
 
-// An interrupted run still removes its container.
+// An interrupted run still removes its container; the services' containers are removed by
+// Testcontainers' reaper once this process is gone.
 const removeContainer = () => {
   void run('docker', ['rm', '--force', containerName]);
 };
 process.on('SIGINT', removeContainer);
 process.on('SIGTERM', removeContainer);
 
-process.exitCode = await run('docker', dockerArgs);
+try {
+  process.exitCode = await run('docker', dockerArgs, {
+    env: { ...process.env, ...services.networkEnv },
+  });
+} finally {
+  await services.stop();
+}

@@ -71,16 +71,16 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "The Playwright container image, tag and digest, in scripts/test-e2e.ts.",
-      "managerFilePatterns": ["/^scripts/test-e2e\\.ts$/"],
+      "description": "Container images the scripts start, written as '<image>:<tag>@sha256:<digest>': the Playwright image in scripts/test-e2e.ts, and the PostgreSQL and S3Mock images of the test services in scripts/lib/test-services.ts.",
+      "managerFilePatterns": ["/^scripts/.+\\.ts$/"],
       "matchStrings": [
-        "'(?<depName>mcr\\.microsoft\\.com/playwright):(?<currentValue>v[^@']+)@(?<currentDigest>sha256:[0-9a-f]{64})'"
+        "'(?<depName>[a-z0-9][a-z0-9._/-]*):(?<currentValue>[^@'\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})'"
       ],
       "datasourceTemplate": "docker"
     },
     {
       "customType": "regex",
-      "description": "Tool versions in workflows, actions and Taskfile.yml written under a `# renovate: datasource=<datasource> depName=<name>` comment, such as Task, gitleaks, actionlint, zizmor, the Vercel CLI and the Neon CLI.",
+      "description": "Tool versions in workflows, actions and Taskfile.yml written under a `# renovate: datasource=<datasource> depName=<name>` comment, such as Task, gitleaks, actionlint, zizmor, the Vercel CLI, the Neon CLI and the gcloud CLI.",
       "managerFilePatterns": [
         "/^\\.github/(workflows|actions)/.+\\.ya?ml$/",
         "/^Taskfile\\.ya?ml$/"
