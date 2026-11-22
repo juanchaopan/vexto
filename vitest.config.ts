@@ -3,7 +3,7 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 // Test kinds are told apart by file name, so a test can sit next to the code it tests:
-//   *.test.ts             unit tests in Node
+//   *.test.ts             unit tests in Node, for the application and the project scripts
 //   *.test.tsx            component tests in real browsers
 //   *.integration.test.ts integration tests from the route entry inward
 //   *.security.test.ts    sign-in, permission, data isolation and hostile input cases
@@ -24,7 +24,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['src/**/*.test.ts'],
+          include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
           exclude: typedTests,
         },
       },
