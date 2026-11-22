@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency updates: weekly on Monday, every non-major update in one pull request, each major update on its own, Playwright and its container image together, security updates at any time.",
+  "description": "Dependency updates: weekly on Monday, every non-major update in one pull request, each major update on its own, Playwright and its container image together, Node.js and the worker image's base image together, security updates at any time.",
   "extends": ["config:best-practices"],
   "timezone": "UTC",
   "schedule": ["* * * * 1"],
@@ -37,8 +37,9 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Node.js moves only to LTS major versions, which are the even ones.",
-      "matchDatasources": ["node-version"],
+      "description": "Node.js moves only to LTS major versions, which are the even ones, both in .nvmrc and in the base image of worker.Dockerfile.",
+      "matchDepNames": ["node"],
+      "matchDatasources": ["node-version", "docker"],
       "allowedVersions": "/^v?\\d*[02468]\\./"
     },
     {
@@ -58,6 +59,13 @@
       "minimumReleaseAgeBehaviour": "timestamp-optional",
       "internalChecksFilter": "none",
       "prCreation": "not-pending"
+    },
+    {
+      "description": "Node.js in .nvmrc and the base image of worker.Dockerfile, which Renovate's dockerfile manager finds by its .Dockerfile suffix, move together in one pull request for every update type, because a unit test fails when their versions differ. This rule comes after the non-major group, so it wins over it.",
+      "matchDepNames": ["node"],
+      "matchDatasources": ["node-version", "docker"],
+      "groupName": "Node.js",
+      "groupSlug": "node"
     }
   ],
   "customManagers": [

@@ -75,9 +75,19 @@ tasks:
       - pnpm exec tsc --noEmit {{.CLI_ARGS}}
 
   build:
-    desc: Build the application for production
+    desc: Build the application for production, then the Cloud Run image (arguments go to next build)
     cmds:
       - pnpm exec next build {{.CLI_ARGS}}
+      - task: build-worker
+
+  # The image carries inline cache metadata, so a build given CACHE_FROM reuses the layers of an
+  # earlier image whose inputs have not changed, and the registry stores those layers once.
+  build-worker:
+    desc: 'Build the Cloud Run image from worker.Dockerfile without pushing it: task build-worker [IMAGE=<name:tag>] [CACHE_FROM=<image>]'
+    vars:
+      IMAGE: '{{.IMAGE | default "vexto-worker:local"}}'
+    cmds:
+      - docker build --file worker.Dockerfile --build-arg BUILDKIT_INLINE_CACHE=1 {{if .CACHE_FROM}}--cache-from {{.CACHE_FROM}}{{end}} --tag {{.IMAGE}} .
 
   arch:
     desc: Check the dependency rules with dependency-cruiser (default src)
