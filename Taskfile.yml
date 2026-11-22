@@ -3,17 +3,13 @@
 # Extra arguments go after `--`, for example `task test-unit -- src/features/health`.
 version: '3'
 
-vars:
-  # Permissive licenses allowed for runtime dependencies. CC-BY-4.0 covers caniuse-lite, the
-  # browser support data Next.js ships; it only asks for attribution.
-  ALLOWED_LICENSES: MIT;MIT-0;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;Unlicense;CC0-1.0;BlueOak-1.0.0;CC-BY-4.0
-
 tasks:
   setup:
-    desc: Install dependencies and the browsers the component and smoke tests use
+    desc: Install dependencies, the browsers the component and smoke tests use, and the git hooks
     cmds:
       - pnpm install --frozen-lockfile
       - pnpm exec playwright install {{.CLI_ARGS}} chromium webkit
+      - pnpm exec lefthook install
 
   dev:
     desc: Start the development server
@@ -57,9 +53,9 @@ tasks:
       - pnpm exec jscpd {{.CLI_ARGS | default "."}}
 
   licenses:
-    desc: Fail when a runtime dependency has a license outside the allowed list
+    desc: Fail when a runtime dependency has a license outside scripts/lib/license-policy.ts
     cmds:
-      - pnpm exec license-checker-rseidelsohn --production --excludePrivatePackages --summary --onlyAllow "{{.ALLOWED_LICENSES}}"
+      - node scripts/check-licenses.ts
 
   audit:
     desc: Fail on dependencies with high or critical vulnerabilities
@@ -70,6 +66,25 @@ tasks:
     desc: Lint the Markdown in .docs/ and the repository root
     cmds:
       - pnpm exec markdownlint-cli2 {{.CLI_ARGS}}
+
+  secrets-scan:
+    desc: Scan every commit of the repository history for secrets with gitleaks
+    cmds:
+      - gitleaks git --config .gitleaks.toml --redact --no-banner .
+
+  workflows-lint:
+    desc: Lint the GitHub Actions workflows with actionlint and zizmor (default all)
+    cmds:
+      - node scripts/lint-workflows.ts {{.CLI_ARGS}}
+
+  commits-check:
+    desc: 'Check commit messages and steps: task commits-check [FROM=<ref>] [TO=<ref>] [BRANCH=<name>]'
+    vars:
+      FROM: '{{.FROM | default "origin/main"}}'
+      TO: '{{.TO | default "HEAD"}}'
+    cmds:
+      - pnpm exec commitlint --from {{.FROM}} --to {{.TO}}
+      - node scripts/check-commits.ts --range {{.FROM}}..{{.TO}} {{if .BRANCH}}--branch {{.BRANCH}}{{end}}
 
   check:
     desc: Run every static check that runs locally
@@ -82,6 +97,7 @@ tasks:
       - task: duplication
       - task: licenses
       - task: audit
+      - task: secrets-scan
 
   test-unit:
     desc: Run unit tests (pass files or Vitest options to narrow the run)

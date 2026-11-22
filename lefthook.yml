@@ -1,0 +1,38 @@
+# Git hooks managed by lefthook and installed into .git/hooks by `task setup`. Hooks can be
+# skipped, so CI runs every one of these checks again.
+# Globs use doublestar matching: `**` spans directories and `*` stays within one.
+glob_matcher: doublestar
+
+# Checks on the staged files only.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      run: pnpm exec prettier --check --ignore-unknown {staged_files}
+    - name: lint
+      glob: '**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'
+      run: pnpm exec eslint --max-warnings 0 --no-warn-ignored {staged_files}
+    - name: docs-lint
+      glob: '**/*.md'
+      run: pnpm exec markdownlint-cli2 --no-globs {staged_files}
+    - name: secrets
+      run: gitleaks git --staged --config .gitleaks.toml --redact --no-banner .
+    - name: workflows
+      glob: '.github/workflows/*.{yml,yaml}'
+      run: node scripts/lint-workflows.ts {staged_files}
+
+# Commit message format, then the workflow rules for the message and the staged files.
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
+    - name: workflow rules
+      run: node scripts/check-commits.ts --message-file {1}
+
+# Type check and the unit tests affected by the changes since origin/main.
+pre-push:
+  jobs:
+    - name: typecheck
+      run: task typecheck
+    - name: unit tests
+      run: task test-unit -- --changed origin/main --passWithNoTests

@@ -1,0 +1,7 @@
+# gitleaks configuration: the full default rule set, with no allowlist. A false positive is
+# handled where it occurs, by a reviewed `gitleaks:allow` comment or an entry in this file with a
+# reason, so nothing is ignored silently.
+title = "vexto gitleaks configuration"
+
+[extend]
+useDefault = true
