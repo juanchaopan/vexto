@@ -16,6 +16,7 @@
   - 容器主机 + Neon Free。
 - 资源：直接用 lingocurrent 现有的；或者在同一账号下新建。
 - 名字：改成 vexto；或者保持原名。
+- 存储桶：沿用 lingocurrent 的；或者在同一个 Neon 项目里新建名字带 vexto 的。
 - 函数地区：cle1；或者 iad1。
 - 生产地址：先用 vercel.app 地址；沿用 lingocurrent.dpdns.org；或者换新域名。
 - 基础设施：用命令行直接操作；或者用 OpenTofu。
@@ -24,23 +25,25 @@
 
 ## 决定
 
-- 直接用 lingocurrent 的 Vercel 项目、Neon 项目和存储桶，有 staging 和生产两个目标。
+- 直接用 lingocurrent 的 Vercel 项目和 Neon 项目，有 staging 和生产两个目标。
 - 函数地区设为 cle1，和数据库在同一个 AWS 地区。
-- staging 已搭建：Vercel 项目改名为 `vexto-staging`，Neon 项目改名为 `vexto-staging-db`，Node 版本为 26.x。生产的改名、地址和密钥以后单独搭建。
-- staging 新建 Google Cloud 项目 `vexto-staging`，地区 us-central1；生产以后另建自己的项目。
+- staging 已搭建：Vercel 项目改名为 `vexto-staging`，Neon 项目改名为 `vexto-staging-db`，Node 版本为 26.x；音频放在这个 Neon 项目里新建的私有存储桶 `vexto-staging-audio`。
+- 生产用 Vercel 项目 `lingocurrent-production`、Neon 项目 `lingocurrent-production-db` 和它的私有存储桶 `lingocurrent-production-audio`；改名、地址和密钥以后单独搭建。
+- staging 新建 Google Cloud 项目 `vexto-staging`，地区 us-central1，运行收集任务、朗读服务和结算保护（见 0017）；生产以后另建自己的项目。
 - 朗读模型复制到 us-central1 的 Cloud Storage 存储桶，挂载进 Cloud Run；镜像里不放模型。
 - 用 `vercel`、`neon`、`gcloud` 命令行直接创建和修改资源，执行过的操作写回 `.docs/architecture.md` 的部署目标一节。
 
 ## 理由
 
 - 资源现成、免费，两个库都是空的，不需要迁移数据。
+- 存储桶不能改名；staging 的桶是空的，新建一个就能用 vexto 的名字，不用搬音频。
 - 资源很少，用不着基础设施即代码。
 - Cloud Storage 的永久免费额度只在 us-central1、us-east1 和 us-west1，us-central1 也是 Cloud Run 免费额度的基准地区；同地区读取模型不收流量费。
 - 模型不进镜像，镜像在 Artifact Registry 的免费额度以内；Hugging Face 上的模型就算被删也不受影响。
 
 ## 代价
 
-- 存储桶不能改名，名字里还是 lingocurrent。
+- 生产的存储桶 `lingocurrent-production-audio` 不能改名，名字里还是 lingocurrent。
 - 在网页控制台里手工做的改动，不会被发现。
 - vexto 部署之前，要先关掉 lingocurrent 的自动部署。
 - Hobby 只适合个人、非商业用途。

@@ -443,6 +443,6 @@ Vercel 项目 `vexto-staging` 的 Production 环境里有 Neon 集成接入时�
 ## 待定事项
 
 - Speak 用什么判定：由 spike #4 决定，Speak 复习在 #5 实现。
-- 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、生产的 Google Cloud 项目、生产用的 Clerk 应用（沿用 lingocurrent 现有的 `lingocurrent-production-auth`，还是在 Clerk 应用 `vexto` 里建生产实例）、Clerk 生产实例的邮件问题，以及两个 Clerk 实例共用一个 Google OAuth 客户端的问题。
+- 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、生产的 Google Cloud 项目、生产用的 Clerk 应用（沿用 lingocurrent 现有的 `lingocurrent-production-auth`，还是在 Clerk 应用 `vexto` 里建生产实例），以及 Clerk 生产实例的邮件问题。
 
 Last changed: #3 (2026-11-22)
