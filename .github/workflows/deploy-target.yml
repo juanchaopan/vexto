@@ -3,6 +3,13 @@
 # tests against the target's address. Called by ci for staging after every passing push to main,
 # and by the manual deploy workflow.
 #
+# ci's runs on main do not cancel each other, so an older commit's run can reach its staging
+# deployment after a newer commit's. ci therefore sets only-if-main-head: the job then checks,
+# while it holds the target's concurrency group and before it changes anything, that the commit is
+# still the head of main, and otherwise ends successfully without deploying. A commit that becomes
+# the head after the check queues its own deployment behind this one. The manual deploy workflow
+# leaves the input off, because it may deploy an older version on purpose.
+#
 # The job runs in the GitHub environment named after the target, which is the only place the
 # target's values are kept. It reads from it:
 #   secret   VERCEL_TOKEN       Vercel token for this target only; the CLI reads it from the
@@ -40,6 +47,11 @@ on:
         description: Full SHA of the commit to deploy
         type: string
         required: true
+      only-if-main-head:
+        description: Skip the deployment, successfully, when ref is no longer the head of main
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
@@ -53,7 +65,9 @@ jobs:
     environment:
       name: ${{ inputs.target }}
       url: ${{ vars.APP_URL }}
-    # One deployment per target at a time; a deployment in progress is never cancelled.
+    # One deployment per target at a time; a deployment in progress is never cancelled. The head
+    # check below relies on this: no other deployment of the target runs between it and the end
+    # of the job.
     concurrency:
       group: deploy-${{ inputs.target }}
       cancel-in-progress: false
@@ -95,18 +109,51 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every later step runs only when this one decides to deploy. Main's head is read from the
+      # API, because the checkout keeps no credentials for git to ask the remote with. A failed
+      # read fails the job instead of skipping, so a deployment is never dropped silently.
+      - name: Check that the commit is still the head of main
+        id: head
+        env:
+          ONLY_IF_MAIN_HEAD: ${{ inputs.only-if-main-head }}
+          TARGET: ${{ inputs.target }}
+          REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$ONLY_IF_MAIN_HEAD" != true ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          head=$(gh api "repos/$REPO/git/ref/heads/main" --jq '.object.sha')
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the head of main."
+            exit 1
+          fi
+          if [ "$head" = "$REF" ]; then
+            echo "$REF is the head of main; deploying it to $TARGET."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Not deploying $REF to $TARGET: it is no longer the head of main," \
+              "which is $head now; $TARGET is left to the ci runs of the newer commits."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.head.outputs.deploy == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
 
-      - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - if: steps.head.outputs.deploy == 'true'
+        uses: ./.github/actions/setup # zizmor: ignore[self-repository]
         with:
           cache: 'false'
 
       # Runs before the migrations, so a value stored under the wrong kind stops the deployment
       # before the database changes. Each value goes to the CLI on standard input.
       - name: Copy the runtime values to the Vercel project
+        if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           ENVIRONMENT_SECRETS: ${{ toJSON(secrets) }} # zizmor: ignore[overprovisioned-secrets]
@@ -114,12 +161,14 @@ jobs:
         run: node scripts/sync-vercel-env.ts
 
       - name: Apply the database migrations
+        if: steps.head.outputs.deploy == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: task migrate
 
       - name: Pull the Vercel project settings
+        if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production
@@ -127,15 +176,18 @@ jobs:
       # The build works from the pulled settings and needs no token, so the project's build code
       # never sees it.
       - name: Build
+        if: steps.head.outputs.deploy == 'true'
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
 
       - name: Deploy
+        if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
 
       # Production runs only the smoke tests that are safe against real user data.
       - name: Run the smoke tests
+        if: steps.head.outputs.deploy == 'true'
         env:
           TARGET: ${{ inputs.target }}
           APP_URL: ${{ vars.APP_URL }}

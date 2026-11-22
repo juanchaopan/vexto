@@ -88,7 +88,7 @@ CI 总是跑全部检查。PR 上的每一项都是必过检查：
 
 风险和人工审批：`risk` 用目标分支上的 `.github/risk-rules.txt` 和分级脚本给 PR 打上 `risk:low`、`risk:medium` 或 `risk:high`；GitHub 最多列出 3000 个改动的文件，列出的数目达到 3000 或者和 PR 记录的不一致时，一律算高风险。中、高风险的 PR 要有人看过之后加上 `human-reviewed` 标签，`risk-gate` 才会通过；它只认在 PR 当前的最新提交到达之后加上的标签，所以有新提交后要看过新提交再重新加上（有新提交时 `risk` 也会去掉这个标签）。规则和分级脚本取自目标分支，PR 改了它们要合并后才生效；但工作流 `.github/workflows/risk.yml` 在 PR 上跑的是 PR 自己的版本，改了它的 PR 可以改掉自己的门禁。这样的 PR 一律是高风险，评审时要检查门禁的改动。
 
-合并到 main 后，`ci` 再完整跑一遍，全部通过后自动部署 staging，并跑冒烟测试。main 上每个提交的 `ci` 各自运行，后来的推送不会取消前面的；部署 staging 时排队，一次只部署一个。手动部署用工作流 `deploy`：选目标 staging 或 production，填版本标签（如 `v1.2.3`），staging 也可以填 main 上的提交 SHA；这个提交必须在 main 上，并且它在 main 上的 `ci` 已经跑完、全部检查通过。
+合并到 main 后，`ci` 再完整跑一遍，全部通过后自动部署 staging，并跑冒烟测试。main 上每个提交的 `ci` 各自运行，后来的推送不会取消前面的，所以先推送的提交可能后跑完。部署 staging 时排队，一次只部署一个；轮到某个提交部署时，如果它已经不是 main 的最新提交，就跳过部署，任务照样算成功，日志里写明跳过的原因，这样晚跑完的旧提交不会把 staging 上的新代码盖掉。手动部署用工作流 `deploy`：选目标 staging 或 production，填版本标签（如 `v1.2.3`），staging 也可以填 main 上的提交 SHA；这个提交必须在 main 上，并且它在 main 上的 `ci` 已经跑完、全部检查通过。手动部署不检查是不是 main 的最新提交，可以有意部署旧版本。
 
 环境变量和密钥：每个部署目标（staging，以后还有 production）的变量和密钥只存在同名的 GitHub 环境里。应用在运行时读的值列在 `scripts/lib/runtime-env.ts` 里，密钥存成 GitHub 环境的 secret，其余存成 variable。每次部署在拉取、构建和部署之前，把这些值写进目标 Vercel 项目的 Production 环境，覆盖 Vercel 上原有的副本；密钥在 Vercel 上存成 Sensitive。GitHub 环境里没有设置的名字会跳过，Vercel 上原有的值不动，所以一个目标可以逐个设置。新增运行时值时，在这个列表里加一行，再到每个 GitHub 环境里设置，工作流不用改。本机开发用的值在 `scripts/env-pull.json` 写的 Vercel 项目（`vexto-staging`）的 Development 环境里，用 `task env-pull` 拉到 `.env.local`；要换项目或团队时改这个文件，或者传 `VERCEL_PROJECT=<项目>`、`VERCEL_SCOPE=<团队>`（写在命令后面或设成环境变量都可以）。
 

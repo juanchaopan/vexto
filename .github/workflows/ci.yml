@@ -1,6 +1,7 @@
 # Every static check and test subject runs as its own job with a stable name, and each job runs
 # the same task command developers run locally. The job names are the required checks of main.
-# After a push to main passes every check, staging is deployed.
+# After a push to main passes every check, staging is deployed, unless a newer commit has become
+# the head of main by then.
 #
 # Local actions and workflows are referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on those lines.
@@ -20,9 +21,10 @@ permissions: {}
 
 # A concurrency group holds one running and one waiting run, and a newer run cancels the waiting
 # one. A pull request has one group, so a new push replaces its run in progress. Every push to
-# main gets a group of its own commit, so no commit on main loses its checks or its staging
-# deployment to a later push; the deployments themselves take turns in the deploy-<target> group
-# of deploy-target.yml.
+# main gets a group of its own commit, so no commit on main loses its checks to a later push.
+# Runs on main can therefore finish out of order; the staging deployments take turns in the
+# deploy-<target> group of deploy-target.yml, and each one skips its commit when that commit is
+# no longer the head of main, so a late older run never replaces newer code on staging.
 concurrency:
   group: ci-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -384,6 +386,8 @@ jobs:
           done
           task commits-check FROM="origin/$BASE_REF" TO="$HEAD_SHA" BRANCH="$HEAD_REF"
 
+  # only-if-main-head makes the deployment skip, successfully, a commit that is no longer the
+  # head of main when its turn to deploy comes (see deploy-target.yml).
   deploy-staging:
     name: deploy-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -411,4 +415,5 @@ jobs:
     with:
       target: staging
       ref: ${{ github.sha }}
+      only-if-main-head: true
     secrets: inherit
