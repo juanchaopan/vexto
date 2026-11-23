@@ -1,8 +1,14 @@
 // The stand-in for OpenAI the end-to-end run points the application at (OPENAI_BASE_URL), since
 // the built application runs as its own process where MSW cannot reach it and the tests must
-// never call the real service. It answers `POST /v1/responses` like the Responses API: a lookup
-// gets the prototype's explanation of the word when it has one and a plain made-up one otherwise,
-// and a new example request gets a new sentence each time. `GET /health` tells Playwright it is up.
+// never call the real service. It answers `POST /v1/responses` like the Responses API, by the name
+// of the structured output the request asks for:
+//   - a lookup gets the prototype's explanation of the word when it has one and a plain made-up
+//     one otherwise;
+//   - a new example request gets a new sentence each time;
+//   - the same-meaning check of a save names the saved meaning written exactly like the new one,
+//     or none;
+//   - the Translate options of a save get three fixed wrong meanings.
+// `GET /health` tells Playwright it is up.
 // Usage: node e2e/support/openai-double.ts <port>
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -49,6 +55,9 @@ const KNOWN: Record<string, Explanation> = {
   },
 };
 
+/** The wrong Translate options of every saved word. */
+const DISTRACTORS = ['迅速消失的', '令人厌烦的', '非常昂贵的'];
+
 function madeUp(selection: string): Explanation {
   const word = selection.toLowerCase();
   return {
@@ -71,14 +80,29 @@ type Request = {
   text: { format: { name: string } };
 };
 
-function answerOf(request: Request): unknown {
-  const data = JSON.parse(request.input[0]?.content ?? '{}') as Record<string, unknown>;
-  if (request.text.format.name === 'new_example') {
+type Data = Record<string, unknown>;
+
+const answers: Record<string, (data: Data) => unknown> = {
+  new_example(data) {
     examples += 1;
     const form = (data.acceptedForms as string[] | undefined)?.[0] ?? 'word';
     return {
       example: `Story ${examples} shows how a ${form} idea can help people every single day.`,
     };
+  },
+  meaning_match(data) {
+    const word = data.word as { meaningZh?: string } | undefined;
+    const saved = (data.savedMeanings as { number: number; meaningZh: string }[] | undefined) ?? [];
+    return { sameMeaning: saved.find((one) => one.meaningZh === word?.meaningZh)?.number ?? 0 };
+  },
+  translation_options: () => ({ distractors: DISTRACTORS }),
+};
+
+function answerOf(request: Request): unknown {
+  const data = JSON.parse(request.input[0]?.content ?? '{}') as Data;
+  const answer = answers[request.text.format.name];
+  if (answer) {
+    return answer(data);
   }
   const selection = String(data.selection ?? '');
   return KNOWN[selection.toLowerCase()] ?? madeUp(selection);

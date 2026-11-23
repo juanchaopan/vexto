@@ -22,11 +22,14 @@ export async function withDatabase<T>(work: (sql: postgres.Sql) => Promise<T>): 
 }
 
 /**
- * Removes the member row of an address with what refers to it: visits, lookups (with their
- * examples), operation receipts, and the owner of usage records, which are kept.
+ * Removes the member row of an address with what refers to it: review progress, vocabulary cards
+ * (with their examples and Translate options), visits, lookups (with their examples), operation
+ * receipts, and the owner of usage records, which are kept.
  */
 async function removeMember(sql: postgres.Sql, email: string) {
   const owner = sql`(SELECT id FROM members WHERE email = ${email})`;
+  await sql`DELETE FROM review_progress WHERE owner_id IN ${owner}`;
+  await sql`DELETE FROM vocabulary_cards WHERE owner_id IN ${owner}`;
   await sql`DELETE FROM visits WHERE owner_id IN ${owner}`;
   await sql`DELETE FROM lookup_entries WHERE owner_id IN ${owner}`;
   await sql`DELETE FROM operation_receipts WHERE owner_id IN ${owner}`;
