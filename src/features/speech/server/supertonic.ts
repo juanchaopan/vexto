@@ -11,6 +11,9 @@
 //   GPU, batch, WAV-writing, timer and file-name helpers are left out;
 // - text is indexed by UTF-16 code unit throughout, and characters the model has no index for
 //   are left out instead of being passed to the model as -1;
+// - a sentence longer than a chunk is split at the last word boundary that fits, or inside a word
+//   that is longer than a chunk, so no single inference reads more than a chunk of text and the
+//   memory one inference takes stays bounded;
 // - the samples of a synthesis are cut to the duration the model predicts, as the example
 //   program of the repository does before writing its WAV file;
 // - the sessions use as many threads as the CPUs the process may use, which on Cloud Run is the
@@ -157,27 +160,67 @@ export function preprocessText(input: string, lang: string): string {
 const SENTENCE_BOUNDARY =
   /(?<!Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.|Sr\.|Jr\.|Ph\.D\.|etc\.|e\.g\.|i\.e\.|vs\.|Inc\.|Ltd\.|Co\.|Corp\.|St\.|Ave\.|Blvd\.)(?<!\b[A-Z]\.)(?<=[.!?])\s+/;
 
-/** Packs a paragraph's sentences into chunks of at most maxLen characters where they fit. */
+const WHITESPACE = /\s/;
+
+function isHighSurrogate(code: number) {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+/**
+ * Where to cut text longer than maxLen so the head keeps at most maxLen characters: at the last
+ * whitespace that leaves the head within the limit, or, when the head holds no whitespace, at
+ * maxLen itself, moved back one code unit so a surrogate pair is not cut in two.
+ */
+function cutPosition(text: string, maxLen: number): number {
+  for (let index = maxLen; index > 0; index -= 1) {
+    if (WHITESPACE.test(text[index])) {
+      return index;
+    }
+  }
+  return maxLen > 1 && isHighSurrogate(text.charCodeAt(maxLen - 1)) ? maxLen - 1 : maxLen;
+}
+
+/** A sentence as pieces of at most maxLen characters, cut at word boundaries where it can be. */
+function splitLongSentence(sentence: string, maxLen: number): string[] {
+  const pieces: string[] = [];
+  let rest = sentence.trim();
+  while (rest.length > maxLen) {
+    const cut = cutPosition(rest, maxLen);
+    pieces.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest !== '') {
+    pieces.push(rest);
+  }
+  return pieces;
+}
+
+/**
+ * Packs a paragraph's sentences into chunks of at most maxLen characters: whole sentences
+ * together where they fit, and a sentence longer than maxLen in pieces of its own words.
+ */
 function packSentences(sentences: readonly string[], maxLen: number): string[] {
   const chunks: string[] = [];
   let current = '';
-  for (const sentence of sentences) {
-    if (current.length + sentence.length + 1 <= maxLen) {
-      current += (current ? ' ' : '') + sentence;
+  for (const piece of sentences.flatMap((sentence) => splitLongSentence(sentence, maxLen))) {
+    const joined = current === '' ? piece : `${current} ${piece}`;
+    if (joined.length <= maxLen) {
+      current = joined;
       continue;
     }
-    if (current) {
-      chunks.push(current.trim());
-    }
-    current = sentence;
+    chunks.push(current);
+    current = piece;
   }
-  if (current) {
-    chunks.push(current.trim());
+  if (current !== '') {
+    chunks.push(current);
   }
   return chunks;
 }
 
-/** Splits text into chunks of at most maxLen characters at paragraph and sentence boundaries. */
+/**
+ * Splits text into chunks of at most maxLen characters at paragraph and sentence boundaries, and
+ * inside a sentence longer than maxLen.
+ */
 export function chunkText(text: string, maxLen = 300): string[] {
   return text
     .trim()
@@ -185,6 +228,36 @@ export function chunkText(text: string, maxLen = 300): string[] {
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph !== '')
     .flatMap((paragraph) => packSentences(paragraph.split(SENTENCE_BOUNDARY), maxLen));
+}
+
+/** Seconds of silence between two chunks of one synthesis. */
+const CHUNK_GAP_SECONDS = 0.3;
+
+/**
+ * Synthesizes text of any length chunk by chunk with `infer`, with silence between the chunks,
+ * as one run of samples: the caller sees one synthesis however many chunks the text took.
+ */
+export async function synthesizeInChunks(
+  text: string,
+  maxLen: number,
+  sampleRate: number,
+  infer: (chunk: string) => Promise<Float32Array>,
+): Promise<Float32Array> {
+  const silence = Math.floor(CHUNK_GAP_SECONDS * sampleRate);
+  const pieces: Float32Array[] = [];
+  for (const chunk of chunkText(text, maxLen)) {
+    if (pieces.length > 0) {
+      pieces.push(new Float32Array(silence));
+    }
+    pieces.push(await infer(chunk));
+  }
+  const joined = new Float32Array(pieces.reduce((sum, piece) => sum + piece.length, 0));
+  let offset = 0;
+  for (const piece of pieces) {
+    joined.set(piece, offset);
+    offset += piece.length;
+  }
+  return joined;
 }
 
 /** Model ids of the text's UTF-16 code units; units without an id are left out. */
@@ -325,23 +398,11 @@ class TextToSpeech {
     return samples.slice(0, Math.min(samples.length, Math.floor(this.sampleRate * seconds)));
   }
 
-  /** Synthesizes text of any length chunk by chunk, with 0.3 s of silence between chunks. */
-  async call(text: string): Promise<Float32Array> {
-    const silence = Math.floor(0.3 * this.sampleRate);
-    const pieces: Float32Array[] = [];
-    for (const chunk of chunkText(text, this.maxChunkLength())) {
-      if (pieces.length > 0) {
-        pieces.push(new Float32Array(silence));
-      }
-      pieces.push(await this.infer(chunk));
-    }
-    const joined = new Float32Array(pieces.reduce((sum, piece) => sum + piece.length, 0));
-    let offset = 0;
-    for (const piece of pieces) {
-      joined.set(piece, offset);
-      offset += piece.length;
-    }
-    return joined;
+  /** Synthesizes text of any length as one run of samples. */
+  call(text: string): Promise<Float32Array> {
+    return synthesizeInChunks(text, this.maxChunkLength(), this.sampleRate, (chunk) =>
+      this.infer(chunk),
+    );
   }
 }
 
