@@ -7,14 +7,20 @@
 // Word sorts by the lemma key; a mode's Round by its round; a mode's Next by the due time, with
 // new and completed words, which have none, last in either direction. Equal values go by the lemma
 // key, then the ID, in the same direction, which keeps the order total, and batches continue after
-// a keyset cursor of those values. Due times go into the cursor as text with microseconds, as
-// PostgreSQL holds them, so a cursor never skips rows that differ below a millisecond.
+// a keyset cursor of those values.
 import { and, count, eq, inArray, not, or, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
-import { decodeCursor, PAGE_SIZE, takePage, type CursorValue } from '../../../lib/api/cursor.ts';
-import { ApiError } from '../../../lib/api/errors.ts';
+import {
+  decodeCursor,
+  invalidCursor,
+  microsecondTime,
+  PAGE_SIZE,
+  takePage,
+  type CursorValue,
+} from '../../../lib/api/cursor.ts';
 import type { Executor } from '../../../lib/db/client.ts';
+import { isoOrNull, microsecondText } from '../../../lib/db/columns.ts';
 import { canonicalJson, sha256Hex } from '../../../lib/digest.ts';
 import type { PartOfSpeech } from '../../lookup/index.ts';
 import {
@@ -29,7 +35,6 @@ import {
   sortKeyOf,
   type VocabularyQuery,
 } from '../domain/vocabulary-query.ts';
-import { isoOrNull } from './card-store.ts';
 import { reviewProgress, vocabularyCards, vocabularyExamples } from './schema.ts';
 
 export type CardListItem = {
@@ -120,11 +125,6 @@ type LeadingSort = {
   bound: (value: string | number) => SQL;
 };
 
-const microsecondTime = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/)
-  .refine((text) => !Number.isNaN(Date.parse(text)));
-
 /** The leading value of the query's sort; the word sort has none, only the lemma key. */
 function leadingSort(query: VocabularyQuery): LeadingSort | null {
   const sortKey = sortKeyOf(query.sort);
@@ -143,7 +143,7 @@ function leadingSort(query: VocabularyQuery): LeadingSort | null {
   }
   return {
     value: sql`${row.dueAt}`,
-    key: sql`to_char(${row.dueAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    key: microsecondText(row.dueAt),
     nullable: true,
     cursorValue: microsecondTime,
     bound: (value) => sql`${value}::timestamptz`,
@@ -174,10 +174,6 @@ function cursorScope(query: VocabularyQuery): string {
 
 const cursorId = z.uuid();
 const cursorLemmaKey = z.string().max(1000);
-
-function invalidCursor(): never {
-  throw new ApiError('INVALID_INPUT', 'The cursor is not valid for this list.');
-}
 
 function checked<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -231,32 +227,34 @@ export async function listCards(
   const filters = filtersOf(ownerId, query);
   const where = cursor === undefined ? filters : [...filters, afterCursor(query, cursor)];
   const lead = leadingSort(query);
-  const rows = await executor
-    .select({
-      id: vocabularyCards.id,
-      lemma: vocabularyCards.lemma,
-      lemmaKey: vocabularyCards.lemmaKey,
-      pos: vocabularyCards.pos,
-      meaningZh: vocabularyCards.meaningZh,
-      speak: progressColumns('speak'),
-      spell: progressColumns('spell'),
-      translate: progressColumns('translate'),
-      sortKey: lead === null ? sql<CursorValue>`null` : sql<CursorValue>`${lead.key}`,
-    })
-    .from(vocabularyCards)
-    .innerJoin(progressRows.speak, joinProgress('speak', ownerId))
-    .innerJoin(progressRows.spell, joinProgress('spell', ownerId))
-    .innerJoin(progressRows.translate, joinProgress('translate', ownerId))
-    .where(and(...where))
-    .orderBy(...orderBy(query))
-    .limit(PAGE_SIZE + 1);
-  const [{ total }] = await executor
-    .select({ total: count() })
-    .from(vocabularyCards)
-    .innerJoin(progressRows.speak, joinProgress('speak', ownerId))
-    .innerJoin(progressRows.spell, joinProgress('spell', ownerId))
-    .innerJoin(progressRows.translate, joinProgress('translate', ownerId))
-    .where(and(...filters));
+  const [rows, [{ total }]] = await Promise.all([
+    executor
+      .select({
+        id: vocabularyCards.id,
+        lemma: vocabularyCards.lemma,
+        lemmaKey: vocabularyCards.lemmaKey,
+        pos: vocabularyCards.pos,
+        meaningZh: vocabularyCards.meaningZh,
+        speak: progressColumns('speak'),
+        spell: progressColumns('spell'),
+        translate: progressColumns('translate'),
+        sortKey: lead === null ? sql<CursorValue>`null` : sql<CursorValue>`${lead.key}`,
+      })
+      .from(vocabularyCards)
+      .innerJoin(progressRows.speak, joinProgress('speak', ownerId))
+      .innerJoin(progressRows.spell, joinProgress('spell', ownerId))
+      .innerJoin(progressRows.translate, joinProgress('translate', ownerId))
+      .where(and(...where))
+      .orderBy(...orderBy(query))
+      .limit(PAGE_SIZE + 1),
+    executor
+      .select({ total: count() })
+      .from(vocabularyCards)
+      .innerJoin(progressRows.speak, joinProgress('speak', ownerId))
+      .innerJoin(progressRows.spell, joinProgress('spell', ownerId))
+      .innerJoin(progressRows.translate, joinProgress('translate', ownerId))
+      .where(and(...filters)),
+  ]);
   const page = takePage(rows, cursorScope(query), (row) => [row.sortKey, row.lemmaKey, row.id]);
   return {
     items: page.items.map((row) => ({

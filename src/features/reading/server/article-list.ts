@@ -5,15 +5,19 @@
 // into those places in SQL. Last visited is the member's own visit; articles never visited come
 // last in either direction. Equal values are ordered by ID in the same direction, which keeps the
 // order total, and batches continue after a keyset cursor of the sort value and the ID.
-//
-// Times go into the cursor as text with microseconds, as PostgreSQL holds them: a JavaScript Date
-// keeps only milliseconds, and a cursor rounded to them would skip rows that differ below that.
 import { and, count, eq, inArray, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import { decodeCursor, PAGE_SIZE, takePage, type CursorValue } from '../../../lib/api/cursor.ts';
-import { ApiError } from '../../../lib/api/errors.ts';
+import {
+  decodeCursor,
+  invalidCursor,
+  microsecondTime,
+  PAGE_SIZE,
+  takePage,
+  type CursorValue,
+} from '../../../lib/api/cursor.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
 import type { Executor } from '../../../lib/db/client.ts';
+import { isoOrNull, microsecondText } from '../../../lib/db/columns.ts';
 import { canonicalJson, sha256Hex } from '../../../lib/digest.ts';
 import { articles, articleSentences, visits } from '../../articles/index.ts';
 import { rankByName, type ArticleQuery, type ArticleSort } from '../domain/article-query.ts';
@@ -45,15 +49,10 @@ type SortSpec = {
   cursorValue: z.ZodType<string | number>;
 };
 
-const microsecondTime = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/)
-  .refine((text) => !Number.isNaN(Date.parse(text)));
-
 function timeSort(column: AnyColumn): SortSpec {
   return {
     value: sql`${column}`,
-    key: sql`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    key: microsecondText(column),
     bound: (value) => sql`${value}::timestamptz`,
     cursorValue: microsecondTime,
   };
@@ -121,10 +120,6 @@ function cursorScope(query: ArticleQuery): string {
 
 const cursorId = z.uuid();
 
-function invalidCursor(): never {
-  throw new ApiError('INVALID_INPUT', 'The cursor is not valid for this list.');
-}
-
 /** Rows after the cursor's sort value and ID, in the query's order. */
 function afterCursor(query: ArticleQuery, cursor: string): SQL {
   const [rawValue, rawId] = decodeCursor(cursorScope(query), cursor, 2);
@@ -156,10 +151,6 @@ function memberVisit(ownerId: string) {
   return and(eq(visits.articleId, articles.id), eq(visits.ownerId, ownerId));
 }
 
-function isoOrNull(value: Date | null): string | null {
-  return value === null ? null : value.toISOString();
-}
-
 /** One batch of the list for the member, the cursor of the next batch and the total count. */
 export async function listArticles(
   executor: Executor,
@@ -169,30 +160,32 @@ export async function listArticles(
 ): Promise<ArticleListBatch> {
   const filters = filtersOf(query);
   const where = cursor === undefined ? filters : [...filters, afterCursor(query, cursor)];
-  const rows = await executor
-    .select({
-      id: articles.id,
-      title: articles.title,
-      excerpt: articleSentences.text,
-      feedKey: articles.feedKey,
-      categoryKey: articles.categoryKey,
-      collectedAt: articles.collectedAt,
-      lastVisitedAt: visits.lastOpenedAt,
-      sortKey: sql<CursorValue>`${sorts[query.sort].key}`,
-    })
-    .from(articles)
-    .leftJoin(visits, memberVisit(ownerId))
-    .leftJoin(
-      articleSentences,
-      and(eq(articleSentences.articleId, articles.id), eq(articleSentences.sentenceIndex, 0)),
-    )
-    .where(and(...where))
-    .orderBy(...orderOf(query))
-    .limit(PAGE_SIZE + 1);
-  const [{ total }] = await executor
-    .select({ total: count() })
-    .from(articles)
-    .where(and(...filters));
+  const [rows, [{ total }]] = await Promise.all([
+    executor
+      .select({
+        id: articles.id,
+        title: articles.title,
+        excerpt: articleSentences.text,
+        feedKey: articles.feedKey,
+        categoryKey: articles.categoryKey,
+        collectedAt: articles.collectedAt,
+        lastVisitedAt: visits.lastOpenedAt,
+        sortKey: sql<CursorValue>`${sorts[query.sort].key}`,
+      })
+      .from(articles)
+      .leftJoin(visits, memberVisit(ownerId))
+      .leftJoin(
+        articleSentences,
+        and(eq(articleSentences.articleId, articles.id), eq(articleSentences.sentenceIndex, 0)),
+      )
+      .where(and(...where))
+      .orderBy(...orderOf(query))
+      .limit(PAGE_SIZE + 1),
+    executor
+      .select({ total: count() })
+      .from(articles)
+      .where(and(...filters)),
+  ]);
   const page = takePage(rows, cursorScope(query), (row) => [row.sortKey, row.id]);
   return {
     items: page.items.map((row) => ({

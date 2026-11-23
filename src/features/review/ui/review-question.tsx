@@ -12,8 +12,8 @@
 // Return on the keyboard submits as the Submit button does.
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
+import { CHANGED_ELSEWHERE } from '../../../lib/ui/messages.ts';
 import {
-  COMPLETE_ROUND,
   RETRY_WAIT_MINUTES,
   waitToReach,
   type ReviewableMode,
@@ -26,7 +26,6 @@ import { SpellPrompt } from './spell-prompt.tsx';
 import { TranslatePrompt } from './translate-prompt.tsx';
 
 export const NOT_SAVED = 'Not saved. Reconnect to check the result.';
-export const CHANGED = 'This word changed on another device.';
 
 /** A wait as the result row says it: `4 days`, `1 day`, `10 mins`. */
 export function waitText(wait: Wait): string {
@@ -42,20 +41,18 @@ export function resultRow(outcome: Outcome): Row {
     return { tone: 'error', text: NOT_SAVED };
   }
   if (outcome.kind === 'changed') {
-    return { tone: 'warn', text: CHANGED };
+    return { tone: 'warn', text: CHANGED_ELSEWHERE };
   }
   const { result } = outcome;
   if (result.result === 'incorrect') {
     const wait = waitText({ unit: 'minute', amount: RETRY_WAIT_MINUTES });
     return { tone: 'plain', text: `${result.answer} · Try again in ${wait}` };
   }
+  // No wait means the round reached completes the mode.
   const wait = waitToReach(result.round);
   return {
     tone: 'plain',
-    text:
-      result.round >= COMPLETE_ROUND || !wait
-        ? 'Correct · Complete'
-        : `Correct · Next review in ${waitText(wait)}`,
+    text: wait ? `Correct · Next review in ${waitText(wait)}` : 'Correct · Complete',
   };
 }
 

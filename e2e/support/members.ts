@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { revokedMemberDataStatements } from '../../scripts/lib/members.ts';
 import { sharedConfig } from '../../src/lib/config/shared-config.ts';
 
 // The member list of the throwaway database the application under test uses: `task test-e2e`
@@ -23,18 +24,16 @@ export async function withDatabase<T>(work: (sql: postgres.Sql) => Promise<T>): 
 }
 
 /**
- * Removes the member row of an address with what refers to it: review progress, vocabulary cards
- * (with their examples and Translate options), visits, lookups (with their examples), operation
- * receipts, and the owner of usage records, which are kept.
+ * Removes the member row of an address with what refers to it, through the same statements that
+ * revoking a member runs: every table of the member's personal data is cleared first.
  */
 async function removeMember(sql: postgres.Sql, email: string) {
-  const owner = sql`(SELECT id FROM members WHERE email = ${email})`;
-  await sql`DELETE FROM review_progress WHERE owner_id IN ${owner}`;
-  await sql`DELETE FROM vocabulary_cards WHERE owner_id IN ${owner}`;
-  await sql`DELETE FROM visits WHERE owner_id IN ${owner}`;
-  await sql`DELETE FROM lookup_entries WHERE owner_id IN ${owner}`;
-  await sql`DELETE FROM operation_receipts WHERE owner_id IN ${owner}`;
-  await sql`UPDATE usage_records SET owner_id = NULL WHERE owner_id IN ${owner}`;
+  const [member] = await sql<{ id: string }[]>`SELECT id FROM members WHERE email = ${email}`;
+  if (member) {
+    for (const { text, params } of revokedMemberDataStatements(member.id)) {
+      await sql.unsafe(text, [...params]);
+    }
+  }
   await sql`DELETE FROM members WHERE email = ${email}`;
 }
 

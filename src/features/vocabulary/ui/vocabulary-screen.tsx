@@ -9,12 +9,18 @@
 // filters kept.
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { offersRetry } from '../../../lib/api/client.ts';
+import {
+  footerStateOf,
+  listTotal,
+  loadedItems,
+  useLoadMore,
+} from '../../../lib/ui/batched-list.ts';
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
-import { ListFooter, type ListFooterState } from '../../../lib/ui/list-footer.tsx';
+import { ListFooter } from '../../../lib/ui/list-footer.tsx';
 import { RetryStatus } from '../../../lib/ui/retry-status.tsx';
 import { showToast } from '../../../lib/ui/toast.tsx';
 import { changedSelection } from '../domain/save-decision.ts';
@@ -22,61 +28,18 @@ import { isNarrowed, type VocabularyQuery } from '../domain/vocabulary-query.ts'
 import { useDeletion } from './card-deletion.tsx';
 import { useNavigationReset, useShowing } from './list-visit.ts';
 import { cardPath, cardTitleSelector } from './paths.ts';
-import {
-  loadedCards,
-  useVocabularyList,
-  vocabularyListKey,
-  type CardListItem,
-} from './vocabulary-api.ts';
+import { useVocabularyList, vocabularyListKey, type CardListItem } from './vocabulary-api.ts';
 import { ModeButtons, QueryControls, SelectionBar } from './vocabulary-controls.tsx';
 import { rememberScroll, setSelection, startOver, useVocabularyStore } from './vocabulary-store.ts';
 import { WordCard } from './word-card.tsx';
 
 const LOAD_FAILED = "Couldn't load words.";
 const LOAD_MORE_FAILED = "Couldn't load more words.";
-const MORE_LOADED = 'More records loaded.';
 const TOO_MANY = 'Select up to 100 words at a time.';
 
 type VocabularyList = ReturnType<typeof useVocabularyList>;
 
-function footerState(list: VocabularyList, retry: () => void): ListFooterState {
-  if (list.isFetchingNextPage) {
-    return { kind: 'loading' };
-  }
-  if (list.isFetchNextPageError) {
-    return {
-      kind: 'failed',
-      message: LOAD_MORE_FAILED,
-      onRetry: offersRetry(list.error) ? retry : undefined,
-    };
-  }
-  return list.hasNextPage ? { kind: 'more' } : { kind: 'done' };
-}
-
-/** Loading the next batch: a notice once it is in, and after Load more the focus on its first card. */
-function useLoadMore(list: VocabularyList, count: number) {
-  const focusTarget = useRef<string | null>(null);
-  useEffect(() => {
-    const target = focusTarget.current;
-    const title = target ? document.querySelector<HTMLElement>(cardTitleSelector(target)) : null;
-    if (title) {
-      focusTarget.current = null;
-      title.focus();
-    }
-  });
-  return (manual: boolean) => {
-    void list.fetchNextPage().then((result) => {
-      if (result.isFetchNextPageError) {
-        return;
-      }
-      showToast(MORE_LOADED);
-      const first = loadedCards(result.data)[count];
-      if (manual && first) {
-        focusTarget.current = first.id;
-      }
-    });
-  };
-}
+const cardTitle = (id: string) => document.querySelector<HTMLElement>(cardTitleSelector(id));
 
 type CardListProps = {
   query: VocabularyQuery;
@@ -94,7 +57,7 @@ type CardListProps = {
 function CardList(props: CardListProps) {
   const { query, list, items, selecting, selected, swiped, onSwipe, onSelect, onDelete } = props;
   const router = useRouter();
-  const loadMore = useLoadMore(list, items.length);
+  const loadMore = useLoadMore(list, items.length, cardTitle);
 
   if (list.isError && !list.data) {
     return (
@@ -153,7 +116,7 @@ function CardList(props: CardListProps) {
         />
       ))}
       <ListFooter
-        state={footerState(list, () => loadMore(true))}
+        state={footerStateOf(list, LOAD_MORE_FAILED, () => loadMore(true))}
         onLoadMore={loadMore}
         autoLoad={!selecting}
       />
@@ -171,8 +134,8 @@ export function VocabularyScreen() {
     })),
   );
   const list = useVocabularyList(query);
-  const items = loadedCards(list.data);
-  const total = list.isError && !list.data ? undefined : list.data?.pages[0]?.meta.totalCount;
+  const items = loadedItems(list.data);
+  const total = listTotal(list);
   const [swiped, setSwiped] = useState<string | null>(null);
   const deletion = useDeletion({ query, items, onDeleted: () => setSwiped(null) });
 

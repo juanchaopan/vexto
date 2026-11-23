@@ -2,6 +2,10 @@
 // sort values and ID of the last item sent, so the next batch starts right after it. To the
 // client a cursor is an opaque base64url string. It also carries the list's scope, such as the
 // sort and direction it was made for, so a cursor from one query is refused by another.
+//
+// Times go into a cursor as text with microseconds, as PostgreSQL holds them: a JavaScript Date
+// keeps only milliseconds, and a cursor rounded to them would skip rows that differ below that.
+import { z } from 'zod';
 import { ApiError } from './errors.ts';
 
 /** Every list sends this many items per batch; the client cannot change it. */
@@ -11,6 +15,17 @@ export const PAGE_SIZE = 20;
 export type CursorValue = string | number | boolean | null;
 
 type CursorPayload = { s: string; k: CursorValue[] };
+
+/** A time as a cursor holds it: UTC ISO 8601 with six fractional digits. */
+export const microsecondTime = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/)
+  .refine((text) => !Number.isNaN(Date.parse(text)));
+
+/** The INVALID_INPUT of a cursor that is not one of this list, or whose keys are not valid. */
+export function invalidCursor(): never {
+  throw new ApiError('INVALID_INPUT', 'The cursor is not valid for this list.');
+}
 
 function isCursorValue(value: unknown): value is CursorValue {
   return (
@@ -54,7 +69,7 @@ export function decodeCursor(scope: string, cursor: string, keyCount: number): C
   ) {
     return (payload as CursorPayload).k;
   }
-  throw new ApiError('INVALID_INPUT', 'The cursor is not valid for this list.');
+  return invalidCursor();
 }
 
 export type Page<T> = { items: T[]; nextCursor: string | null };

@@ -9,14 +9,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { buttonClassName } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
+import type { ModeCounts } from '../../../lib/ui/review-counts.ts';
 import { AccountMenu, type AccountMenuProps } from './account-menu.tsx';
 import { Brand } from './brand.tsx';
 
-export type ReviewCounts = { due: number; new: number };
-
 export type TopBarProps = AccountMenuProps & {
-  /** The review counts on the Vocabulary button, once they are known. */
-  counts?: ReviewCounts;
+  /** The review counts on the Vocabulary button, every mode added together, once known. */
+  counts?: ModeCounts;
 };
 
 export const ARTICLES_PATH = '/';
@@ -30,7 +29,7 @@ function inVocabularyGroup(pathname: string) {
 
 const navClass = `${buttonClassName('default', 'icon')} rounded-[5px] border-line bg-none bg-surface aria-[current=page]:border-[color-mix(in_srgb,var(--color-accent),var(--color-line)_50%)] aria-[current=page]:bg-soft aria-[current=page]:text-accent`;
 
-function Badges({ counts }: { counts: ReviewCounts }) {
+function Badges({ counts }: { counts: ModeCounts }) {
   const dot =
     'grid h-[18px] min-w-[18px] place-items-center rounded-[9px] border-2 border-surface px-[3px] text-[10px] font-semibold';
   return (

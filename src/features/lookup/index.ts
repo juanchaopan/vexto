@@ -27,8 +27,12 @@ export { exampleTask } from './server/explanation-tasks.ts';
 export { lookupExample, type CardSources, type ExampleText } from './server/lookup-context.ts';
 export { lookupRequest, refreshExampleRequest, refreshPath } from './server/lookup-request.ts';
 export {
+  DATA_RULE,
   modelServices,
   runModelTask,
+  SHAPE_PROBLEM,
+  strictObject,
+  verdict,
   type JsonSchema,
   type ModelServices,
   type ModelTask,

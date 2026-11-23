@@ -12,10 +12,8 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
-import { apiRequest, dataBody } from '../../../lib/api/client.ts';
+import { apiRequest, dataBody, isoTime, listBody } from '../../../lib/api/client.ts';
 import type { ArticleQuery } from '../domain/article-query.ts';
-
-const time = z.iso.datetime({ offset: true });
 
 const listItemSchema = z.object({
   id: z.string(),
@@ -23,18 +21,15 @@ const listItemSchema = z.object({
   excerpt: z.string(),
   feedKey: z.string(),
   categoryKey: z.string(),
-  collectedAt: time,
-  lastVisitedAt: time.nullable(),
+  collectedAt: isoTime,
+  lastVisitedAt: isoTime.nullable(),
 });
 
 export type ArticleListItem = z.infer<typeof listItemSchema>;
 
-const listBatchSchema = z.object({
-  data: z.array(listItemSchema),
-  meta: z.object({ nextCursor: z.string().nullable(), totalCount: z.number().int() }),
-});
+const listBatchSchema = listBody(listItemSchema);
 
-export type ArticleListBatch = z.infer<typeof listBatchSchema>;
+type ArticleListBatch = z.infer<typeof listBatchSchema>;
 
 const articleSchema = z.object({
   id: z.string(),
@@ -43,7 +38,7 @@ const articleSchema = z.object({
   categoryKey: z.string(),
   author: z.string().nullable(),
   sourceUrl: z.string(),
-  collectedAt: time,
+  collectedAt: isoTime,
   durationMs: z.number().int(),
   sentences: z.array(
     z.object({
@@ -60,7 +55,7 @@ export type ReaderArticle = z.infer<typeof articleSchema>;
 
 const playbackSchema = z.object({
   url: z.string(),
-  expiresAt: time,
+  expiresAt: isoTime,
   durationMs: z.number().int(),
 });
 
@@ -69,10 +64,10 @@ export type PlaybackAddress = z.infer<typeof playbackSchema>;
 const listRoot = ['articles', 'list'] as const;
 
 export const articleListKey = (query: ArticleQuery) => [...listRoot, query] as const;
-export const articleKey = (id: string) => ['articles', 'detail', id] as const;
+const articleKey = (id: string) => ['articles', 'detail', id] as const;
 
 /** The query string of a query: only what differs from no search and no filter is sent. */
-export function articleParams(query: ArticleQuery, cursor?: string | null): URLSearchParams {
+function articleParams(query: ArticleQuery, cursor?: string | null): URLSearchParams {
   const params = new URLSearchParams();
   if (query.q !== '') {
     params.set('q', query.q);
@@ -98,19 +93,6 @@ export function useArticleList(query: ArticleQuery) {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-}
-
-/** The articles of the loaded batches, each once even when a later batch repeats one. */
-export function loadedArticles(data: InfiniteData<ArticleListBatch> | undefined) {
-  const seen = new Set<string>();
-  const items: ArticleListItem[] = [];
-  for (const item of data?.pages.flatMap((batch) => batch.data) ?? []) {
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      items.push(item);
-    }
-  }
-  return items;
 }
 
 /** Every article ID of the query, in the list's order, read fresh for a continuous play. */
@@ -158,7 +140,7 @@ export function fetchArticle(queryClient: QueryClient, id: string) {
 export async function recordVisit(queryClient: QueryClient, id: string) {
   const { data } = await apiRequest(
     `/api/articles/${encodeURIComponent(id)}/visit`,
-    dataBody(z.object({ lastVisitedAt: time })),
+    dataBody(z.object({ lastVisitedAt: isoTime })),
     { method: 'PUT' },
   );
   queryClient.setQueriesData<InfiniteData<ArticleListBatch>>({ queryKey: listRoot }, (lists) =>

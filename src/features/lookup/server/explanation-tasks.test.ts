@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exampleTask, explanationTask } from './explanation-tasks.ts';
+import { exampleTask, explanationTask, type ExampleRequest } from './explanation-tasks.ts';
 
 const context = 'Engineers want equipment that is resilient enough to keep working.';
 const start = context.indexOf('resilient');
@@ -76,23 +76,30 @@ describe('explanationTask', () => {
 });
 
 describe('exampleTask', () => {
-  const refresh = exampleTask({
+  const request: ExampleRequest = {
     ownerId: 'owner',
-    lookupId: 'lookup',
+    resource: { type: 'lookup', id: 'lookup' },
     lemma: 'resilient',
     pos: 'adjective',
     meaningZh: '有韧性的',
     acceptedForms: ['resilient'],
     context,
     existingExamples: answer.examples,
-  });
+  };
+  const refresh = exampleTask(request);
 
-  it('records the usage against the lookup', () => {
+  it('records the usage against the lookup or the card it writes for', () => {
     expect(refresh.usage).toEqual({
       kind: 'example',
       ownerId: 'owner',
       resourceType: 'lookup',
       resourceId: 'lookup',
+    });
+    expect(exampleTask({ ...request, resource: { type: 'card', id: 'card' } }).usage).toEqual({
+      kind: 'example',
+      ownerId: 'owner',
+      resourceType: 'card',
+      resourceId: 'card',
     });
     expect(JSON.parse(refresh.input)).toMatchObject({ existingExamples: answer.examples });
   });

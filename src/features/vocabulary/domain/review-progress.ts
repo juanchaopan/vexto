@@ -20,6 +20,11 @@ export function newProgress(): ModeProgress {
   return { round: 0, dueAt: null };
 }
 
+/** A new card's progress: every mode at round 0, not due. */
+export function newCardProgress(): CardProgress {
+  return { speak: newProgress(), spell: newProgress(), translate: newProgress() };
+}
+
 /**
  * What a card shows for a mode (.docs/design/interfaces.md, 词卡列表): the round of the next
  * answer, `Round <round + 1>`, or `Complete` once the final round is reached.

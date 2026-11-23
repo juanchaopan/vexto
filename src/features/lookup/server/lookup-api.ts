@@ -56,7 +56,7 @@ export type RequestMember = { requestId: string; ownerId: string };
 const invalid = (message: string) => new ApiError('INVALID_INPUT', message);
 
 /** The selection grown to whole words and checked against the context and the limits. */
-export function checkedSelection(context: LookupContextText, selection: TextRange): TextRange {
+function checkedSelection(context: LookupContextText, selection: TextRange): TextRange {
   if (!isRangeOf(context.text, selection)) {
     throw invalid('The selection is not a range of the context.');
   }
@@ -170,7 +170,7 @@ export async function refreshExampleResult(
     model(),
     exampleTask({
       ownerId,
-      lookupId: target.lookupId,
+      resource: { type: 'lookup', id: target.lookupId },
       lemma: source.lemma,
       pos: source.pos,
       meaningZh: source.meaningZh,

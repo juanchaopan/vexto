@@ -4,10 +4,8 @@
 // a mode and submitting an answer. Each submit carries the operationId of the person's action:
 // Retry sends the same one with the same answer again, a changed answer is a new operation.
 import { z } from 'zod';
-import { apiRequest, dataBody } from '../../../lib/api/client.ts';
+import { apiRequest, dataBody, isoTime } from '../../../lib/api/client.ts';
 import type { ReviewableMode } from '../domain/schedule.ts';
-
-const time = z.iso.datetime({ offset: true });
 
 const segmentSchema = z.union([
   z.object({ start: z.number().int(), text: z.string() }),
@@ -40,7 +38,7 @@ export type TranslateQuestion = z.infer<typeof translateSchema>;
 export type Question = z.infer<typeof questionSchema>;
 export type TranslateOption = z.infer<typeof optionSchema>;
 
-const nextSchema = z.object({ question: questionSchema.nullable(), nextDueAt: time.nullable() });
+const nextSchema = z.object({ question: questionSchema.nullable(), nextDueAt: isoTime.nullable() });
 
 export type NextQuestion = z.infer<typeof nextSchema>;
 
@@ -48,7 +46,7 @@ const resultSchema = z.object({
   result: z.enum(['correct', 'incorrect']),
   answer: z.string(),
   round: z.number().int(),
-  dueAt: time.nullable(),
+  dueAt: isoTime.nullable(),
 });
 
 export type SubmitResult = z.infer<typeof resultSchema>;

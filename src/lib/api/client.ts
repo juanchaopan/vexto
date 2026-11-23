@@ -43,6 +43,15 @@ export function offersRetry(error: unknown): boolean {
   return hasErrorCode(error, 'INTERNAL', 'UNAVAILABLE', 'NO_RESPONSE');
 }
 
+/**
+ * Whether the failure is about the person's access: signed out, no longer a member or the terms
+ * not accepted. The account handling answers these for every request, so an operation shows
+ * nothing of its own for them.
+ */
+export function isAccessError(error: unknown): boolean {
+  return hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED');
+}
+
 const errorBodySchema = z.object({
   error: z.object({
     code: z.enum(Object.keys(ERROR_CODES) as [ErrorCode, ...ErrorCode[]]),
@@ -51,9 +60,20 @@ const errorBodySchema = z.object({
   }),
 });
 
+/** A time in the interface: ISO 8601 with its offset. */
+export const isoTime = z.iso.datetime({ offset: true });
+
 /** A success body `{ data }` whose data has the given shape. */
 export function dataBody<T extends z.ZodType>(data: T) {
   return z.object({ data });
+}
+
+/** A batch of a list: the items of the batch, the cursor of the next one and the list's total. */
+export function listBody<T extends z.ZodType>(item: T) {
+  return z.object({
+    data: z.array(item),
+    meta: z.object({ nextCursor: z.string().nullable(), totalCount: z.number().int() }),
+  });
 }
 
 export type ApiRequestInit = {

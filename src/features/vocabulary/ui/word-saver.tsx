@@ -23,6 +23,7 @@ import {
   provideWordSaver,
   type SavableLookup,
 } from '../../../lib/ui/lookup-bridge.ts';
+import { CHANGED_ELSEWHERE } from '../../../lib/ui/messages.ts';
 import { refreshReviewCounts } from '../../../lib/ui/review-counts.ts';
 import { onSignOut } from '../../../lib/ui/sign-out-cleanup.ts';
 import { showToast } from '../../../lib/ui/toast.tsx';
@@ -40,14 +41,12 @@ const SAVED = 'Saved to Vocabulary.';
 const SAVE_FAILED = "Couldn't save the word.";
 const REPLACED = 'Saved word replaced. Review progress is unchanged.';
 const REPLACE_FAILED = "Couldn't replace the word.";
-const CHANGED = 'This word changed on another device.';
 
-/** The replace question: the explanation, the saved card and how to close the question. */
+/** The replace question: the explanation and the saved card it would replace. */
 type ReplaceQuestion = {
   lookup: SavableLookup;
   saved: SavedCard;
   operationId: string;
-  close: () => void;
 };
 
 function vocabularyChanged(queryClient: QueryClient, cardId?: string) {
@@ -86,10 +85,10 @@ function Column({ title, meaningZh, examples, fresh = false }: ColumnProps) {
   );
 }
 
-function ReplaceDialog({ question }: { question: ReplaceQuestion }) {
+function ReplaceDialog({ question, onClose }: { question: ReplaceQuestion; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const { lookup, saved, operationId, close } = question;
+  const { lookup, saved, operationId } = question;
 
   const replace = async () => {
     setBusy(true);
@@ -98,12 +97,12 @@ function ReplaceDialog({ question }: { question: ReplaceQuestion }) {
       vocabularyChanged(queryClient, card.id);
       announceSavedWord(lookup.id, card.id);
       showToast(REPLACED);
-      close();
+      onClose();
     } catch (error) {
       if (hasErrorCode(error, 'NOT_FOUND', 'CONFLICT')) {
         vocabularyChanged(queryClient, saved.id);
-        showToast(CHANGED);
-        close();
+        showToast(CHANGED_ELSEWHERE);
+        onClose();
       } else {
         showToast(REPLACE_FAILED, offersRetry(error) ? { retry: () => void replace() } : {});
       }
@@ -117,7 +116,7 @@ function ReplaceDialog({ question }: { question: ReplaceQuestion }) {
       title="Replace saved word?"
       onCancel={() => {
         if (!busy) {
-          close();
+          onClose();
         }
       }}
       action={<DialogAction label="Replace" busy={busy} onClick={() => void replace()} />}
@@ -140,15 +139,6 @@ export function WordSaverHost() {
   const [question, setQuestion] = useState<ReplaceQuestion | null>(null);
 
   useEffect(() => {
-    const ask = (lookup: SavableLookup, saved: SavedCard) => {
-      setQuestion({
-        lookup,
-        saved,
-        operationId: crypto.randomUUID(),
-        close: () => setQuestion(null),
-      });
-    };
-
     const save = async (lookup: SavableLookup, operationId: string): Promise<string | null> => {
       try {
         const card = await requestSave(lookup.id, operationId);
@@ -161,12 +151,12 @@ export function WordSaverHost() {
           ? savedCardOf(error.details)
           : undefined;
         if (saved) {
-          ask(lookup, saved);
+          setQuestion({ lookup, saved, operationId: crypto.randomUUID() });
           return null;
         }
         if (hasErrorCode(error, 'CONFLICT')) {
           vocabularyChanged(queryClient);
-          showToast(CHANGED);
+          showToast(CHANGED_ELSEWHERE);
           return null;
         }
         const retry = offersRetry(error) ? () => void save(lookup, operationId) : undefined;
@@ -180,5 +170,11 @@ export function WordSaverHost() {
 
   useEffect(() => onSignOut(() => setQuestion(null)), []);
 
-  return question ? <ReplaceDialog key={question.operationId} question={question} /> : null;
+  return question ? (
+    <ReplaceDialog
+      key={question.operationId}
+      question={question}
+      onClose={() => setQuestion(null)}
+    />
+  ) : null;
 }

@@ -18,6 +18,7 @@ import { Button } from '../../../lib/ui/button.tsx';
 import { ExampleCarousel } from '../../../lib/ui/example-carousel.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
 import { useLookupBridge } from '../../../lib/ui/lookup-bridge.ts';
+import { CHANGED_ELSEWHERE, NEW_EXAMPLE_FAILED } from '../../../lib/ui/messages.ts';
 import { useCloseTo } from '../../../lib/ui/navigation-history.tsx';
 import { RetryStatus } from '../../../lib/ui/retry-status.tsx';
 import { useSpeech } from '../../../lib/ui/speech-audio.ts';
@@ -37,8 +38,6 @@ import {
 
 const LOAD_FAILED = "Couldn't load this word.";
 const DELETED = 'This word was deleted.';
-const CHANGED = 'This word changed on another device.';
-const REFRESH_FAILED = "Couldn't get a new example.";
 
 /** Back to Vocabulary, once, after the card turned out to be gone: the list is read again. */
 function useWordDeleted() {
@@ -81,11 +80,11 @@ function useExampleRefresh(card: CardDetail, onDeleted: () => void) {
       if (hasErrorCode(error, 'NOT_FOUND')) {
         onDeleted();
       } else if (hasErrorCode(error, 'CONFLICT')) {
-        showToast(CHANGED);
+        showToast(CHANGED_ELSEWHERE);
         void queryClient.invalidateQueries({ queryKey: cardKey(card.id) });
       } else {
         const retry = offersRetry(error) ? () => void send(exampleId, operationId) : undefined;
-        showToast(REFRESH_FAILED, { retry });
+        showToast(NEW_EXAMPLE_FAILED, { retry });
       }
     } finally {
       setRefreshing(null);

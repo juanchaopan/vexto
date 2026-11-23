@@ -4,9 +4,9 @@
 // input; a path ID that is not a UUID names no card.
 import { z } from 'zod';
 import { ApiError } from '../../../lib/api/errors.ts';
-import { parseInput } from '../../../lib/api/route.ts';
+import { databaseText, parseInput, queryObject } from '../../../lib/api/route.ts';
 import { SELECTION_MAX } from '../domain/save-decision.ts';
-import { REVIEW_MODES, type ReviewMode } from '../domain/review-progress.ts';
+import { REVIEW_MODES } from '../domain/review-progress.ts';
 import {
   DEFAULT_VOCABULARY_QUERY,
   effectiveRounds,
@@ -18,21 +18,14 @@ import {
   type VocabularyQuery,
 } from '../domain/vocabulary-query.ts';
 
-const roundParam = (mode: ReviewMode) => `rounds.${mode}`;
-
-const repeatable = new Set<string>(REVIEW_MODES.map(roundParam));
-
-// PostgreSQL text cannot hold a NUL character, so a search with one is refused here.
-const searchText = z
-  .string()
-  .max(VOCABULARY_SEARCH_MAX_LENGTH)
-  .refine((text) => !text.includes('\u0000'), 'must not contain a NUL character');
+/** The round filters, one repeatable parameter per mode. */
+const roundParams = REVIEW_MODES.map((mode) => `rounds.${mode}`);
 
 const rounds = z.array(z.enum(ROUND_CHOICES));
 
 const listParams = z.strictObject({
   state: z.enum(VOCABULARY_STATES).optional(),
-  q: searchText.optional(),
+  q: databaseText(VOCABULARY_SEARCH_MAX_LENGTH).optional(),
   'rounds.speak': rounds,
   'rounds.spell': rounds,
   'rounds.translate': rounds,
@@ -41,30 +34,12 @@ const listParams = z.strictObject({
   cursor: z.string().max(2000).optional(),
 });
 
-/** The parameters as an object: the round filters as arrays, the others as single strings. */
-function paramObject(params: URLSearchParams): Record<string, unknown> {
-  const object: Record<string, unknown> = Object.fromEntries(
-    REVIEW_MODES.map((mode) => [roundParam(mode), []]),
-  );
-  for (const name of new Set(params.keys())) {
-    const values = params.getAll(name);
-    if (repeatable.has(name)) {
-      object[name] = values;
-    } else if (values.length > 1) {
-      throw new ApiError('INVALID_INPUT', `The parameter ${name} is given more than once.`);
-    } else {
-      object[name] = values[0];
-    }
-  }
-  return object;
-}
-
 /** The query and cursor of a list request. */
 export function vocabularyListRequest(params: URLSearchParams): {
   query: VocabularyQuery;
   cursor: string | undefined;
 } {
-  const fields = parseInput(listParams, paramObject(params));
+  const fields = parseInput(listParams, queryObject(params, roundParams));
   return {
     query: {
       state: fields.state ?? DEFAULT_VOCABULARY_QUERY.state,

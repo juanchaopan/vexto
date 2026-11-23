@@ -7,6 +7,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { ApiError } from '../../../lib/api/errors.ts';
 import type { Executor, Transaction } from '../../../lib/db/client.ts';
+import { isoOrNull } from '../../../lib/db/columns.ts';
 import { members } from '../../../lib/db/schema.ts';
 import { sha256Hex } from '../../../lib/digest.ts';
 import {
@@ -16,7 +17,7 @@ import {
   type TargetRange,
 } from '../../lookup/index.ts';
 import {
-  newProgress,
+  newCardProgress,
   REVIEW_MODES,
   type CardProgress,
   type ModeProgress,
@@ -56,10 +57,6 @@ const exampleView = {
   targetRanges: vocabularyExamples.targetRanges,
 };
 
-export function isoOrNull(value: Date | null): string | null {
-  return value === null ? null : value.toISOString();
-}
-
 /** The examples of a card in position order. */
 export function cardExamples(executor: Executor, cardId: string): Promise<CardExampleView[]> {
   return executor
@@ -89,7 +86,7 @@ export async function progressOf(
     .from(reviewProgress)
     .where(and(eq(reviewProgress.ownerId, ownerId), inArray(reviewProgress.cardId, [...cardIds])));
   for (const id of cardIds) {
-    progress.set(id, { speak: newProgress(), spell: newProgress(), translate: newProgress() });
+    progress.set(id, newCardProgress());
   }
   for (const row of rows) {
     const mode: ModeProgress = { round: row.round, dueAt: isoOrNull(row.dueAt) };
@@ -150,19 +147,18 @@ export async function readCard(
   if (!head) {
     return undefined;
   }
-  const progress = await progressOf(executor, ownerId, [cardId]);
+  const [progress, cardExampleViews] = await Promise.all([
+    progressOf(executor, ownerId, [cardId]),
+    cardExamples(executor, cardId),
+  ]);
   return {
     id: head.id,
     lemma: head.lemma,
     pos: head.pos,
     meaningZh: head.meaningZh,
-    progress: progress.get(cardId) ?? {
-      speak: newProgress(),
-      spell: newProgress(),
-      translate: newProgress(),
-    },
+    progress: progress.get(cardId) ?? newCardProgress(),
     updatedAt: head.updatedAt,
-    examples: await cardExamples(executor, cardId),
+    examples: cardExampleViews,
   };
 }
 
@@ -247,30 +243,44 @@ export async function sameWordCards(
   return rows.map((row) => ({ id: row.id, updatedAt: row.updatedAt.toISOString() }));
 }
 
-/** The meanings and example texts of the cards, in the order of the IDs. */
+/** The meanings and example texts of the member's cards, in the order of the IDs. */
 export async function cardMeanings(
   executor: Executor,
   ownerId: string,
   cardIds: readonly string[],
 ): Promise<{ meaningZh: string; examples: string[] }[]> {
-  const meanings = [];
-  for (const id of cardIds) {
-    const card = await readCard(executor, ownerId, id);
-    if (card) {
-      meanings.push({ meaningZh: card.meaningZh, examples: card.examples.map((e) => e.text) });
-    }
+  if (cardIds.length === 0) {
+    return [];
   }
-  return meanings;
+  const owned = and(
+    eq(vocabularyCards.ownerId, ownerId),
+    inArray(vocabularyCards.id, [...cardIds]),
+  );
+  const [cards, exampleRows] = await Promise.all([
+    executor
+      .select({ id: vocabularyCards.id, meaningZh: vocabularyCards.meaningZh })
+      .from(vocabularyCards)
+      .where(owned),
+    executor
+      .select({ cardId: vocabularyExamples.cardId, text: vocabularyExamples.text })
+      .from(vocabularyExamples)
+      .innerJoin(vocabularyCards, eq(vocabularyCards.id, vocabularyExamples.cardId))
+      .where(owned)
+      .orderBy(asc(vocabularyExamples.position)),
+  ]);
+  const texts = new Map<string, string[]>();
+  for (const row of exampleRows) {
+    texts.set(row.cardId, [...(texts.get(row.cardId) ?? []), row.text]);
+  }
+  const meanings = new Map(cards.map((card) => [card.id, card.meaningZh]));
+  return cardIds.flatMap((id) => {
+    const meaningZh = meanings.get(id);
+    return meaningZh === undefined ? [] : [{ meaningZh, examples: texts.get(id) ?? [] }];
+  });
 }
 
-function exampleRows(cardId: string, source: CardSource) {
-  return source.examples.map((example) => ({
-    cardId,
-    position: example.position,
-    text: example.text,
-    targetRanges: example.targetRanges,
-    contentHash: example.contentHash,
-  }));
+function exampleRowsOf(cardId: string, source: CardSource) {
+  return source.examples.map((example) => ({ cardId, ...example }));
 }
 
 function meaningOf(source: CardSource) {
@@ -298,7 +308,7 @@ export async function insertCard(
     .insert(vocabularyCards)
     .values({ ownerId, ...meaningOf(source), updatedAt: sql`date_trunc('milliseconds', now())` })
     .returning({ id: vocabularyCards.id });
-  await tx.insert(vocabularyExamples).values(exampleRows(card.id, source));
+  await tx.insert(vocabularyExamples).values(exampleRowsOf(card.id, source));
   await tx.insert(translationSets).values({ cardId: card.id, ...options });
   await tx
     .insert(reviewProgress)
@@ -323,7 +333,7 @@ export async function replaceCardContent(
     .set({ ...meaningOf(source), updatedAt: nextUpdatedAt })
     .where(eq(vocabularyCards.id, cardId));
   await tx.delete(vocabularyExamples).where(eq(vocabularyExamples.cardId, cardId));
-  await tx.insert(vocabularyExamples).values(exampleRows(cardId, source));
+  await tx.insert(vocabularyExamples).values(exampleRowsOf(cardId, source));
   await tx
     .insert(translationSets)
     .values({ cardId, ...options })

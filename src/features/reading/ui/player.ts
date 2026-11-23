@@ -20,7 +20,12 @@
 // When playback fails, the player stops at the current sentence. A play that fails before the
 // article was ever started leaves it as it was, not played and with nothing highlighted.
 import type { QueryClient } from '@tanstack/react-query';
-import { ApiRequestError, hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
+import {
+  ApiRequestError,
+  hasErrorCode,
+  isAccessError,
+  offersRetry,
+} from '../../../lib/api/client.ts';
 import {
   releaseAudioFocus,
   takeAudioFocus,
@@ -34,7 +39,7 @@ import {
   forgetArticle,
   type ReaderArticle,
 } from './article-api.ts';
-import { stoppedPlayer, usePlayerStore, type PlayMode } from './player-store.ts';
+import { isPlaying, stoppedPlayer, usePlayerStore, type PlayMode } from './player-store.ts';
 import { feedName } from './source-mark.tsx';
 
 export const PLAY_FAILED = "Couldn't play this article.";
@@ -170,13 +175,14 @@ function later(work: () => void) {
  */
 export function preparePlayback(): void {
   const target = element();
-  if (prepared || target.src) {
-    prepared = true;
+  if (prepared) {
     return;
   }
   prepared = true;
-  target.play().catch(() => undefined);
-  target.pause();
+  if (!target.src) {
+    target.play().catch(() => undefined);
+    target.pause();
+  }
 }
 
 async function ensureAddress(articleId: string, target: PlayerAudio, queryClient: QueryClient) {
@@ -188,15 +194,12 @@ async function ensureAddress(articleId: string, target: PlayerAudio, queryClient
   target.src = fresh.url;
 }
 
-const handledElsewhere = (error: unknown) =>
-  hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED');
-
 /** The player stops where it is and says the article could not play. */
 function failed(error: unknown, retry: () => void, unplayed = false) {
   halt();
   set(unplayed ? { status: 'idle', started: false } : { status: 'paused' });
   releaseAudioFocus(holder);
-  if (handledElsewhere(error)) {
+  if (isAccessError(error)) {
     return;
   }
   const retryable = offersRetry(error) || !(error instanceof ApiRequestError);
@@ -300,8 +303,7 @@ function onOutsidePause() {
 
 /** Pauses the article, keeping its place. */
 export function pause(): void {
-  const { status } = state();
-  if (status === 'playing' || status === 'loading') {
+  if (isPlaying(state().status)) {
     set({ status: 'paused' });
     halt();
   }
@@ -313,7 +315,7 @@ export function pause(): void {
  */
 export function toggle(): void {
   const { status, mode, selected, started, sentence } = state();
-  if ((status === 'playing' || status === 'loading') && mode === 'article') {
+  if (isPlaying(status) && mode === 'article') {
     pause();
     return;
   }
@@ -361,7 +363,7 @@ export function resume(): void {
 /** True while an article plays or a continuous play is under way. */
 export function isActive(): boolean {
   const { status, queue } = state();
-  return status === 'playing' || status === 'loading' || status === 'blocked' || queue !== null;
+  return isPlaying(status) || status === 'blocked' || queue !== null;
 }
 
 /** Stops playback and clears the queue, as opening an article from the list does. */

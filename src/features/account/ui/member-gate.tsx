@@ -8,7 +8,7 @@
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
+import { hasErrorCode, isAccessError, offersRetry } from '../../../lib/api/client.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
@@ -49,7 +49,7 @@ export function AcceptTermsScreen() {
       onError: (error) => {
         if (hasErrorCode(error, 'CONFLICT')) {
           window.location.reload();
-        } else if (!hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED')) {
+        } else if (!isAccessError(error)) {
           showToast(ACCEPT_FAILED, offersRetry(error) ? { retry: agree } : {});
         }
       },

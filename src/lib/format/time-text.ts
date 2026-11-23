@@ -5,16 +5,29 @@
 
 type ZonedParts = { year: number; month: string; day: number; time: string };
 
+/** One formatter per time zone, the device's own under the empty key: lists format many times. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string | undefined): Intl.DateTimeFormat {
+  const key = timeZone ?? '';
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 function zonedParts(date: Date, timeZone: string | undefined): ZonedParts {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date);
+  const parts = formatterFor(timeZone).formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((item) => item.type === type)?.value ?? '';
   return {

@@ -4,7 +4,7 @@
 // where one is allowed, or a key that is not in the configuration is invalid input.
 import { z } from 'zod';
 import { ApiError } from '../../../lib/api/errors.ts';
-import { parseInput } from '../../../lib/api/route.ts';
+import { databaseText, parseInput, queryObject } from '../../../lib/api/route.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
 import {
   ARTICLE_SEARCH_MAX_LENGTH,
@@ -18,19 +18,13 @@ import {
 const feedKeys = sharedConfig.feeds.map((feed) => feed.key);
 const categoryKeys = sharedConfig.categories.map((category) => category.key);
 
-const repeatable = new Set(['feed', 'category']);
+const repeatable = ['feed', 'category'];
 
 const keys = (allowed: readonly string[]) =>
   z.array(z.string().refine((key) => allowed.includes(key), 'is not a known key'));
 
-// PostgreSQL text cannot hold a NUL character, so a search with one is refused here.
-const searchText = z
-  .string()
-  .max(ARTICLE_SEARCH_MAX_LENGTH)
-  .refine((text) => !text.includes('\u0000'), 'must not contain a NUL character');
-
 const queryFields = {
-  q: searchText.optional(),
+  q: databaseText(ARTICLE_SEARCH_MAX_LENGTH).optional(),
   feed: keys(feedKeys),
   category: keys(categoryKeys),
   sort: z.enum(ARTICLE_SORTS).optional(),
@@ -39,22 +33,6 @@ const queryFields = {
 
 const listParams = z.strictObject({ ...queryFields, cursor: z.string().max(2000).optional() });
 const idParams = z.strictObject(queryFields);
-
-/** The parameters as an object: repeatable names as arrays, the others as single strings. */
-function paramObject(params: URLSearchParams): Record<string, unknown> {
-  const object: Record<string, unknown> = { feed: [], category: [] };
-  for (const name of new Set(params.keys())) {
-    const values = params.getAll(name);
-    if (repeatable.has(name)) {
-      object[name] = values;
-    } else if (values.length > 1) {
-      throw new ApiError('INVALID_INPUT', `The parameter ${name} is given more than once.`);
-    } else {
-      object[name] = values[0];
-    }
-  }
-  return object;
-}
 
 function toQuery(fields: z.infer<typeof idParams>): ArticleQuery {
   return {
@@ -71,13 +49,13 @@ export function articleListRequest(params: URLSearchParams): {
   query: ArticleQuery;
   cursor: string | undefined;
 } {
-  const fields = parseInput(listParams, paramObject(params));
+  const fields = parseInput(listParams, queryObject(params, repeatable));
   return { query: toQuery(fields), cursor: fields.cursor };
 }
 
 /** The query of an ID list request, which has no cursor. */
 export function articleIdsRequest(params: URLSearchParams): ArticleQuery {
-  return toQuery(parseInput(idParams, paramObject(params)));
+  return toQuery(parseInput(idParams, queryObject(params, repeatable)));
 }
 
 const uuid = z.uuid();

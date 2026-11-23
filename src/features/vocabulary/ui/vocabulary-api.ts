@@ -11,13 +11,12 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
-import { apiRequest, dataBody } from '../../../lib/api/client.ts';
+import { apiRequest, dataBody, isoTime, listBody } from '../../../lib/api/client.ts';
+import { loadedItems } from '../../../lib/ui/batched-list.ts';
 import { REVIEW_MODES } from '../domain/review-progress.ts';
 import type { VocabularyQuery } from '../domain/vocabulary-query.ts';
 
-const time = z.iso.datetime({ offset: true });
-
-const modeProgress = z.object({ round: z.number().int(), dueAt: time.nullable() });
+const modeProgress = z.object({ round: z.number().int(), dueAt: isoTime.nullable() });
 
 const progressSchema = z.object({
   speak: modeProgress,
@@ -35,12 +34,9 @@ const listItemSchema = z.object({
 
 export type CardListItem = z.infer<typeof listItemSchema>;
 
-const listBatchSchema = z.object({
-  data: z.array(listItemSchema),
-  meta: z.object({ nextCursor: z.string().nullable(), totalCount: z.number().int() }),
-});
+const listBatchSchema = listBody(listItemSchema);
 
-export type CardListBatch = z.infer<typeof listBatchSchema>;
+type CardListBatch = z.infer<typeof listBatchSchema>;
 
 const exampleSchema = z.object({
   id: z.string(),
@@ -57,7 +53,7 @@ const savedCardSchema = z.object({
   pos: z.string(),
   meaningZh: z.string(),
   examples: z.array(exampleSchema),
-  updatedAt: time,
+  updatedAt: isoTime,
 });
 
 /** The saved card a DUPLICATE_WORD answer carries. */
@@ -67,14 +63,13 @@ const cardSchema = savedCardSchema.extend({ progress: progressSchema });
 
 export type CardDetail = z.infer<typeof cardSchema>;
 
-export const VOCABULARY_KEY = ['vocabulary'] as const;
 const listRoot = ['vocabulary', 'list'] as const;
 
 export const vocabularyListKey = (query: VocabularyQuery) => [...listRoot, query] as const;
 export const cardKey = (id: string) => ['vocabulary', 'card', id] as const;
 
 /** The query string of a query: only what differs from no tab, search or filter is sent. */
-export function vocabularyParams(query: VocabularyQuery, cursor?: string | null): URLSearchParams {
+function vocabularyParams(query: VocabularyQuery, cursor?: string | null): URLSearchParams {
   const params = new URLSearchParams();
   if (query.state !== 'all') {
     params.set('state', query.state);
@@ -106,19 +101,6 @@ export function useVocabularyList(query: VocabularyQuery) {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-}
-
-/** The cards of the loaded batches, each once even when a later batch repeats one. */
-export function loadedCards(data: InfiniteData<CardListBatch> | undefined): CardListItem[] {
-  const seen = new Set<string>();
-  const items: CardListItem[] = [];
-  for (const item of data?.pages.flatMap((batch) => batch.data) ?? []) {
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      items.push(item);
-    }
-  }
-  return items;
 }
 
 const cardPath = (id: string) => `/api/vocabulary/${encodeURIComponent(id)}`;
@@ -201,7 +183,7 @@ export function forgetCards(queryClient: QueryClient, ids: readonly string[]): v
     if (!lists) {
       return lists;
     }
-    const removed = loadedCards(lists).filter((item) => gone.has(item.id)).length;
+    const removed = loadedItems(lists).filter((item) => gone.has(item.id)).length;
     return {
       ...lists,
       pages: lists.pages.map((batch) => ({

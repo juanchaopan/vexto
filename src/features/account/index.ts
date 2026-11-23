@@ -14,4 +14,3 @@ export { LicenseScreen } from './ui/license-screen.tsx';
 export { MemberGate } from './ui/member-gate.tsx';
 export { ReadOnlyTermsScreen } from './ui/read-only-terms-screen.tsx';
 export { SignInScreen } from './ui/sign-in-screen.tsx';
-export type { ReviewCounts } from './ui/top-bar.tsx';

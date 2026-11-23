@@ -1,7 +1,8 @@
 // Column and constraint builders the table definitions share, so every table follows the
 // conventions of .docs/design/data.md the same way: UUID primary keys, times as timestamptz, and
-// CHECK constraints written from the same value lists the code validates with.
-import { sql, type SQL } from 'drizzle-orm';
+// CHECK constraints written from the same value lists the code validates with. Also how a time
+// column is read back: as an ISO string for the interface, or with microseconds for a cursor.
+import { sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { customType, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /** A UUID primary key the database fills in when a row is inserted without one. */
@@ -41,4 +42,14 @@ export function isOneOf(column: AnyPgColumn, values: readonly string[]): SQL {
 /** `column BETWEEN low AND high` for a CHECK constraint on an integer column. */
 export function isBetween(column: AnyPgColumn, low: number, high: number): SQL {
   return sql`${column} between ${sql.raw(String(low))} and ${sql.raw(String(high))}`;
+}
+
+/** A timestamptz column as text in UTC with microseconds, the way a list cursor holds a time. */
+export function microsecondText(column: AnyColumn): SQL {
+  return sql`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+}
+
+/** A time read from the database as the interface writes it, or null without one. */
+export function isoOrNull(value: Date | null): string | null {
+  return value === null ? null : value.toISOString();
 }

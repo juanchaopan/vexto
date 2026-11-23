@@ -7,17 +7,21 @@
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useReviewCounts, type ReviewCounts as ModeCounts } from '../../../lib/ui/review-counts.ts';
+import {
+  useReviewCounts,
+  type ModeCounts,
+  type ReviewCounts,
+} from '../../../lib/ui/review-counts.ts';
 import { initialsOf } from '../domain/initials.ts';
 import { useLogOut } from './account-queries.ts';
-import { TopBar, type ReviewCounts } from './top-bar.tsx';
+import { TopBar } from './top-bar.tsx';
 
 export type AppShellProps = {
   children: ReactNode;
 };
 
 /** The counts of every mode added together. */
-export function totalCounts(counts: ModeCounts | undefined): ReviewCounts | undefined {
+function totalCounts(counts: ReviewCounts | undefined): ModeCounts | undefined {
   if (!counts) {
     return undefined;
   }

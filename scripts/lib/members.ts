@@ -129,30 +129,24 @@ export const memberStatements = {
 
 /**
  * What revoking removes from the tables that hold a member's personal data, one statement per
- * table, run in the revoke transaction before the member row is updated
- * (.docs/design/rules.md, 取消资格, and data.md, 什么删掉什么). Deleting the vocabulary cards
- * deletes their examples, Translate options and review progress with them, and deleting the
+ * table with the member's ID as $1, run in the revoke transaction before the member row is
+ * updated (.docs/design/rules.md, 取消资格, and data.md, 什么删掉什么). Deleting the vocabulary
+ * cards deletes their examples, Translate options and review progress with them, and deleting the
  * lookups deletes their examples; review progress is also deleted by its owner, so none can be
  * left behind. Visits and operation receipts are deleted, and usage records stay without an owner.
  */
-const memberDataRemovals: readonly ((memberId: string) => Statement)[] = [
-  (memberId) => ({ text: 'DELETE FROM vocabulary_cards WHERE owner_id = $1', params: [memberId] }),
-  (memberId) => ({ text: 'DELETE FROM review_progress WHERE owner_id = $1', params: [memberId] }),
-  (memberId) => ({ text: 'DELETE FROM lookup_entries WHERE owner_id = $1', params: [memberId] }),
-  (memberId) => ({ text: 'DELETE FROM visits WHERE owner_id = $1', params: [memberId] }),
-  (memberId) => ({
-    text: 'DELETE FROM operation_receipts WHERE owner_id = $1',
-    params: [memberId],
-  }),
-  (memberId) => ({
-    text: 'UPDATE usage_records SET owner_id = NULL WHERE owner_id = $1',
-    params: [memberId],
-  }),
-];
+const memberDataRemovals = [
+  'DELETE FROM vocabulary_cards WHERE owner_id = $1',
+  'DELETE FROM review_progress WHERE owner_id = $1',
+  'DELETE FROM lookup_entries WHERE owner_id = $1',
+  'DELETE FROM visits WHERE owner_id = $1',
+  'DELETE FROM operation_receipts WHERE owner_id = $1',
+  'UPDATE usage_records SET owner_id = NULL WHERE owner_id = $1',
+] as const;
 
 /** The statements that remove a revoked member's personal data, in the order they run. */
 export function revokedMemberDataStatements(memberId: string): Statement[] {
-  return memberDataRemovals.map((removal) => removal(memberId));
+  return memberDataRemovals.map((text) => ({ text, params: [memberId] }));
 }
 
 async function deleteRevokedMemberData(session: MemberSession, memberId: string) {

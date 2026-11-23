@@ -1,7 +1,8 @@
 // The frame every Route Handler of the web application runs in: each request gets an ID, the
 // handler's result is sent as JSON, an ApiError is answered with its code, and anything else is
-// logged under the request ID and answered as INTERNAL without its message.
-import type { z } from 'zod';
+// logged under the request ID and answered as INTERNAL without its message. Also the readers of
+// request input the handlers share: a JSON body, a query string, and text bound for the database.
+import { z } from 'zod';
 import { errorFields, log } from '../log.ts';
 import { ApiError } from './errors.ts';
 import { errorResponse, sendResult, type ApiResult } from './responses.ts';
@@ -56,4 +57,35 @@ export async function readJsonBody<T>(request: Request, schema: z.ZodType<T>): P
     throw new ApiError('INVALID_INPUT', 'The request body is not JSON.');
   }
   return parseInput(schema, value);
+}
+
+/**
+ * A query string as an object to validate: the repeatable names as arrays, empty when absent,
+ * and every other name as a single string. A name that is not repeatable but given more than
+ * once is INVALID_INPUT.
+ */
+export function queryObject(
+  params: URLSearchParams,
+  repeatable: readonly string[] = [],
+): Record<string, unknown> {
+  const object: Record<string, unknown> = Object.fromEntries(repeatable.map((name) => [name, []]));
+  for (const name of new Set(params.keys())) {
+    const values = params.getAll(name);
+    if (repeatable.includes(name)) {
+      object[name] = values;
+    } else if (values.length > 1) {
+      throw new ApiError('INVALID_INPUT', `The parameter ${name} is given more than once.`);
+    } else {
+      object[name] = values[0];
+    }
+  }
+  return object;
+}
+
+/** Text of at most `max` characters for the database: PostgreSQL text cannot hold a NUL. */
+export function databaseText(max: number) {
+  return z
+    .string()
+    .max(max)
+    .refine((text) => !text.includes('\u0000'), 'must not contain a NUL character');
 }

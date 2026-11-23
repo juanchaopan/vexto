@@ -36,6 +36,7 @@ import { translationSet, type TranslationRandom } from '../domain/translation-se
 import { savedCardIdOf } from './card-sources.ts';
 import { listCards } from './card-list.ts';
 import {
+  cardExamples,
   cardHeadOf,
   cardMeanings,
   cardSourceOf,
@@ -356,29 +357,28 @@ export async function refreshCardExampleResult(
     return replayed;
   }
   const card = await cardHeadOf(database, ownerId, target.cardId);
-  const view = card && (await readCard(database, ownerId, target.cardId));
-  if (!card || !view) {
+  if (!card) {
     throw cardNotFound();
   }
-  const shown = view.examples.find((example) => example.id === target.exampleId);
+  const existing = await cardExamples(database, target.cardId);
+  const shown = existing.find((example) => example.id === target.exampleId);
   if (!shown) {
     throw new ApiError('CONFLICT', 'The example was already replaced.');
   }
-  const task = exampleTask({
-    ownerId,
-    lookupId: target.cardId,
-    lemma: card.lemma,
-    pos: card.pos,
-    meaningZh: card.meaningZh,
-    acceptedForms: card.acceptedForms,
-    // A card keeps no passage of its own; the example being replaced sets the level instead.
-    context: shown.text,
-    existingExamples: view.examples.map((example) => example.text),
-  });
-  const example = await runModelTask(model(), {
-    ...task,
-    usage: { ...task.usage, resourceType: 'card', resourceId: target.cardId },
-  });
+  const example = await runModelTask(
+    model(),
+    exampleTask({
+      ownerId,
+      resource: { type: 'card', id: target.cardId },
+      lemma: card.lemma,
+      pos: card.pos,
+      meaningZh: card.meaningZh,
+      acceptedForms: card.acceptedForms,
+      // A card keeps no passage of its own; the example being replaced sets the level instead.
+      context: shown.text,
+      existingExamples: existing.map((other) => other.text),
+    }),
+  );
   return inTransaction((tx) =>
     runOperation(tx, { ...operation, requestId }, async (work) => {
       if (!(await cardHeadOf(work, ownerId, target.cardId, true))) {

@@ -7,14 +7,20 @@
 // opened; a continuous play moving to its next article has the list load up to it and show it.
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
+import { isAccessError, offersRetry } from '../../../lib/api/client.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
+import {
+  footerStateOf,
+  listTotal,
+  loadedItems,
+  useLoadMore,
+} from '../../../lib/ui/batched-list.ts';
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
 import { FilterControl, SortControl } from '../../../lib/ui/list-controls.tsx';
-import { ListFooter, type ListFooterState } from '../../../lib/ui/list-footer.tsx';
+import { ListFooter } from '../../../lib/ui/list-footer.tsx';
 import { RetryStatus } from '../../../lib/ui/retry-status.tsx';
 import { SearchBox } from '../../../lib/ui/search-box.tsx';
 import { showToast } from '../../../lib/ui/toast.tsx';
@@ -28,7 +34,6 @@ import {
 import {
   articleListKey,
   fetchArticleIds,
-  loadedArticles,
   useArticleList,
   type ArticleListItem,
 } from './article-api.ts';
@@ -40,7 +45,6 @@ import { SourceMark } from './source-mark.tsx';
 
 const LOAD_FAILED = "Couldn't load articles.";
 const LOAD_MORE_FAILED = "Couldn't load more articles.";
-const MORE_LOADED = 'More records loaded.';
 
 const feedKeys = sharedConfig.feeds.map((feed) => feed.key);
 const categoryKeys = sharedConfig.categories.map((category) => category.key);
@@ -70,9 +74,6 @@ function cardTitle(articleId: string): HTMLElement | null {
 function countText(total: number) {
   return `${total} ${total === 1 ? 'article' : 'articles'}`;
 }
-
-const handledElsewhere = (error: unknown) =>
-  hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED');
 
 type ArticleList = ReturnType<typeof useArticleList>;
 
@@ -113,53 +114,10 @@ function useReveal(list: ArticleList, items: readonly ArticleListItem[]) {
   }, [reveal, list, items]);
 }
 
-function footerState(list: ArticleList, retry: () => void): ListFooterState {
-  if (list.isFetchingNextPage) {
-    return { kind: 'loading' };
-  }
-  if (list.isFetchNextPageError) {
-    return {
-      kind: 'failed',
-      message: LOAD_MORE_FAILED,
-      onRetry: offersRetry(list.error) ? retry : undefined,
-    };
-  }
-  return list.hasNextPage ? { kind: 'more' } : { kind: 'done' };
-}
-
-/**
- * Loading the next batch: a notice once it is in, and after a press of Load more the focus on
- * its first article, as soon as that article is drawn.
- */
-function useLoadMore(list: ArticleList, items: readonly ArticleListItem[]) {
-  const focusTarget = useRef<string | null>(null);
-  useEffect(() => {
-    const target = focusTarget.current;
-    const title = target ? cardTitle(target) : null;
-    if (title) {
-      focusTarget.current = null;
-      title.focus();
-    }
-  });
-  return (manual: boolean) => {
-    const before = items.length;
-    void list.fetchNextPage().then((result) => {
-      if (result.isFetchNextPageError) {
-        return;
-      }
-      showToast(MORE_LOADED);
-      const first = loadedArticles(result.data)[before];
-      if (manual && first) {
-        focusTarget.current = first.id;
-      }
-    });
-  };
-}
-
 function useListActions(query: ArticleQuery, list: ArticleList, items: ArticleListItem[]) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const loadMore = useLoadMore(list, items);
+  const loadMore = useLoadMore(list, items.length, cardTitle);
 
   const changeQuery = (change: Partial<ArticleQuery>) => {
     const next = { ...query, ...change };
@@ -185,7 +143,7 @@ function useListActions(query: ArticleQuery, list: ArticleList, items: ArticleLi
         }
       })
       .catch((error: unknown) => {
-        if (!handledElsewhere(error)) {
+        if (!isAccessError(error)) {
           showToast(PLAY_FAILED, offersRetry(error) ? { retry: () => play(startId) } : {});
         }
       });
@@ -234,7 +192,7 @@ function ListContent({ query, list, items, actions }: ListContentProps) {
         />
       ))}
       <ListFooter
-        state={footerState(list, () => actions.loadMore(true))}
+        state={footerStateOf(list, LOAD_MORE_FAILED, () => actions.loadMore(true))}
         onLoadMore={actions.loadMore}
       />
     </>
@@ -244,8 +202,8 @@ function ListContent({ query, list, items, actions }: ListContentProps) {
 export function ArticlesScreen() {
   const query = useArticleListStore((state) => state.query);
   const list = useArticleList(query);
-  const items = loadedArticles(list.data);
-  const total = list.isError && !list.data ? undefined : list.data?.pages[0]?.meta.totalCount;
+  const items = loadedItems(list.data);
+  const total = listTotal(list);
   const actions = useListActions(query, list, items);
   const { changeQuery } = actions;
   useRestoreOnReturn(Boolean(list.data));

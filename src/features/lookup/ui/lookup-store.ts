@@ -13,6 +13,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { create } from 'zustand';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import type { LookupContext, LookupTarget } from '../../../lib/ui/lookup-bridge.ts';
+import { CHANGED_ELSEWHERE, NEW_EXAMPLE_FAILED } from '../../../lib/ui/messages.ts';
 import { showToast } from '../../../lib/ui/toast.tsx';
 import {
   isRangeOf,
@@ -29,8 +30,6 @@ import {
 
 export const TOO_LONG = 'Select up to 8 words.';
 export const HIDDEN_WORD = 'Select words on one side of the blank.';
-export const CHANGED = 'This word changed on another device.';
-export const REFRESH_FAILED = "Couldn't get a new example.";
 
 export type LayerStatus = 'loading' | 'ready' | 'failed' | 'offline';
 
@@ -223,14 +222,14 @@ async function sendRefresh(key: number, lookupId: string, exampleId: string, ope
   } catch (error) {
     changeLayer(key, () => ({ refreshing: null }));
     if (hasErrorCode(error, 'CONFLICT')) {
-      showToast(CHANGED);
+      showToast(CHANGED_ELSEWHERE);
       reloadExplanation(key);
       return;
     }
     const retry = offersRetry(error)
       ? () => void sendRefresh(key, lookupId, exampleId, operationId)
       : undefined;
-    showToast(REFRESH_FAILED, { retry });
+    showToast(NEW_EXAMPLE_FAILED, { retry });
   }
 }
 
