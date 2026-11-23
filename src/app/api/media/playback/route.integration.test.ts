@@ -1,17 +1,24 @@
 // POST /api/media/playback against a real PostgreSQL, with MSW standing in for vexto-tts and the
 // S3Mock bucket's settings for signing: article audio is signed at once, word and example audio
-// is made once, recorded and shared, and a speech service that fails leaves the row to retry.
+// is made once, recorded and shared, a speech service that fails leaves the row to retry, and an
+// object written for a row the collection job retired meanwhile does not stay in the bucket.
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { signInAsMember } from '../../../../features/account/testing.ts';
-import { audioAssets, speechCacheKey } from '../../../../features/audio/index.ts';
+import {
+  audioAssets,
+  speechCacheKey,
+  type SpeechRequest,
+} from '../../../../features/audio/index.ts';
 import { createArticle, createCard, createLookup } from '../../../../features/media/testing.ts';
 import {
   playbackServices,
   readySpeechAudio,
   SpeechServiceError,
+  type SpeechServiceClient,
 } from '../../../../features/playback/index.ts';
 import {
+  speechAnswerFor,
   speechServiceDouble,
   stubSpeechService,
   TEST_SPEECH_SERVICE_URL,
@@ -20,6 +27,8 @@ import { usageRecords } from '../../../../features/usage/index.ts';
 import { expectApiError, jsonRequest, readSuccess } from '../../../../lib/api/testing.ts';
 import { speechConfig, speechVersionOf } from '../../../../lib/config/speech-config.ts';
 import { closeDatabase, getDatabase } from '../../../../lib/db/client.ts';
+import { objectStorageFromEnv } from '../../../../lib/storage/object-storage.ts';
+import { testBucket } from '../../../../lib/storage/testing.ts';
 import { POST } from './route.ts';
 
 vi.mock(
@@ -239,6 +248,41 @@ describe('POST /api/media/playback', () => {
 });
 
 describe('readySpeechAudio', () => {
+  const bucket = testBucket();
+
+  /**
+   * A speech service that writes the object into the bucket, as vexto-tts does, after `before`
+   * has run; it records the keys it wrote.
+   */
+  function writingService(before: (request: SpeechRequest) => Promise<void>) {
+    const written: string[] = [];
+    const service: SpeechServiceClient = {
+      async synthesize(request) {
+        await before(request);
+        await bucket.put(request.key);
+        written.push(request.key);
+        return speechAnswerFor(request);
+      },
+    };
+    return { service, written };
+  }
+
+  /**
+   * The collection job's retention of a pending row, by its object key: marks the row retiring
+   * and deletes its object, then, when `removesRow`, deletes the row as well.
+   */
+  async function retireRow(objectKey: string, removesRow: boolean) {
+    const db = getDatabase();
+    await db
+      .update(audioAssets)
+      .set({ state: 'retiring' })
+      .where(eq(audioAssets.objectKey, objectKey));
+    await objectStorageFromEnv().deleteObject(objectKey);
+    if (removesRow) {
+      await db.delete(audioAssets).where(eq(audioAssets.objectKey, objectKey));
+    }
+  }
+
   it('records a call that timed out as unknown usage', async () => {
     const member = await signInAsMember();
     const card = await createCard(member.id);
@@ -263,5 +307,57 @@ describe('readySpeechAudio', () => {
         cpuMs: null,
       }),
     ]);
+  });
+
+  it.each([
+    ['while the job still holds the retiring row', false],
+    ['after the job removed the row', true],
+  ])(
+    'deletes the object it wrote for a row the collection job retired, %s',
+    async (_when, removesRow) => {
+      const member = await signInAsMember();
+      const card = await createCard(member.id);
+      const { service, written } = writingService((request) => retireRow(request.key, removesRow));
+      const services = { ...playbackServices(), speechService: service };
+
+      await expect(
+        readySpeechAudio(services, { text: card.lemma, usageKind: 'word_tts', ownerId: member.id }),
+      ).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+
+      expect(written).toHaveLength(1);
+      expect(await bucket.has(written[0])).toBe(false);
+      const rows = await audioOf(card.lemma);
+      expect(rows.map((row) => row.state)).toEqual(removesRow ? [] : ['retiring']);
+    },
+  );
+
+  it('keeps the object when another request marked the same row ready first', async () => {
+    const member = await signInAsMember();
+    const card = await createCard(member.id);
+    let arrived = 0;
+    let bothArrived: () => void = () => undefined;
+    const meeting = new Promise<void>((resolve) => {
+      bothArrived = resolve;
+    });
+    const { service, written } = writingService(async () => {
+      arrived += 1;
+      if (arrived === 2) {
+        bothArrived();
+      }
+      await meeting;
+    });
+    const services = { ...playbackServices(), speechService: service };
+    const toPlay = { text: card.lemma, usageKind: 'word_tts' as const, ownerId: member.id };
+
+    const answers = await Promise.all([
+      readySpeechAudio(services, toPlay),
+      readySpeechAudio(services, toPlay),
+    ]);
+
+    const [row] = await audioOf(card.lemma);
+    expect(row.state).toBe('ready');
+    expect(written).toEqual([row.objectKey, row.objectKey]);
+    expect(answers.map((answer) => answer.objectKey)).toEqual([row.objectKey, row.objectKey]);
+    expect(await bucket.has(row.objectKey)).toBe(true);
   });
 });

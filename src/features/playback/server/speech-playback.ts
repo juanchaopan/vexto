@@ -5,7 +5,11 @@
 //      usage record and its outcome; then the row is marked ready with its size and duration.
 // A failed call leaves the row pending for the next request. Two requests that meet the same
 // pending row both call the service; they write the same object, and the second finds the row
-// already ready. Nothing here runs inside a transaction.
+// already ready. A pending row may also be retired while the service writes its object, as the
+// collection job retires pending rows an hour after they were made, however recently a request
+// took one up; the retirement may delete the object before it is written, so the request that
+// wrote it deletes it again, or it would stay in the bucket with no row to count or remove it.
+// Nothing here runs inside a transaction.
 import { ApiError } from '../../../lib/api/errors.ts';
 import {
   speechConfig,
@@ -14,6 +18,7 @@ import {
 } from '../../../lib/config/speech-config.ts';
 import { getDatabase, type Database } from '../../../lib/db/client.ts';
 import { errorFields, log } from '../../../lib/log.ts';
+import { objectStorageFromEnv, type ObjectStorage } from '../../../lib/storage/object-storage.ts';
 import { objectUrlsFromEnv, type ObjectUrls } from '../../../lib/storage/presigned-url.ts';
 import {
   findLiveAudio,
@@ -43,21 +48,27 @@ export type PlaybackServices = {
   database: Database;
   speechService: SpeechServiceClient;
   urls: ObjectUrls;
+  /** The bucket, for deleting an object whose row was retired while it was written. */
+  storage: ObjectStorage;
   config: SpeechConfig;
   now: () => Date;
 };
 
-type Remote = Pick<PlaybackServices, 'speechService' | 'urls'>;
+type Remote = Pick<PlaybackServices, 'speechService' | 'urls' | 'storage'>;
 
 let remote: Remote | undefined;
 
 /**
  * The shared database, the speech service and bucket of the runtime values, and the clock. The
- * speech service client and the bucket's signer are made once per process, so the identity token
- * and the signing client are reused across requests.
+ * speech service client and the bucket's clients are made once per process, so the identity
+ * token and the bucket's connections are reused across requests.
  */
 export function playbackServices(): PlaybackServices {
-  remote ??= { speechService: speechServiceFromEnv(), urls: objectUrlsFromEnv() };
+  remote ??= {
+    speechService: speechServiceFromEnv(),
+    urls: objectUrlsFromEnv(),
+    storage: objectStorageFromEnv(),
+  };
   return { ...remote, database: getDatabase(), config: speechConfig, now: () => new Date() };
 }
 
@@ -121,6 +132,21 @@ function synthesize(
   );
 }
 
+/**
+ * Deletes the object just written for a row that was retired meanwhile. The object key is the
+ * row's own, so no other row's audio is touched.
+ */
+async function deleteRetiredObject(services: PlaybackServices, row: LiveAudioRow) {
+  try {
+    await services.storage.deleteObject(row.objectKey);
+  } catch (error) {
+    log('WARNING', 'Deleting the object of a retired audio row failed.', {
+      audioId: row.id,
+      ...errorFields(error),
+    });
+  }
+}
+
 async function synthesizedAudio(
   services: PlaybackServices,
   row: LiveAudioRow,
@@ -140,9 +166,13 @@ async function synthesizedAudio(
   if (await markAudioReady(services.database, row.id, answer)) {
     return { objectKey: row.objectKey, durationMs: answer.durationMs };
   }
-  // Another request marked the row first, or it was retired meanwhile.
+  // Another request marked the row ready first, or the row was retired meanwhile; a retired row
+  // is no longer the live row of its cache key.
   const cacheKey = speechCacheKey(text, speechVersionOf(services.config));
   const current = await findLiveAudio(services.database, cacheKey);
+  if (current?.id !== row.id) {
+    await deleteRetiredObject(services, row);
+  }
   const ready = current && playable(current);
   if (!ready) {
     throw new ApiError('UNAVAILABLE', 'The audio was retired while it was made.');
