@@ -1,4 +1,4 @@
-import { clerk, clerkSetup } from '@clerk/testing/playwright';
+import { clerkSetup } from '@clerk/testing/playwright';
 import {
   expect as baseExpect,
   type Browser,
@@ -22,14 +22,20 @@ import { DEMO_WORDS, seedVocabulary, type ReviewCardSeed } from './review-cards.
 //
 // The page's clock is set only for screens that show times: the demo's day for the article and
 // terms dates, and the moment the vocabulary's due times count from for the word screens. Other
-// screens keep the real time, which Clerk's session in the page relies on.
+// screens keep the real time.
 
 // With every test file running side by side in both browsers, a page of the built application
 // can take several seconds to answer, and a whole-page screenshot of a long list in WebKit takes
 // seconds of its own.
 const expect = baseExpect.configure({ timeout: 20_000 });
 const SCREENSHOT_TIMEOUT = 30_000;
-const SESSION_TIMEOUT = 20_000;
+
+/**
+ * How long a page may take to have the member's Clerk account. A loading page waits up to 7
+ * seconds for the account from Clerk's development instance and then asks again without a time
+ * limit, so a slow answer still arrives in this time.
+ */
+const ACCOUNT_TIMEOUT = 45_000;
 
 /** The phone screen of the design, in CSS pixels. */
 export const SCREEN_SIZE = { width: 390, height: 844 };
@@ -51,7 +57,6 @@ type ScreenWindow = Window & {
   screenAudio?: HTMLMediaElement;
   refusePlay?: boolean;
   holdNotices?: boolean;
-  Clerk?: { loaded?: boolean; user?: unknown };
 };
 
 /**
@@ -99,32 +104,36 @@ async function screenContext(browser: Browser, testInfo: TestInfo): Promise<Brow
 }
 
 /**
- * Closes a browser context. Clerk's testing helpers answer Clerk's requests through request
- * handlers that may still be waiting; they are dropped first, so closing does not wait for them.
+ * Waits until the page is past the sign-in page with the member's whole Clerk account loaded:
+ * the account with its email address, not only the session that Clerk can rebuild from the
+ * session cookie while the account is still on its way. A page that went through the sign-in
+ * page is brought back by Clerk once it finds the session.
  */
-async function closeContext(context: BrowserContext): Promise<void> {
-  await context.unrouteAll({ behavior: 'ignoreErrors' });
-  await Promise.all(context.pages().map((one) => one.unrouteAll({ behavior: 'ignoreErrors' })));
-  await context.close();
-}
-
-/** Where the page's Clerk stands: the account loaded, sent to sign in, or neither in time. */
-async function sessionOf(page: Page): Promise<'signed-in' | 'signed-out' | 'unknown'> {
+async function waitForAccount(page: Page): Promise<void> {
   try {
-    const state = await page.waitForFunction(
+    await page.waitForFunction(
       () => {
-        const loaded = (window as ScreenWindow).Clerk;
-        if (loaded?.loaded && loaded.user) {
-          return 'signed-in';
-        }
-        return window.location.pathname.startsWith('/sign-in') ? 'signed-out' : false;
+        const clerk = window.Clerk;
+        return (
+          !window.location.pathname.startsWith('/sign-in') &&
+          clerk?.loaded === true &&
+          Boolean(clerk.user?.primaryEmailAddress)
+        );
       },
       undefined,
-      { timeout: SESSION_TIMEOUT },
+      { timeout: ACCOUNT_TIMEOUT },
     );
-    return (await state.jsonValue()) as 'signed-in' | 'signed-out';
-  } catch {
-    return 'unknown';
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      at: window.location.pathname,
+      clerk: window.Clerk?.status ?? 'missing',
+      account: Boolean(window.Clerk?.user?.primaryEmailAddress),
+    }));
+    throw new Error(
+      `The page had no Clerk account in ${ACCOUNT_TIMEOUT / 1000} s: it is at ${state.at}, ` +
+        `Clerk is ${state.clerk}, the account is ${state.account ? 'loaded' : 'missing'}.`,
+      { cause: error },
+    );
   }
 }
 
@@ -133,12 +142,7 @@ type OpenOptions = { waitUntil?: 'load' | 'domcontentloaded' | 'commit' };
 export type DemoAccount = {
   page: Page;
   email: string;
-  /**
-   * Opens `path` signed in. Clerk's development instance renews the one-minute session token
-   * through its own servers; when a renewal does not get through, the page lands on the sign-in
-   * page or its account never loads. The member then signs in again, or the page is loaded
-   * again, once, before the screen is checked.
-   */
+  /** Opens `path` and waits until the page has the member's Clerk account loaded. */
   open(path: string, options?: OpenOptions): Promise<void>;
   close(): Promise<void>;
 };
@@ -167,17 +171,10 @@ export async function demoAccount(
 
   const open = async (path: string, options: OpenOptions = {}) => {
     await page.goto(path, options);
-    const session = await sessionOf(page);
-    if (session === 'signed-in') {
-      return;
-    }
-    if (session === 'signed-out') {
-      await clerk.signIn({ page, emailAddress: email });
-    }
-    await page.goto(path, options);
+    await waitForAccount(page);
   };
 
-  return { page, email, open, close: () => closeContext(context) };
+  return { page, email, open, close: () => context.close() };
 }
 
 /** A page of a signed-out browser at the design's screen size. */
