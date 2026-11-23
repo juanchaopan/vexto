@@ -1,8 +1,9 @@
 // Test kit for the collection job's integration and security tests. Only test files import it.
 //
 // - isolatedDatabase(): a database of its own, built with the migration scripts in the test
-//   PostgreSQL. A run of the job takes the one lease row and changes rows of every feed, so each
-//   test file that runs it works in its own database, apart from the files running beside it.
+//   PostgreSQL. A run of the job takes the one lease row, synthesizes every preparing article that
+//   is due and changes rows of every feed, so each test file that runs it, in its own process or
+//   in the test's, works in its own database, apart from the files running beside it.
 // - feedServer(): MSW in front of the network. Feeds and pages are answered by the handlers a test
 //   adds; the S3Mock bucket is passed through; anything else fails the request.
 // - testResolver(): host names resolve to a public test address, or to the addresses a test gives.
@@ -39,7 +40,12 @@ export { failingStorage, testBucket } from '../../lib/storage/testing.ts';
 /** The address every test host resolves to unless the test says otherwise. */
 export const PUBLIC_TEST_ADDRESS = '93.184.215.14';
 
-export type IsolatedDatabase = { database: Database; close(): Promise<void> };
+export type IsolatedDatabase = {
+  database: Database;
+  /** The database's connection string, for a process of its own such as a job entry. */
+  url: string;
+  close(): Promise<void>;
+};
 
 /** A new database in the test PostgreSQL, migrated from empty; close() drops it. */
 export async function isolatedDatabase(): Promise<IsolatedDatabase> {
@@ -56,6 +62,7 @@ export async function isolatedDatabase(): Promise<IsolatedDatabase> {
   const connection = createDatabase(url.href, { max: 2 });
   return {
     database: connection.database,
+    url: url.href,
     async close() {
       await connection.client.end({ timeout: 5 });
       await admin.unsafe(`drop database if exists ${name} with (force)`);

@@ -1,18 +1,30 @@
 // Starts each entry the way the container image does, as `node src/worker/<entry>.ts`, so the
 // TypeScript and its imports are known to run on Node directly, without a bundler. The collection
-// job runs against the test database and bucket; with no feed due yet, a run only starts the
-// feeds' cursors and removes expired rows.
+// job runs against a database of its own and the test bucket: in the shared test database other
+// files leave preparing articles that are due, which the job would synthesize with the real model.
+// With no feed due yet and no article to synthesize, a run only starts the feeds' cursors and
+// removes expired rows.
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { isolatedDatabase, type IsolatedDatabase } from '../features/collection/testing.ts';
 
 const workerDir = import.meta.dirname;
 const started: ChildProcess[] = [];
+let db: IsolatedDatabase;
 
-function start(entry: string) {
+beforeAll(async () => {
+  db = await isolatedDatabase();
+}, 120_000);
+
+afterAll(async () => {
+  await db?.close();
+});
+
+function start(entry: string, env: Readonly<Record<string, string>> = {}) {
   const child = spawn(process.execPath, [path.join(workerDir, entry)], {
-    env: { ...process.env, PORT: '0' },
+    env: { ...process.env, PORT: '0', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   started.push(child);
@@ -45,13 +57,15 @@ describe('the Cloud Run entries under plain Node', () => {
   // A fresh Node process strips the types of every module the job loads, which takes seconds
   // while the other test files run beside it.
   it('runs the collection job to a successful exit', { timeout: 30_000 }, async () => {
-    const child = start('collect.ts');
+    const child = start('collect.ts', { DATABASE_URL: db.url });
     const exit = new Promise((resolve) => child.on('exit', resolve));
-    const messages: unknown[] = [];
+    const entries: Record<string, unknown>[] = [];
     for await (const entry of logEntries(child)) {
-      messages.push(entry.message);
+      entries.push(entry);
     }
+    const messages = entries.map((entry) => entry.message);
 
+    expect(entries.filter((entry) => entry.severity === 'ERROR')).toEqual([]);
     expect(await exit).toBe(0);
     expect(messages[0]).toBe('vexto-collect started.');
     expect(messages.at(-1)).toBe('vexto-collect finished.');
