@@ -1,12 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
+import { aiConfig } from '../../../lib/config/ai-config.ts';
+import { priceConfig } from '../../../lib/config/price-config.ts';
+import { speechConfig } from '../../../lib/config/speech-config.ts';
 import { closeDatabase, getDatabase } from '../../../lib/db/client.ts';
 import { members } from '../../account/index.ts';
 import { usageRecords } from './schema.ts';
-import { finishUsage, startUsage, trackUsage, type UsageStart } from './usage-records.ts';
+import {
+  finishUsage,
+  pricedOutcome,
+  startUsage,
+  trackUsage,
+  type UsageStart,
+} from './usage-records.ts';
 
-// Each test names a model of its own, so it finds exactly the records it wrote.
+// Each test names a model or resource of its own, so it finds exactly the records it wrote.
 
 const db = getDatabase();
 
@@ -18,6 +27,17 @@ function lookupCall(): UsageStart {
   return { kind: 'lookup', provider: 'openai', model: `model-${randomUUID()}` };
 }
 
+/** A call to the configured model, told apart by a resource of its own. */
+function pricedLookupCall(): UsageStart {
+  return {
+    kind: 'lookup',
+    provider: aiConfig.provider,
+    model: aiConfig.model,
+    resourceType: 'lookup',
+    resourceId: randomUUID(),
+  };
+}
+
 async function record(id: string) {
   const [row] = await db.select().from(usageRecords).where(eq(usageRecords.id, id));
   return row;
@@ -25,6 +45,10 @@ async function record(id: string) {
 
 async function recordsOf(model: string) {
   return db.select().from(usageRecords).where(eq(usageRecords.model, model));
+}
+
+async function recordsFor(resourceId: string) {
+  return db.select().from(usageRecords).where(eq(usageRecords.resourceId, resourceId));
 }
 
 describe('startUsage and finishUsage', () => {
@@ -122,7 +146,13 @@ describe('trackUsage', () => {
     expect(result).toBe('explained');
     expect(statusDuringCall).toBe('pending');
     expect(await recordsOf(call.model)).toEqual([
-      expect.objectContaining({ status: 'succeeded', inputTokens: 10, outputTokens: null }),
+      expect.objectContaining({
+        status: 'succeeded',
+        inputTokens: 10,
+        outputTokens: null,
+        estimatedCost: null,
+        priceVersion: null,
+      }),
     ]);
   });
 
@@ -144,5 +174,66 @@ describe('trackUsage', () => {
     const [row] = await recordsOf(call.model);
     expect(row).toMatchObject({ status: 'unknown', errorCode: 'timeout', inputTokens: null });
     expect(row.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it('estimates the cost of a call to a priced model with the price table’s version', async () => {
+    const call = pricedLookupCall();
+
+    await trackUsage(
+      db,
+      call,
+      async () => ({
+        result: null,
+        outcome: { status: 'succeeded', inputTokens: 812, outputTokens: 96 },
+      }),
+      () => ({ status: 'failed' }),
+    );
+
+    expect(await recordsFor(call.resourceId ?? '')).toEqual([
+      expect.objectContaining({
+        inputTokens: 812,
+        outputTokens: 96,
+        estimatedCost: '0.000129',
+        priceVersion: priceConfig.version,
+      }),
+    ]);
+  });
+
+  it('leaves the cost of a call whose usage is unknown empty', async () => {
+    const call = pricedLookupCall();
+
+    await expect(
+      trackUsage(
+        db,
+        call,
+        async () => {
+          throw new Error('timed out');
+        },
+        () => ({ status: 'unknown', errorCode: 'timeout' }),
+      ),
+    ).rejects.toThrow('timed out');
+
+    expect(await recordsFor(call.resourceId ?? '')).toEqual([
+      expect.objectContaining({ status: 'unknown', estimatedCost: null, priceVersion: null }),
+    ]);
+  });
+});
+
+describe('pricedOutcome', () => {
+  it('prices speech by its CPU time', () => {
+    expect(pricedOutcome(speechConfig, { status: 'succeeded', cpuMs: 1600, audioMs: 700 })).toEqual(
+      {
+        status: 'succeeded',
+        cpuMs: 1600,
+        audioMs: 700,
+        estimatedCost: '0.000000',
+        priceVersion: priceConfig.version,
+      },
+    );
+  });
+
+  it('keeps an estimate the outcome already has', () => {
+    const outcome = { status: 'succeeded' as const, estimatedCost: '1.000000', priceVersion: 'x' };
+    expect(pricedOutcome(aiConfig, outcome)).toBe(outcome);
   });
 });

@@ -1,10 +1,13 @@
 // Usage records (.docs/design/rules.md, 用量记录): every actual call to the AI or to speech
 // synthesis gets a `pending` row just before it is made, and the row is completed with the
-// provider's request ID, the usage, the status and the price version once the outcome is known.
-// Usage that is not known stays null and is never written as 0. The records are written on the
-// database itself, outside any transaction, as external calls are.
+// provider's request ID, the usage, the status and the estimated cost with the price version once
+// the outcome is known. Usage that is not known stays null and is never written as 0, and so does
+// the cost it would need. The records are written on the database itself, outside any
+// transaction, as external calls are.
 import { eq, sql } from 'drizzle-orm';
+import { priceConfig, priceOf, type PriceConfig } from '../../../lib/config/price-config.ts';
 import type { Executor } from '../../../lib/db/client.ts';
+import { estimateCost } from '../domain/cost.ts';
 import type { FinishedUsageStatus, UsageKind } from '../domain/usage.ts';
 import { usageRecords } from './schema.ts';
 
@@ -54,14 +57,33 @@ export async function finishUsage(
     .where(eq(usageRecords.id, id));
 }
 
+/**
+ * The outcome with its estimated cost and the price table's version, when the table prices the
+ * call's model and the usage the price counts is known; otherwise the outcome as it is.
+ */
+export function pricedOutcome(
+  start: Pick<UsageStart, 'provider' | 'model'>,
+  outcome: UsageOutcome,
+  prices: PriceConfig = priceConfig,
+): UsageOutcome {
+  if (outcome.estimatedCost !== undefined) {
+    return outcome;
+  }
+  const price = priceOf(prices, start.provider, start.model);
+  const estimatedCost = price && estimateCost(price, outcome);
+  return estimatedCost === undefined
+    ? outcome
+    : { ...outcome, estimatedCost, priceVersion: prices.version };
+}
+
 /** What a tracked call reports: its result and the usage it learned. */
 export type TrackedCall<T> = { result: T; outcome: UsageOutcome };
 
 /**
- * Makes one external call between a pending record and its outcome. When the call throws,
- * `outcomeOfError` says whether it failed or its outcome is unknown (such as a timeout, where the
- * provider may still have done the work), the record is completed with that, and the error is
- * thrown on.
+ * Makes one external call between a pending record and its outcome, priced with the price table.
+ * When the call throws, `outcomeOfError` says whether it failed or its outcome is unknown (such as
+ * a timeout, where the provider may still have done the work), the record is completed with that,
+ * and the error is thrown on.
  */
 export async function trackUsage<T>(
   executor: Executor,
@@ -74,9 +96,9 @@ export async function trackUsage<T>(
   try {
     tracked = await call();
   } catch (error) {
-    await finishUsage(executor, id, outcomeOfError(error));
+    await finishUsage(executor, id, pricedOutcome(start, outcomeOfError(error)));
     throw error;
   }
-  await finishUsage(executor, id, tracked.outcome);
+  await finishUsage(executor, id, pricedOutcome(start, tracked.outcome));
   return tracked.result;
 }

@@ -1,0 +1,7 @@
+{
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "requestTimeoutMs": 15000,
+  "maxOutputTokens": 2000,
+  "reasoningEffort": "low"
+}

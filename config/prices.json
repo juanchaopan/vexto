@@ -1,0 +1,24 @@
+{
+  "version": "2026-11-23",
+  "prices": [
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "unit": "tokens",
+      "usdPerMillionInputTokens": "0.10",
+      "usdPerMillionOutputTokens": "0.50",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checkedOn": "2026-11-23",
+      "note": "Standard tier, short context. Cached input costs less; every input token is counted at the full input price, so the estimate is an upper bound."
+    },
+    {
+      "provider": "supertonic",
+      "model": "supertonic-3",
+      "unit": "cpu-seconds",
+      "usdPerCpuSecond": "0",
+      "source": "https://cloud.google.com/run/pricing",
+      "checkedOn": "2026-11-23",
+      "note": "Speech runs on Cloud Run within its free tier; the billing guard disables billing as soon as any charge appears."
+    }
+  ]
+}
