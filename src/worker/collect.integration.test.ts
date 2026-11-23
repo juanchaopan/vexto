@@ -206,11 +206,14 @@ describe('vexto-collect', { timeout: RUN_TIMEOUT }, () => {
 
     expect(await main(dependencies)).toBe(1);
 
+    // The log names the error and where it was thrown, never its message.
     expect(logged.at(-1)).toMatchObject({
       severity: 'ERROR',
       message: 'vexto-collect failed.',
-      error: 'MODEL_DIR is not set; it must name the speech model directory.',
+      error: { name: 'Error' },
+      stack: expect.stringContaining('speech-runtime.ts'),
     });
+    expect(JSON.stringify(logged.at(-1))).not.toContain('MODEL_DIR');
     const [lease] = await db.database.select().from(jobLeases);
     expect(lease.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
   });

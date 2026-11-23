@@ -38,7 +38,7 @@ describe('handleRequest', () => {
     });
   });
 
-  it('logs any other error under the request ID and answers INTERNAL without its message', async () => {
+  it('logs any other error by name under the request ID and answers INTERNAL without its message', async () => {
     const lines: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
       lines.push(String(chunk));
@@ -60,8 +60,9 @@ describe('handleRequest', () => {
     expect(JSON.parse(lines[0])).toMatchObject({
       severity: 'ERROR',
       requestId: body.error.requestId,
-      error: 'connection refused to db.internal',
+      error: { name: 'Error' },
     });
+    expect(lines[0]).not.toContain('db.internal');
   });
 });
 
