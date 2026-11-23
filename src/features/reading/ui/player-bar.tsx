@@ -3,7 +3,8 @@
 // The player fixed at the bottom of the reader (.docs/design/screens.md, 阅读页上有什么): play or
 // pause, `<title> · <sentence>/<count>` over the progress slider, the speed button and, during a
 // continuous play, the next article button. When the browser refused to start the audio, Tap to
-// continue takes the place of the play button and the slider.
+// continue takes the place of the play button and the slider. The player is a named region, so
+// screen readers can jump to it from anywhere in the article.
 import { useRef } from 'react';
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
@@ -68,7 +69,7 @@ export function PlayerBar({ title, sentenceCount, sentence, current }: PlayerBar
   const queued = usePlayerStore((state) => current && state.queue !== null);
   const playing = isPlaying(status) && mode === 'article';
   return (
-    <footer
+    <section
       aria-label="Article player"
       className="sticky bottom-0 z-[5] flex min-h-[58px] items-center gap-1 border-t border-line bg-surface px-[5px] pt-2 pb-[calc(8px+env(safe-area-inset-bottom))]"
     >
@@ -113,6 +114,6 @@ export function PlayerBar({ title, sentenceCount, sentence, current }: PlayerBar
           <Icon name="skip-forward" />
         </Button>
       ) : null}
-    </footer>
+    </section>
   );
 }

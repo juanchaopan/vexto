@@ -3,6 +3,8 @@
 // The small panels of the interface (.docs/design/screens.md, 浮层和对话框): filters, sort, speed
 // and the like. A panel sits right below the button that opened it, its right edge lined up with
 // the button's and kept 12 pixels inside the screen; when there is no room below it goes above.
+// It is placed on the screen and follows the button when the page scrolls, so it stays next to a
+// button that scrolls with the page as well as one fixed to the screen, such as the player's.
 // Pressing outside the panel or Escape closes it, with no animation. The panel is drawn at the
 // end of the page, so no container around the button clips it.
 import {
@@ -23,7 +25,7 @@ const GAP = 6;
 
 type Place = { left: number; top: number; width: number };
 
-/** Where the panel goes, in page coordinates, for a panel of this size next to the button. */
+/** Where the panel goes on the screen, for a panel of this size next to the button. */
 function placeNextTo(anchor: DOMRect, width: number, height: number): Place {
   const screenWidth = document.documentElement.clientWidth;
   const fitted = Math.min(width, screenWidth - 2 * SCREEN_MARGIN);
@@ -35,7 +37,11 @@ function placeNextTo(anchor: DOMRect, width: number, height: number): Place {
   const above = anchor.top - GAP - height;
   const fitsBelow = below + height <= window.innerHeight - SCREEN_MARGIN;
   const top = fitsBelow || above < SCREEN_MARGIN ? below : above;
-  return { left: left + window.scrollX, top: top + window.scrollY, width: fitted };
+  return { left, top, width: fitted };
+}
+
+function samePlace(a: Place | null, b: Place) {
+  return a !== null && a.left === b.left && a.top === b.top && a.width === b.width;
 }
 
 function firstControl(panel: HTMLElement): HTMLElement | null {
@@ -59,22 +65,36 @@ export type PopoverProps = {
   children: ReactNode;
 };
 
-export function Popover({ anchor, label, width, onClose, className = '', children }: PopoverProps) {
-  const panel = useRef<HTMLElement>(null);
+/** Keeps the panel next to its button as the page scrolls or the screen changes size. */
+function usePlace(
+  anchor: RefObject<HTMLElement | null>,
+  panel: RefObject<HTMLElement | null>,
+  width: number,
+) {
   const [place, setPlace] = useState<Place | null>(null);
-
   useLayoutEffect(() => {
     const update = () => {
       const button = anchor.current;
       const element = panel.current;
       if (button && element) {
-        setPlace(placeNextTo(button.getBoundingClientRect(), width, element.offsetHeight));
+        const next = placeNextTo(button.getBoundingClientRect(), width, element.offsetHeight);
+        setPlace((current) => (samePlace(current, next) ? current : next));
       }
     };
     update();
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [anchor, width]);
+    window.addEventListener('scroll', update, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, { capture: true });
+    };
+  }, [anchor, panel, width]);
+  return place;
+}
+
+export function Popover({ anchor, label, width, onClose, className = '', children }: PopoverProps) {
+  const panel = useRef<HTMLElement>(null);
+  const place = usePlace(anchor, panel, width);
 
   useEffect(() => {
     if (panel.current) {
@@ -113,7 +133,7 @@ export function Popover({ anchor, label, width, onClose, className = '', childre
         width: place?.width ?? width,
         visibility: place ? 'visible' : 'hidden',
       }}
-      className={`absolute z-30 rounded-md border border-line bg-surface p-2.5 text-left text-[13px] font-normal whitespace-normal text-ink shadow-[0_8px_26px_#00000024] ${className}`}
+      className={`fixed z-30 rounded-md border border-line bg-surface p-2.5 text-left text-[13px] font-normal whitespace-normal text-ink shadow-[0_8px_26px_#00000024] ${className}`}
     >
       {children}
     </section>,

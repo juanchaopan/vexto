@@ -87,7 +87,7 @@ async function openReader(id = 'a') {
   await screen.findByRole('heading', { level: 1, name: `Lunar dust shields ${id}` });
 }
 
-const player = () => screen.getByRole('contentinfo', { name: 'Article player' });
+const player = () => screen.getByRole('region', { name: 'Article player' });
 const row = (index: number) =>
   document.querySelector<HTMLElement>(`[data-sentence-row="${index}"]`) as HTMLElement;
 /** The play button of the article head; the player's own button comes after it. */
@@ -413,11 +413,11 @@ describe('failures', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent("Couldn't load this article.Retry");
     expect(screen.getByRole('button', { name: 'Articles' })).toBeVisible();
-    expect(screen.queryByRole('contentinfo', { name: 'Article player' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Article player' })).toBeNull();
 
     failing = false;
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByRole('contentinfo', { name: 'Article player' })).toBeVisible();
+    expect(await screen.findByRole('region', { name: 'Article player' })).toBeVisible();
   });
 });
 
