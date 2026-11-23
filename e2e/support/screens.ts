@@ -64,15 +64,27 @@ type ScreenWindow = Window & {
  * be captured: a list loads its next batch only when Load more is pressed, a plain notice stays
  * once the test asks for it, and the article audio is reachable from the test, which can hold it
  * at one moment or have the browser refuse to start it, as autoplay rules do.
+ *
+ * A notice is held by stretching the timer that removes it. The page clock that some screens set
+ * (`page.clock`) puts its own `setTimeout` in place after this script has run, so `setTimeout`
+ * is an accessor that wraps whatever timer function is put there, the browser's or the clock's.
  */
 function steadyScreens(noticeMs: number) {
   const scope = window as ScreenWindow;
   Object.defineProperty(window, 'IntersectionObserver', { value: undefined, configurable: true });
-  const setTimer = window.setTimeout.bind(window);
-  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...rest: unknown[]) => {
-    const held = scope.holdNotices === true && timeout === noticeMs;
-    return setTimer(handler, held ? 2 ** 31 - 1 : timeout, ...rest);
-  }) as typeof setTimeout;
+  const holding = (setTimer: typeof setTimeout) =>
+    ((handler: TimerHandler, timeout?: number, ...rest: unknown[]) => {
+      const held = scope.holdNotices === true && timeout === noticeMs;
+      return setTimer(handler, held ? 2 ** 31 - 1 : timeout, ...rest);
+    }) as typeof setTimeout;
+  let current = holding(window.setTimeout.bind(window));
+  Object.defineProperty(window, 'setTimeout', {
+    configurable: true,
+    get: () => current,
+    set: (next: typeof setTimeout) => {
+      current = holding(next);
+    },
+  });
   const play = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function playForScreens(this: HTMLMediaElement) {
     scope.screenAudio = this;
@@ -235,7 +247,7 @@ const noticeHolds = new WeakMap<Page, Disposable>();
 
 /**
  * Keeps plain notices on screen until another replaces them, from now on and in the pages this
- * page opens next, until `settleScreen` is called.
+ * page opens next, until `settleScreen` is called. It works with and without the page clock.
  */
 export async function holdNotices(page: Page): Promise<void> {
   const hold = () => {
