@@ -68,29 +68,30 @@ flowchart LR
 
 ## 技术选择和决策点
 
-| 方面         | 决定                                                                                                                                                                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 框架         | Next.js 16，App Router，Route Handlers 提供接口                                                                                                                                                              |
-| 运行时       | Node.js 26 LTS，版本写死在 `.nvmrc` 和 `package.json` 的 `engines` 里；容器镜像用同一个版本                                                                                                                  |
-| 语言         | TypeScript 6.0.3（typescript-eslint 还不支持 7）                                                                                                                                                             |
-| 包管理器     | pnpm 12，版本写死在 `packageManager` 里                                                                                                                                                                      |
-| 构建         | Next.js 自带（Turbopack）；Cloud Run 的镜像用 Docker 构建，`worker.Dockerfile`                                                                                                                               |
-| 数据访问     | Drizzle ORM + postgres.js 驱动；接口和外部数据用 Zod 校验                                                                                                                                                    |
-| 前端状态     | TanStack Query 管服务端数据，Zustand 管页面状态                                                                                                                                                              |
-| 样式         | Tailwind CSS，颜色用语义化变量                                                                                                                                                                               |
-| AI           | OpenAI 官方 TypeScript SDK，不经过网关                                                                                                                                                                       |
-| 登录         | Clerk 的 Next.js SDK                                                                                                                                                                                         |
-| 对象存储访问 | AWS S3 SDK（Neon 的 S3 端点，path-style）                                                                                                                                                                    |
-| 订阅源解析   | fast-xml-parser 解析 RSS 和 Atom                                                                                                                                                                             |
-| 正文提取     | @mozilla/readability 在 jsdom 上提取正文，不执行网页里的脚本；只在收集任务里运行                                                                                                                             |
-| 句子切分     | Node 自带的 `Intl.Segmenter`（英文，按句）                                                                                                                                                                   |
-| 朗读合成     | onnxruntime-node 运行 Supertonic 3；推理代码取自 Supertonic 官方仓库的 Node.js 版本（MIT，仓库已归档），复制进项目自己维护，保留原版权声明并标明改动                                                         |
-| 朗读模型     | Hugging Face `supertone-oss-archive/supertonic-3`，固定在提交 `aafc6e32416a594460b32413efc49d7fe4ce6d46`，按校验和核对后复制到自己的 Cloud Storage 存储桶                                                    |
-| MP3 编码     | 镜像里装的 lame 命令（libmp3lame，单声道，32 kbps）；它是系统程序，不是 npm 依赖                                                                                                                             |
-| 调用朗读服务 | Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取朗读服务的身份令牌（google-auth-library、@vercel/oidc）                                                                                                  |
-| 观测         | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低；Cloud Run 的日志进 Cloud Logging（免费额度内），日志里不写文章正文和查词内容                                                                         |
-| 任务运行器   | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行                                                                                                                                            |
-| 部署工具     | Vercel CLI，用 `pnpm dlx` 临时运行，版本写死在工作流和 `Taskfile.yml` 里，由 Renovate 更新；不作为项目依赖，因为它自己固定的依赖有高危漏洞，会让 `pnpm audit` 失败。Google Cloud 用 gcloud CLI 和官方 action |
+| 方面         | 决定                                                                                                                                                                                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 框架         | Next.js 16，App Router，Route Handlers 提供接口                                                                                                                                                                                                                                                                                                                     |
+| 运行时       | Node.js 26 LTS，版本写死在 `.nvmrc` 和 `package.json` 的 `engines` 里；容器镜像用同一个版本                                                                                                                                                                                                                                                                         |
+| 语言         | TypeScript 6.0.3（typescript-eslint 还不支持 7）                                                                                                                                                                                                                                                                                                                    |
+| 包管理器     | pnpm 12，版本写死在 `packageManager` 里                                                                                                                                                                                                                                                                                                                             |
+| 构建         | Next.js 自带（Turbopack）；Cloud Run 的镜像用 Docker 构建，`worker.Dockerfile`                                                                                                                                                                                                                                                                                      |
+| 数据访问     | Drizzle ORM + postgres.js 驱动；接口和外部数据用 Zod 校验                                                                                                                                                                                                                                                                                                           |
+| 前端状态     | TanStack Query 管服务端数据，Zustand 管页面状态                                                                                                                                                                                                                                                                                                                     |
+| 样式         | Tailwind CSS，颜色用语义化变量                                                                                                                                                                                                                                                                                                                                      |
+| AI           | OpenAI 官方 TypeScript SDK，不经过网关；用 Responses API，结构化输出用严格的 JSON schema，`store: false`，不给模型工具，SDK 自己的重试关掉；模型、每次调用的超时（15 秒）、输出 token 上限和推理强度写在 `config/ai.json`                                                                                                                                           |
+| 登录         | Clerk 的 Next.js SDK                                                                                                                                                                                                                                                                                                                                                |
+| 对象存储访问 | AWS S3 SDK（Neon 的 S3 端点，path-style）                                                                                                                                                                                                                                                                                                                           |
+| 订阅源解析   | fast-xml-parser 解析 RSS 和 Atom                                                                                                                                                                                                                                                                                                                                    |
+| 正文提取     | @mozilla/readability 在 jsdom 上提取正文，不执行网页里的脚本；只在收集任务里运行                                                                                                                                                                                                                                                                                    |
+| 句子切分     | Node 自带的 `Intl.Segmenter`（英文，按句）                                                                                                                                                                                                                                                                                                                          |
+| 朗读合成     | onnxruntime-node 运行 Supertonic 3；推理代码取自 Supertonic 官方仓库的 Node.js 版本（MIT，仓库已归档），复制进项目自己维护，保留原版权声明并标明改动。推理的线程数按容器可用的 CPU 数设定，否则 onnxruntime 按宿主机的核数开线程，在 1 vCPU 上慢很多倍；镜像设 `ORT_DISABLE_TELEMETRY=1`，关掉 onnxruntime 的 Linux 版本向微软发送的遥测                            |
+| 朗读模型     | Hugging Face `supertone-oss-archive/supertonic-3`，固定在提交 `aafc6e32416a594460b32413efc49d7fe4ce6d46`，按校验和核对后复制到自己的 Cloud Storage 存储桶                                                                                                                                                                                                           |
+| MP3 编码     | 镜像里装的 lame 命令（libmp3lame，单声道，32 kbps）；它是系统程序，不是 npm 依赖                                                                                                                                                                                                                                                                                    |
+| 调用朗读服务 | Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取朗读服务的身份令牌（google-auth-library、@vercel/oidc）                                                                                                                                                                                                                                                         |
+| 费用估算     | 用量记录的金额按随版本发布的价格表 `config/prices.json` 估算：表有版本号，每个模型一项，写明价格的出处和核对日期。`gpt-6-luna` 每百万输入 token 0.10 美元、输出 0.50 美元（OpenAI 价格页，2026-11-23 核对，标准档、短上下文；输入都按完整输入价算，所以是上限）；`supertonic-3` 每 CPU 秒 0 美元（在 Cloud Run 的免费额度里）。换模型或调价时在表里加一项、改版本号 |
+| 观测         | `@vercel/otel`，用 Vercel 免费的 Tracing，采样率要设低；Cloud Run 的日志进 Cloud Logging（免费额度内），日志里不写文章正文和查词内容                                                                                                                                                                                                                                |
+| 任务运行器   | Task（`Taskfile.yml`），在 Windows、macOS 和 Linux 上都能直接运行                                                                                                                                                                                                                                                                                                   |
+| 部署工具     | Vercel CLI，用 `pnpm dlx` 临时运行，版本写死在工作流和 `Taskfile.yml` 里，由 Renovate 更新；不作为项目依赖，因为它自己固定的依赖有高危漏洞，会让 `pnpm audit` 失败。Google Cloud 用 gcloud CLI 和官方 action                                                                                                                                                        |
 
 ## 各组件的库
 
@@ -154,12 +155,36 @@ src/
     ui/                   组件
     index.ts              对其他功能公开的接口
   lib/                    共用的数据库连接、环境变量读取等；跨功能共用的表定义在 lib/db/schema.ts
-config/                   随版本发布的配置，例如订阅源
+config/                   随版本发布的配置：shared.json（条款版本、分类、订阅源的显示数据，浏览器也读）、
+                          collection.json（订阅源、合成预算、存储上限，只给服务端）、speech.json 和
+                          speech-model.json（声音、编码和固定的模型版本）、ai.json（AI 调用的参数）、
+                          prices.json（价格表）
 e2e/                      端到端测试
 drizzle/                  迁移脚本
 scripts/                  检查、测试、迁移和部署用的脚本
 worker.Dockerfile         Cloud Run 镜像
 ```
+
+功能：
+
+| 功能            | 做什么                                                              | 谁用                                                  |
+| --------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| `account`       | 成员和条款的检查、`GET /api/me`、确认条款、登录页、顶栏和账号菜单   | Web 应用                                              |
+| `articles`      | 文章、句子和访问记录的表和常量                                      | Web 应用（经 `reading`、`lookup`、`media`）、收集任务 |
+| `reading`       | 文章接口、Articles、阅读页和播放器                                  | Web 应用                                              |
+| `collection`    | 收集流水线：读订阅源、整理正文、合成预算、存储上限、合成文章        | 收集任务                                              |
+| `speech`        | Supertonic 3 的推理、lame 编码、朗读服务的 `POST /synthesize`       | 收集任务、朗读服务                                    |
+| `audio`         | 音频的表、缓存键和对象键、朗读服务的请求和响应格式                  | Web 应用、收集任务、朗读服务                          |
+| `playback`      | 单词和例句读音的生成（调用朗读服务）、签发播放地址                  | Web 应用（经 `media`）                                |
+| `media`         | 播放地址接口 `POST /api/media/playback`：按定位找到音频并核对所有者 | Web 应用；没有功能引用它                              |
+| `lookup`        | 查词的表、接口和浮窗；所有 AI 调用都经过它的 `runModelTask`         | Web 应用                                              |
+| `vocabulary`    | 生词本的表（含复习进度）、接口和画面、保存时的 AI 任务              | Web 应用                                              |
+| `review`        | 复习的排期、出题、判定、接口和画面                                  | Web 应用                                              |
+| `usage`         | 用量记录和费用估算                                                  | Web 应用、收集任务                                    |
+| `billing-guard` | 收到预算通知后停用结算                                              | 结算保护                                              |
+| `health`        | 健康检查                                                            | Web 应用                                              |
+
+功能之间的引用方向：`lookup` 不引用 `vocabulary`，`vocabulary` 不引用 `review`，`playback` 不引用 `media`；`media` 引用 `articles`、`lookup`、`vocabulary` 和 `playback`。收集任务能引到的功能（`collection`、`articles`、`audio`、`usage`、`speech`）不引用 `account` 的 `index.ts`，因为它带着 Clerk 和页面组件；所以 `members` 表定义在 `lib/db/schema.ts`。表归哪个功能见 `.docs/design/data.md`。
 
 依赖规则（由 dependency-cruiser 检查，分析到 0 个模块时直接失败）：
 
@@ -225,7 +250,8 @@ worker.Dockerfile         Cloud Run 镜像
   - 建 Pub/Sub 主题 `vexto-budget` 和推送订阅 `vexto-budget-push`，以 `vexto-budget-push` 的身份推送到结算保护的 `/budget-notifications`；
   - 建预算“vexto-staging zero spend”：作用于项目 `vexto-staging`，金额 1 加元，阈值 1% 和 100%，通知发到主题 `vexto-budget`；结算保护看到费用大于 0 就停用结算，不等阈值；
   - Vercel 项目 `vexto-staging` 打开 OIDC 联合，签发方模式选 Team；它的 Development 环境写入 Clerk 应用 `vexto` 开发实例的两个值；
-  - GitHub 环境 `staging` 设好 #3 的变量和密钥（见下文）。
+  - GitHub 环境 `staging` 设好 #3 的变量和密钥（见下文）；
+  - 仓库级别的密钥 `CLERK_SECRET_KEY` 和变量 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`：Clerk 应用 `vexto` 开发实例的两个值（和 staging 共用，项目所有者 2026-11-22 决定），用 Clerk CLI 取出，经管道直接交给 `gh` 写入，供 CI 的端到端测试用。
 - Node 版本由 `package.json` 的 `engines`（26.x）决定，函数地区由 `vercel.json` 决定，都不在 Vercel 项目设置里改。
 
 ### Google Cloud 的费用
@@ -261,17 +287,17 @@ Google Cloud 必须绑定结算账户才能使用。正常使用全部在免费�
 
 ## 各组件怎么运行
 
-| 组件               | 开发机                                                                                                          | CI                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Next.js 应用       | 本机 Node 直接运行（`next dev`）                                                                                | 运行机上直接构建和启动                                                     |
-| 收集任务、朗读服务 | 本机 Node 直接运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录，核对校验和；lame 装在本机 | 入口的集成测试，朗读合成用测试替身，返回固定的音频夹具；镜像只构建，不推送 |
-| PostgreSQL         | 容器（`postgres:18`）                                                                                           | 测试命令用 Testcontainers 起一次性的容器                                   |
-| 对象存储           | 容器里的 Adobe S3Mock                                                                                           | 同左，由测试命令起停                                                       |
-| OpenAI             | 真实服务，用开发环境自己的密钥（见下文“本机开发”）                                                              | MSW 测试替身                                                               |
-| Clerk              | Clerk 应用 `vexto` 的开发实例，和 staging 共用                                                                  | Clerk 官方的测试模式，用 @clerk/testing                                    |
-| Cloud Scheduler    | 不运行，需要时手动运行收集任务                                                                                  | 不运行                                                                     |
-| Google 身份联合    | 本机的 Web 应用直接调用本机的朗读服务，不带身份令牌                                                             | 测试替身                                                                   |
-| Speak 判定         | 待 spike #4                                                                                                     | 待 spike #4                                                                |
+| 组件               | 开发机                                                                                                          | CI                                                                                                                                                                                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Next.js 应用       | 本机 Node 直接运行（`next dev`）                                                                                | 运行机上直接构建和启动                                                                                                                                                                                                                                                               |
+| 收集任务、朗读服务 | 本机 Node 直接运行；模型由一个 Task 命令按固定版本从 Hugging Face 下载到不提交的目录，核对校验和；lame 装在本机 | 入口的集成测试，朗读合成用测试替身，返回固定的音频夹具；集成测试的任务在运行机上装 lame，编码器的集成测试用真实的 lame；镜像只构建，不推送，构建时用镜像里的 lame 编码一段静音再读回检查                                                                                             |
+| PostgreSQL         | 容器（`postgres:18`）                                                                                           | 测试命令用 Testcontainers 起一次性的容器                                                                                                                                                                                                                                             |
+| 对象存储           | 容器里的 Adobe S3Mock                                                                                           | 同左，由测试命令起停                                                                                                                                                                                                                                                                 |
+| OpenAI             | 真实服务，用开发环境自己的密钥（见下文“本机开发”）                                                              | 单元和集成测试用 MSW 测试替身；端到端测试用一个小的 HTTP 替身（`e2e/support/openai-double.ts`），按回答格式的名字给出固定的回答，应用的 `OPENAI_BASE_URL` 指向它，`OPENAI_API_KEY` 是假值                                                                                            |
+| Clerk              | Clerk 应用 `vexto` 的开发实例，和 staging 共用                                                                  | 集成和安全测试用替身；端到端测试用开发实例的测试模式：@clerk/testing 的 `clerkSetup()` 取得测试令牌，加在浏览器发给 Clerk Frontend API 的每个请求上（请求仍由浏览器自己发）；登录时用 Backend API 生成一次性的登录令牌，在页面里以 `ticket` 方式登录。密钥来自仓库级别的值（见下文） |
+| Cloud Scheduler    | 不运行，需要时手动运行收集任务                                                                                  | 不运行                                                                                                                                                                                                                                                                               |
+| Google 身份联合    | 本机的 Web 应用直接调用本机的朗读服务，不带身份令牌                                                             | 测试替身                                                                                                                                                                                                                                                                             |
+| Speak 判定         | 待 spike #4                                                                                                     | 待 spike #4                                                                                                                                                                                                                                                                          |
 
 S3Mock 不校验预签名地址的签名，所以“过期的预签名地址不能用”这类行为由单元测试检查，真实的存储桶由 staging 的冒烟测试检查。
 
@@ -308,11 +334,11 @@ git hook 由 lefthook 管理。hook 可以被跳过，所以 hook 里的每项�
 | 组件   | Vitest 浏览器模式 + Testing Library                                                                                               | 一个组件或页面                                                                     | 后端接口                   |
 | 集成   | Vitest + Testcontainers + MSW                                                                                                     | 从接口或 Cloud Run 入口到真实 PostgreSQL 和 S3Mock；数据库用迁移脚本从空库建起     | 前端、第三方服务、朗读合成 |
 | 安全   | 同集成测试                                                                                                                        | 登录、权限、用户数据隔离、恶意输入的用例                                           | 第三方服务、朗读合成       |
-| 端到端 | Playwright，手机尺寸的 WebKit 和 Chromium；本机和 CI 都在同一个固定版本的 Playwright Linux 容器里跑，截图基线也只在这个容器里生成 | 整个 Web 应用、数据库和对象存储                                                    | 第三方服务、朗读服务       |
+| 端到端 | Playwright，手机尺寸的 WebKit 和 Chromium；本机和 CI 都在同一个固定版本的 Playwright Linux 容器里跑，截图基线也只在这个容器里生成 | 整个 Web 应用、数据库和对象存储；Clerk 的开发实例                                  | OpenAI、朗读服务           |
 | 冒烟   | 端到端测试里打了 `@smoke` 标签的几个；只改动不了任何东西的还打 `@production-safe`                                                 | 部署好的目标                                                                       | 无                         |
 | 迁移   | Vitest + Testcontainers                                                                                                           | 用上一版格式的数据（含空值、最大长度、特殊字符）跑新的迁移脚本；只新建表的脚本不写 | 无                         |
 
-不写合同测试（前后端在同一个仓库，一起部署），不做性能测试（没有性能指标），不加自动安全扫描，不设覆盖率下限。真实的朗读合成只在 staging 上由冒烟测试检查：部署任务用自己的 Google 身份请朗读服务合成一个单词，确认拿回的是能播放的 MP3。
+不写合同测试（前后端在同一个仓库，一起部署），不做性能测试（没有性能指标），不加自动安全扫描，不设覆盖率下限。真实的朗读合成只在 staging 上由冒烟测试检查：部署任务用自己的 Google 身份请朗读服务把 `Hello` 合成到固定的对象键 `smoke/check.mp3`，再从存储桶读回，确认是带 AI 声音注释、能播放的 MP3。
 
 指标和测试的对应：
 
@@ -434,15 +460,22 @@ Google Cloud 的身份：不用任何长期的服务账号密钥。
 
 上表的密钥都存在 GitHub 环境里，Cloud Run 用到的那几个（`DATABASE_URL`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`）在部署时另写一份副本进 Secret Manager。定时触发由 Cloud Scheduler 用 Google 自己的认证启动收集任务，所以没有 `CRON_SECRET`。
 
+CI 的端到端测试要登录 Clerk，用的两个值存在仓库级别，不属于任何部署目标：
+
+| 名称                                | 用途           | 类型 | 谁读                                                     | 值从哪来                                                    | 由谁设置 |
+| ----------------------------------- | -------------- | ---- | -------------------------------------------------------- | ----------------------------------------------------------- | -------- |
+| `CLERK_SECRET_KEY`                  | Clerk 密钥     | 密钥 | CI 的 `test-e2e` 任务，由 `scripts/test-e2e.ts` 交给容器 | Clerk 应用 `vexto` 的开发实例（和 staging 共用），Clerk CLI | #3       |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk 公开密钥 | 变量 | 同上                                                     | 同上                                                        | #3       |
+
 Vercel 项目 `vexto-staging` 的 Production 环境里有 Neon 集成接入时自动加的 `DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`，部署时由 GitHub 环境里的值覆盖，以 GitHub 的为准；如果 Vercel 不允许覆盖集成管理的变量，#3 回到这一步重新决定。Development 环境里是 Clerk 应用 `vexto` 开发实例的两个值，供本机开发用。
 
 成员名单：`task member -- add|revoke|list <邮箱> --target <环境>` 修改目标环境数据库里的成员表。数据库连接地址由 Neon CLI（`neonctl`，用 `pnpm dlx` 临时运行，版本写死在 `Taskfile.yml` 里）按配置里写的该目标的 Neon 项目和分支取得，项目所有者事先在本机用它登录一次；地址只在内存里交给脚本，不显示，也不写进文件。不用 GitHub 工作流做这件事，因为公开仓库的运行日志和输入谁都能看，会暴露成员的邮箱。
 
-冒烟测试访问健康检查接口，并用部署任务的 Google 身份请朗读服务合成一个单词，不需要外部账号。
+冒烟测试不需要外部账号：访问健康检查接口；确认没登录时 `/` 转到 Clerk 的登录页、`/api/me` 返回 401；用部署任务的 Google 身份取得朗读服务的身份令牌（在日志里遮住），检查它的 `GET /health`，请它把 `Hello` 合成到 `smoke/check.mp3`，再用该目标的 `S3_*` 值从存储桶读回检查。所以冒烟测试的步骤从 GitHub 环境拿到 `S3_*` 的值，只放在测试的环境变量里。生产只跑同时打了 `@production-safe` 的测试，这几个都是。
 
 ## 待定事项
 
 - Speak 用什么判定：由 spike #4 决定，Speak 复习在 #5 实现。
 - 生产环境的搭建：包括改名、地址、GitHub 环境 `production` 和它的密钥、生产的 Google Cloud 项目、生产用的 Clerk 应用（沿用 lingocurrent 现有的 `lingocurrent-production-auth`，还是在 Clerk 应用 `vexto` 里建生产实例），以及 Clerk 生产实例的邮件问题。
 
-Last changed: #3 (2026-11-22)
+Last changed: #3 (2026-11-23)
