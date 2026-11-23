@@ -32,6 +32,12 @@ export default clerkMiddleware(
 );
 
 export const config = {
-  // Everything but Next.js internals, files with an extension (static files) and the health check.
-  matcher: ['/((?!_next/|api/health(?:/|$)|.*\\.[^/]+$).*)'],
+  matcher: [
+    // Pages: everything but Next.js internals, the interface and files with an extension, which
+    // are static files.
+    '/((?!_next/|api/|.*\\.[^/]+$).*)',
+    // The interface: every path but the health check, also one whose last segment has a dot, as a
+    // path ID may; a Route Handler that runs without the middleware cannot read the session.
+    '/api/((?!health(?:/|$)).*)',
+  ],
 };

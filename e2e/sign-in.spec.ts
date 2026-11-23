@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-// What a visitor without a session gets: the sign-in page and refused interface requests. Both
-// are smoke tests that only read, so they also run against production: the first shows that the
-// deployed application reaches Clerk with its keys, the second that its session check guards the
-// interface. Clerk's sign-in component is loaded from Clerk's servers when the page opens.
+// What a visitor without a session gets: the sign-in page and refused interface requests. The
+// first two are smoke tests that only read, so they also run against production: the first shows
+// that the deployed application reaches Clerk with its keys, the second that its session check
+// guards the interface. Clerk's sign-in component is loaded from Clerk's servers when the page
+// opens.
 
 const CLERK_LOAD_TIMEOUT = 20_000;
 
@@ -33,3 +34,12 @@ test(
     expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
   },
 );
+
+test('the interface refuses a path with a dot in its last segment without a session', async ({
+  request,
+}) => {
+  const response = await request.get('/api/vocabulary/not-a-card.json');
+
+  expect(response.status()).toBe(401);
+  expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
+});

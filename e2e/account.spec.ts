@@ -45,6 +45,12 @@ test('a member signs in, accepts the terms, and reads them again from the accoun
   await expect(articlesTitle(page)).toBeVisible();
   expect(await acceptedTermsVersion(email)).toBe(1);
 
+  // A path ID with a dot in it still reaches its Route Handler with the session, which finds no
+  // such card.
+  const dotted = await page.request.get('/api/vocabulary/not-a-card.json');
+  expect(dotted.status()).toBe(404);
+  expect(await dotted.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('button', { name: 'Terms' }).click();
   await expect(page).toHaveURL(/\/terms$/);
