@@ -246,6 +246,9 @@ jobs:
         run: task browsers -- --with-deps
       - run: task test-component
 
+  # lame is the MP3 encoder the Cloud Run image installs from its distribution's packages; with
+  # it on the runner, the encoder's integration tests run against the real program instead of
+  # being skipped.
   test-integration:
     name: test-integration
     runs-on: ubuntu-24.04
@@ -257,6 +260,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Install lame
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends lame
       - run: task test-integration
 
   test-security:

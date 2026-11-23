@@ -8,8 +8,8 @@
 // - testResolver(): host names resolve to a public test address, or to the addresses a test gives.
 // - synthesizerDouble() and storageRoomDouble(): stand-ins for speech synthesis and eviction.
 // - Builders for feed documents and article text, all of it made up for the tests.
+// - testBucket() and failingStorage, from src/lib/storage/testing.ts.
 import { randomUUID } from 'node:crypto';
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { sql } from 'drizzle-orm';
 import { setupServer } from 'msw/node';
 import postgres from 'postgres';
@@ -20,11 +20,7 @@ import {
   type FeedCollection,
 } from '../../lib/config/collection-config.ts';
 import { createDatabase, type Database } from '../../lib/db/client.ts';
-import {
-  createObjectStorage,
-  storageSettingsFromEnv,
-  type ObjectStorage,
-} from '../../lib/storage/object-storage.ts';
+import { createObjectStorage, storageSettingsFromEnv } from '../../lib/storage/object-storage.ts';
 import { COLLECT_LEASE_NAME } from './domain/collection-state.ts';
 import { occurrencesBetween } from './domain/schedule.ts';
 import type { HostResolver, ResolvedAddress } from './server/address-policy.ts';
@@ -37,6 +33,8 @@ import {
 } from './server/article-synthesizer.ts';
 import type { CollectionDependencies } from './server/collection-run.ts';
 import { feedCursors } from './server/schema.ts';
+
+export { failingStorage, testBucket } from '../../lib/storage/testing.ts';
 
 /** The address every test host resolves to unless the test says otherwise. */
 export const PUBLIC_TEST_ADDRESS = '93.184.215.14';
@@ -289,36 +287,3 @@ export function articlePage(title: string, html: string): string {
     <article><h1>${escapeXml(title)}</h1>${html}</article>
     <footer>Footer text</footer></body></html>`;
 }
-
-/** The S3Mock bucket, for putting objects there and checking they are gone. */
-export function testBucket() {
-  const settings = storageSettingsFromEnv();
-  const client = new S3Client({
-    endpoint: settings.endpoint,
-    region: settings.region,
-    forcePathStyle: true,
-    credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey },
-  });
-  return {
-    async put(key: string) {
-      await client.send(
-        new PutObjectCommand({ Bucket: settings.bucket, Key: key, Body: 'test audio' }),
-      );
-    },
-    async has(key: string) {
-      try {
-        await client.send(new HeadObjectCommand({ Bucket: settings.bucket, Key: key }));
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  };
-}
-
-/** Storage that fails every deletion, for the retry of retiring audio. */
-export const failingStorage: ObjectStorage = {
-  async deleteObject() {
-    throw new Error('The bucket is unreachable.');
-  },
-};

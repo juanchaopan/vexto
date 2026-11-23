@@ -34,7 +34,8 @@ FROM base
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends lame \
   && rm -rf /var/lib/apt/lists/*
-ENV NODE_ENV=production
+# onnxruntime's Linux library would otherwise send usage telemetry to Microsoft.
+ENV NODE_ENV=production ORT_DISABLE_TELEMETRY=1
 WORKDIR /app
 COPY --from=dependencies /build/node_modules ./node_modules
 COPY --from=dependencies /build/package.json ./
@@ -44,4 +45,17 @@ COPY config ./config
 COPY src ./src
 # The node user of the base image; the files stay owned by root, so the process cannot change them.
 USER node
+# The image's lame must take the arguments the speech code gives it: a second of silence is
+# encoded with the configured settings and has to read back as a constant-bitrate mono MP3 at
+# the configured rate, with the AI voice comment. A build whose lame does not fails here.
+RUN node --input-type=module --eval " \
+  import { speechConfig } from './src/lib/config/speech-config.ts'; \
+  import { configuredEncoder, readMp3 } from './src/features/speech/index.ts'; \
+  const { encoding } = speechConfig; \
+  const mp3 = readMp3(await configuredEncoder(speechConfig)(new Uint8Array(88200), 44100)); \
+  const fits = mp3.comment === encoding.comment && mp3.channelMode === 'mono' \
+    && mp3.sampleRateHz === encoding.sampleRateHz \
+    && mp3.bitratesKbps.join() === String(encoding.bitrateKbps); \
+  if (!fits) { console.error('lame wrote an unexpected MP3:', mp3); process.exit(1); } \
+  console.log('lame writes', JSON.stringify(mp3));"
 ENTRYPOINT ["node"]
