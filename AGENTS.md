@@ -125,7 +125,7 @@ CI 总是跑全部检查。PR 上的每一项都是必过检查：
 
 部署不创建以上的基础设施（存储桶、Artifact Registry 仓库、服务账号和它们的权限、密钥本身、Cloud Scheduler、预算、Pub/Sub、两个身份联合提供方），它们在搭建时用 gcloud 建一次。Cloud Run 的任务和服务由部署创建和更新，每次部署都把它们的设置重新写一遍：收集任务 2 vCPU、2 GiB、最长 3600 秒、不重试、一次一个；朗读服务 1 vCPU、2 GiB、0 到 1 个实例；结算保护 1 vCPU、256 MiB、0 到 1 个实例；两个服务都只允许有 Run Invoker 的身份调用。
 
-冒烟测试里，部署任务用 `gcloud auth print-identity-token` 以部署的服务账号为 `TTS_SERVICE_URL` 取一个身份令牌，在日志里遮住，只通过环境变量交给测试，测试带着它请求 `vexto-tts` 的 `GET /health`。
+冒烟测试里，部署任务用 `gcloud auth print-identity-token` 以部署的服务账号为 `TTS_SERVICE_URL` 取一个身份令牌，在日志里遮住，只通过环境变量交给测试。测试带着它请求 `vexto-tts` 的 `GET /health`，再请它合成一个单词，写到存储桶里固定的 `smoke/check.mp3`（每次部署覆盖上一次的，没有音频记录，谁也播放不到）；然后用部署步骤交给它的 `S3_*` 值从存储桶读回这个文件，确认它是带 AI 声音注释、能播放的 MP3。
 
 ### 环境变量和密钥
 
