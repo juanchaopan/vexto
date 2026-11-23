@@ -3546,6 +3546,20 @@
           window.scrollTo({ top: 0, behavior: 'instant' });
         }
         const normalise = (t) => t.normalize('NFC').trim().replace(/\s+/g, ' ').toLowerCase();
+        // Moves one mode's progress after an answer; returns the result text of a right answer.
+        function moveProgress(x, correct) {
+          if (!correct) {
+            x.round = Math.max(0, x.round - 1);
+            x.mins = 10;
+            return null;
+          }
+          const wait = REVIEW_STAGES[x.round];
+          x.round += 1;
+          x.mins = wait == null ? null : wait * 1440;
+          return wait == null
+            ? 'Correct · Complete'
+            : `Correct · Next review in ${duration(wait * 1440)}`;
+        }
         function submitAnswer() {
           const r = s.review;
           const w = reviewWord();
@@ -3567,19 +3581,7 @@
           }
           const correct =
             r.mode === 'Spell' ? w.forms.includes(normalise(r.answer)) : r.option === w.correct;
-          const x = w.m[i];
-          if (correct) {
-            const wait = REVIEW_STAGES[x.round];
-            x.round += 1;
-            x.mins = wait == null ? null : wait * 1440;
-            r.result =
-              wait == null
-                ? 'Correct · Complete'
-                : `Correct · Next review in ${duration(wait * 1440)}`;
-          } else {
-            x.round = Math.max(0, x.round - 1);
-            x.mins = 10;
-          }
+          r.result = moveProgress(w.m[i], correct);
           r.feedback = correct ? 'correct' : 'incorrect';
           render();
         }
@@ -4087,11 +4089,18 @@
           (extra = {}) =>
           (st) =>
             Object.assign(st, { page: 'vocabulary' }, extra);
+        // A state after an answer moves the card's progress as well, so the top bar no longer
+        // counts the question; an answer from another device counts as a right one.
         const review =
           (mode, extra = {}) =>
           (st) => {
             st.page = 'review';
             st.review = Object.assign(nextQuestionFor(st, mode), extra);
+            const { feedback, cardId } = st.review;
+            if (!['correct', 'incorrect', 'changed'].includes(feedback)) return;
+            const progress = st.words.find((w) => w.id === cardId).m[modeIndex(mode)];
+            const result = moveProgress(progress, feedback !== 'incorrect');
+            if (feedback === 'correct') st.review.result = result;
           };
         // A state after a failed action: the notice with Retry over the screen the action left.
         const withFailure =
@@ -4350,11 +4359,7 @@
           [
             'review-spell-correct',
             'Spell: correct',
-            review('Spell', {
-              answer: 'resilient',
-              feedback: 'correct',
-              result: 'Correct · Next review in 4 days',
-            }),
+            review('Spell', { answer: 'resilient', feedback: 'correct' }),
           ],
           [
             'review-spell-wrong',
@@ -4365,11 +4370,7 @@
           [
             'review-translate-answered',
             'Translate: answered',
-            review('Translate', {
-              option: 1,
-              feedback: 'correct',
-              result: 'Correct · Next review in 4 days',
-            }),
+            review('Translate', { option: 1, feedback: 'correct' }),
           ],
           [
             'review-empty',
