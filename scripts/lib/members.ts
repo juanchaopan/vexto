@@ -129,13 +129,26 @@ export const memberStatements = {
 
 /**
  * What revoking removes from the tables that hold a member's personal data, one statement per
- * table, run in the revoke transaction before the member row is updated (.docs/design/rules.md):
- * vocabulary cards with their examples, options and review progress, lookups with their examples,
- * visits and operation receipts are deleted, and usage records keep their rows without an owner.
- * Each of those tables adds its statement here; the members table is the only table the database
- * has, so the list is empty.
+ * table, run in the revoke transaction before the member row is updated
+ * (.docs/design/rules.md, 取消资格, and data.md, 什么删掉什么). Deleting the vocabulary cards
+ * deletes their examples, Translate options and review progress with them, and deleting the
+ * lookups deletes their examples; review progress is also deleted by its owner, so none can be
+ * left behind. Visits and operation receipts are deleted, and usage records stay without an owner.
  */
-const memberDataRemovals: readonly ((memberId: string) => Statement)[] = [];
+const memberDataRemovals: readonly ((memberId: string) => Statement)[] = [
+  (memberId) => ({ text: 'DELETE FROM vocabulary_cards WHERE owner_id = $1', params: [memberId] }),
+  (memberId) => ({ text: 'DELETE FROM review_progress WHERE owner_id = $1', params: [memberId] }),
+  (memberId) => ({ text: 'DELETE FROM lookup_entries WHERE owner_id = $1', params: [memberId] }),
+  (memberId) => ({ text: 'DELETE FROM visits WHERE owner_id = $1', params: [memberId] }),
+  (memberId) => ({
+    text: 'DELETE FROM operation_receipts WHERE owner_id = $1',
+    params: [memberId],
+  }),
+  (memberId) => ({
+    text: 'UPDATE usage_records SET owner_id = NULL WHERE owner_id = $1',
+    params: [memberId],
+  }),
+];
 
 /** The statements that remove a revoked member's personal data, in the order they run. */
 export function revokedMemberDataStatements(memberId: string): Statement[] {

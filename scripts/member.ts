@@ -11,14 +11,13 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import postgres from 'postgres';
+import { memberDatabase } from './lib/member-database.ts';
 import {
   describeMemberError,
   memberUsage,
   parseMemberArgs,
   runMemberCommand,
   type MemberCommand,
-  type MemberDatabase,
-  type MemberSession,
 } from './lib/members.ts';
 import {
   connectionStringArgs,
@@ -29,20 +28,6 @@ import {
 import { pnpmSecretOutput, repoRoot } from './lib/node-tools.ts';
 
 const configFile = path.join(repoRoot, 'scripts', 'neon-targets.json');
-
-function sessionOf(connection: postgres.ISql): MemberSession {
-  return {
-    query: async ({ text, params }) => [...(await connection.unsafe(text, [...params]))],
-  };
-}
-
-function memberDatabase(sql: postgres.Sql): MemberDatabase {
-  return {
-    ...sessionOf(sql),
-    transaction: <T>(work: (session: MemberSession) => Promise<T>) =>
-      sql.begin((transaction) => work(sessionOf(transaction))) as Promise<T>,
-  };
-}
 
 let command: MemberCommand;
 try {
