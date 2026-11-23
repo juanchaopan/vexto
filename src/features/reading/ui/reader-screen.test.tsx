@@ -1,7 +1,8 @@
 // The reader and its player (.docs/design/screens.md, 阅读页和播放器) against stand-ins for the
 // endpoints and the audio element: the article and its attribution, the highlight following the
 // audio's time, playing from a sentence, the speed, the next article of a continuous play, Tap to
-// continue, the lock screen controls, failures, an article that is gone, and the lookup seam.
+// continue, the lock screen controls, failures of the playback address, of the audio while it
+// plays and of recording the visit, an article that is gone, and the lookup seam.
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
@@ -31,6 +32,7 @@ const fetchMock = vi.spyOn(window, 'fetch');
 type Answers = {
   article?: (id: string) => Response;
   playback?: () => Response;
+  visit?: () => Response;
 };
 
 const requests: { method: string; path: string; body: unknown }[] = [];
@@ -55,7 +57,9 @@ function answer(answers: Answers = {}) {
       return answers.playback?.() ?? playbackAddress((body as { articleId: string }).articleId);
     }
     if (/^\/api\/articles\/[^/]+\/visit$/.test(url.pathname)) {
-      return json(200, { data: { lastVisitedAt: '2026-11-22T10:00:00.000Z' } });
+      return (
+        answers.visit?.() ?? json(200, { data: { lastVisitedAt: '2026-11-22T10:00:00.000Z' } })
+      );
     }
     const article = /^\/api\/articles\/([^/]+)$/.exec(url.pathname);
     if (article) {
@@ -98,6 +102,8 @@ async function play() {
   await waitFor(() => expect(usePlayerStore.getState().status).toBe('playing'));
 }
 
+const visitRequest = { method: 'PUT', path: '/api/articles/a/visit', body: undefined };
+
 describe('the article', () => {
   it('shows the head, the sentences, the attribution and the player, and records the visit', async () => {
     await openReader();
@@ -120,13 +126,7 @@ describe('the article', () => {
     expect(within(player()).getByText('Lunar dust shields a · 1/3')).toBeVisible();
     expect(screen.getAllByRole('button', { name: 'Play article' })).toHaveLength(2);
     expect(row(0)).not.toHaveAttribute('data-active');
-    await waitFor(() =>
-      expect(requests).toContainEqual({
-        method: 'PUT',
-        path: '/api/articles/a/visit',
-        body: undefined,
-      }),
-    );
+    await waitFor(() => expect(requests).toContainEqual(visitRequest));
   });
 
   it('starts paragraphs after the first with more space', async () => {
@@ -253,7 +253,7 @@ describe('playing', () => {
     expect(within(player()).getByRole('button', { name: 'Pause article' })).toBeVisible();
   });
 
-  it('says the article could not play, and plays it on Retry', async () => {
+  it('says the article could not play and stays unplayed, and plays it on Retry', async () => {
     let refuse = true;
     answer({
       playback: () => (refuse ? json(503, errorBody('UNAVAILABLE', true)) : playbackAddress('a')),
@@ -264,10 +264,32 @@ describe('playing', () => {
 
     const notice = await screen.findByRole('status');
     await waitFor(() => expect(notice).toHaveTextContent("Couldn't play this article.Retry"));
-    expect(usePlayerStore.getState().status).toBe('paused');
+    expect(usePlayerStore.getState()).toMatchObject({ status: 'idle', started: false });
+    expect(row(0)).not.toHaveAttribute('data-active');
+    expect(screen.getAllByRole('button', { name: 'Play article' })).toHaveLength(2);
     refuse = false;
     await userEvent.click(within(notice).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(usePlayerStore.getState().status).toBe('playing'));
+  });
+
+  it('stops at the current sentence when the audio fails while it plays, and plays on with Retry', async () => {
+    await openReader();
+    await play();
+    act(() => audio.moveTo(2.5));
+
+    act(() => {
+      audio.dispatchEvent(new Event('error'));
+    });
+
+    const notice = await screen.findByText("Couldn't play this article.");
+    const toast = notice.closest('[role="status"]') as HTMLElement;
+    expect(usePlayerStore.getState().status).toBe('paused');
+    expect(audio.paused).toBe(true);
+    expect(row(1)).toHaveAttribute('data-active');
+    await userEvent.click(within(toast).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(usePlayerStore.getState().status).toBe('playing'));
+    expect(audio.currentTime).toBe(2.3);
   });
 });
 
@@ -418,6 +440,20 @@ describe('failures', () => {
     failing = false;
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('region', { name: 'Article player' })).toBeVisible();
+  });
+
+  it('says nothing when recording the visit fails, and the article still plays', async () => {
+    answer({ visit: () => json(500, errorBody('INTERNAL', true)) });
+    await openReader();
+
+    await waitFor(() => expect(requests).toContainEqual(visitRequest));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(/^Couldn't/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    await play();
+    expect(row(0)).toHaveAttribute('data-active');
+    expect(screen.queryByText(/^Couldn't/)).toBeNull();
   });
 });
 

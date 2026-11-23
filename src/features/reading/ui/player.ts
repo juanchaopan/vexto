@@ -14,7 +14,11 @@
 // A continuous play moves through its queue: in the foreground an article that ends sends the
 // person back to the list, where the next article is shown, and about 500 ms later the next
 // article opens and plays from its first sentence. In the background or on the lock screen only
-// the audio changes. An article of the queue that no longer exists is skipped with a notice.
+// the audio changes. An article of the queue that no longer exists is skipped: with a notice on
+// the list in the foreground, straight to the one after it in the background.
+//
+// When playback fails, the player stops at the current sentence. A play that fails before the
+// article was ever started leaves it as it was, not played and with nothing highlighted.
 import type { QueryClient } from '@tanstack/react-query';
 import { ApiRequestError, hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import {
@@ -188,9 +192,9 @@ const handledElsewhere = (error: unknown) =>
   hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED');
 
 /** The player stops where it is and says the article could not play. */
-function failed(error: unknown, retry: () => void) {
+function failed(error: unknown, retry: () => void, unplayed = false) {
   halt();
-  set({ status: 'paused' });
+  set(unplayed ? { status: 'idle', started: false } : { status: 'paused' });
   releaseAudioFocus(holder);
   if (handledElsewhere(error)) {
     return;
@@ -203,7 +207,12 @@ function stillLoading(articleId: string) {
   return state().article?.id === articleId && state().status === 'loading';
 }
 
-async function startAudio(articleId: string, target: PlayerAudio, retry: () => void) {
+async function startAudio(
+  articleId: string,
+  target: PlayerAudio,
+  retry: () => void,
+  unplayed: boolean,
+) {
   try {
     await target.play();
   } catch (error) {
@@ -213,7 +222,7 @@ async function startAudio(articleId: string, target: PlayerAudio, retry: () => v
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
       set({ status: 'blocked' });
     } else {
-      failed(error, retry);
+      failed(error, retry, unplayed);
     }
     return;
   }
@@ -229,6 +238,7 @@ async function playFrom(index: number, mode: PlayMode): Promise<void> {
     return;
   }
   const retry = () => void playFrom(index, mode);
+  const unplayed = !started && mode === 'article';
   cancelStep();
   takeAudioFocus(holder);
   set({
@@ -242,13 +252,13 @@ async function playFrom(index: number, mode: PlayMode): Promise<void> {
   try {
     await ensureAddress(article.id, target, connection.queryClient);
   } catch (error) {
-    failed(error, retry);
+    failed(error, retry, unplayed);
     return;
   }
   if (stillLoading(article.id)) {
     target.playbackRate = speed;
     target.currentTime = article.timings[index].startMs / 1000;
-    await startAudio(article.id, target, retry);
+    await startAudio(article.id, target, retry, unplayed);
   }
 }
 

@@ -8,6 +8,10 @@
 // While a modal dialog is open everything outside it is inert, so the notice is drawn inside the
 // topmost open modal dialog: it stays above the dialog's backdrop, in the same place, and its
 // Retry button can still be pressed.
+//
+// The notice is centred by its margins rather than moved by half its width, so its text is laid
+// out on whole pixels and draws the same every time. A plain notice wraps at half the screen's
+// width, as the design draws it; one with Retry keeps its message on one line.
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -101,8 +105,10 @@ export function ToastViewport() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed top-16 left-1/2 z-40 max-w-[min(340px,calc(100vw-24px))] -translate-x-1/2 rounded-md border border-line bg-surface text-xs text-ink shadow-[0_8px_26px_#00000024] empty:hidden ${
-        retry ? 'flex w-max items-center gap-2.5 py-1 pr-1 pl-3' : 'px-3 py-2'
+      className={`fixed inset-x-0 top-16 z-40 mx-auto rounded-md border border-line bg-surface text-xs text-ink shadow-[0_8px_26px_#00000024] empty:hidden ${
+        retry
+          ? 'flex w-max max-w-[min(340px,calc(100vw-24px))] items-center gap-2.5 py-1 pr-1 pl-3'
+          : 'w-fit max-w-[min(340px,50vw)] px-3 py-2'
       }`}
     >
       {toast && retry ? (

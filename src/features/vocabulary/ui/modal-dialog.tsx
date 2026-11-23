@@ -2,8 +2,10 @@
 
 // A modal dialog of the vocabulary (.docs/design/screens.md, 浮层和对话框): the delete confirmation
 // and the replace question. It opens with `showModal()` over a translucent backdrop, so the rest
-// of the page is inert and a notice is drawn inside it, and the focus starts on Cancel. Escape is
-// Cancel; it is kept from also closing an explanation underneath. No animation.
+// of the page is inert and a notice is drawn inside it, and the focus starts on Cancel. Cancel
+// shows the focus ring whenever it has the focus, also when a tap opened the dialog, so the
+// person sees which answer Enter gives. Escape is Cancel; it is kept from also closing an
+// explanation underneath. No animation.
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Button, buttonClassName } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
@@ -48,7 +50,12 @@ export function ModalDialog({ title, onCancel, children, action }: ModalDialogPr
       <h2 className="text-[17px] font-semibold">{title}</h2>
       {children}
       <div className="mt-[17px] flex justify-end gap-2">
-        <button ref={cancel} type="button" className={buttonClassName()} onClick={onCancel}>
+        <button
+          ref={cancel}
+          type="button"
+          className={`${buttonClassName()} focus:outline-2 focus:outline-offset-2 focus:outline-accent`}
+          onClick={onCancel}
+        >
           Cancel
         </button>
         {action}
