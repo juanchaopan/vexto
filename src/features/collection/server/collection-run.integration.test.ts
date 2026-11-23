@@ -44,10 +44,16 @@ let db: IsolatedDatabase;
 let database: Database;
 let synthesizer: SynthesizerDouble;
 
+/** Whether a request goes to one of the made-up example.org hosts rather than to the bucket. */
+function toTestHost(url: string) {
+  const { hostname } = new URL(url);
+  return hostname === 'example.org' || hostname.endsWith('.example.org');
+}
+
 beforeAll(async () => {
   feeds.listen();
   feeds.server.events.on('request:start', ({ request }) => {
-    if (request.url.includes('example.org')) {
+    if (toTestHost(request.url)) {
       requested.push(request.url);
     }
   });

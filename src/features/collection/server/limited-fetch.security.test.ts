@@ -334,7 +334,7 @@ describe('the collection job behind hostile addresses', () => {
 
     expect(await db.database.select().from(articles)).toEqual([]);
     expect(await db.database.select().from(seenItems)).toHaveLength(2);
-    expect(requested.filter((url) => !url.includes('feeds.example.org'))).toEqual([
+    expect(requested.filter((url) => new URL(url).hostname !== 'feeds.example.org')).toEqual([
       'https://news.example.org/moved',
     ]);
   });
