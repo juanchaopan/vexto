@@ -1,7 +1,9 @@
 // A small JSON-over-HTTP server for the Cloud Run services. Each route is a handler keyed by
 // method and path; the server reads the JSON body, calls the handler and writes its answer with
 // `Cache-Control: no-store`. Errors use the body the interfaces define for the services:
-// { error: { code, message, retryable } }.
+// { error: { code, message, retryable } }. No request, however malformed, may end the process:
+// a target that is not a path is refused, and any failure while answering is logged and answered
+// with a 500.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { errorFields, log } from './log.ts';
 
@@ -40,6 +42,9 @@ export function errorResponse(
   return { status, body: { error: { code, message, retryable } } };
 }
 
+const internalError = () =>
+  errorResponse(500, 'INTERNAL', 'The request failed unexpectedly.', true);
+
 /**
  * The health check of a service, served at `GET /health`: answering at all means the service is
  * up. Cloud Run keeps paths ending in z, such as /healthz, to itself, so they never reach it.
@@ -71,6 +76,18 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
+/**
+ * The path of the request target, or undefined when the target cannot be read as one. Node's
+ * parser lets through targets such as `//[`, which the URL parser refuses.
+ */
+function requestPath(request: IncomingMessage): string | undefined {
+  try {
+    return new URL(request.url ?? '/', 'http://localhost').pathname;
+  } catch {
+    return undefined;
+  }
+}
+
 function unmatched(routes: Routes, method: string, path: string): JsonResponse {
   const pathKnown = Object.keys(routes).some((key) => key.slice(key.indexOf(' ') + 1) === path);
   return pathKnown
@@ -80,7 +97,10 @@ function unmatched(routes: Routes, method: string, path: string): JsonResponse {
 
 async function answer(routes: Routes, request: IncomingMessage): Promise<JsonResponse> {
   const method = request.method ?? 'GET';
-  const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+  const path = requestPath(request);
+  if (path === undefined) {
+    return errorResponse(400, 'INVALID_INPUT', 'The request target is not a valid path.', false);
+  }
   const handler = routes[`${method} ${path}`];
   if (!handler) {
     return unmatched(routes, method, path);
@@ -92,22 +112,39 @@ async function answer(routes: Routes, request: IncomingMessage): Promise<JsonRes
       return errorResponse(422, 'INVALID_INPUT', error.message, false);
     }
     log('ERROR', 'The request failed unexpectedly.', { method, path, ...errorFields(error) });
-    return errorResponse(500, 'INTERNAL', 'The request failed unexpectedly.', true);
+    return internalError();
   }
 }
 
+/** Writes the answer; the body is turned into JSON before anything is written. */
 function send(response: ServerResponse, { status, body }: JsonResponse) {
+  const content = status === 204 || body === undefined ? undefined : JSON.stringify(body);
   response.setHeader('Cache-Control', 'no-store');
-  if (status === 204 || body === undefined) {
+  if (content === undefined) {
     response.writeHead(status).end();
     return;
   }
-  response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+  response.writeHead(status, { 'Content-Type': 'application/json' }).end(content);
+}
+
+/**
+ * Answers a request whose answer could not be written, such as one whose body cannot be turned
+ * into JSON: a 500 while nothing has been written yet, otherwise the connection is closed.
+ */
+function sendFailure(response: ServerResponse, error: unknown) {
+  log('ERROR', 'Answering a request failed.', errorFields(error));
+  try {
+    send(response, internalError());
+  } catch {
+    response.destroy();
+  }
 }
 
 export function createJsonServer(routes: Routes): Server {
   return createServer((request, response) => {
-    void answer(routes, request).then((result) => send(response, result));
+    answer(routes, request)
+      .then((result) => send(response, result))
+      .catch((error: unknown) => sendFailure(response, error));
   });
 }
 
