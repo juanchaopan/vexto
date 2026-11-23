@@ -2,7 +2,8 @@
 // Success bodies are checked against the caller's Zod schema; failures become an ApiRequestError
 // that carries the error code, so the interface reacts by code only (.docs/design/screens.md,
 // 错误的显示). A request that got no response at all, such as one sent while offline, has the
-// code NO_RESPONSE.
+// code NO_RESPONSE. Reads go through the query client and writes through writeRequest
+// (./access-handling.ts), which both answer access errors by the same rule.
 import { z } from 'zod';
 import { ERROR_CODES, type ErrorCode } from './errors.ts';
 
@@ -45,8 +46,8 @@ export function offersRetry(error: unknown): boolean {
 
 /**
  * Whether the failure is about the person's access: signed out, no longer a member or the terms
- * not accepted. The account handling answers these for every request, so an operation shows
- * nothing of its own for them.
+ * not accepted. The access handling answers these for every read, sending it again or changing
+ * the page, so a read shows nothing of its own for them; a write tells by leavesPage.
  */
 export function isAccessError(error: unknown): boolean {
   return hasErrorCode(error, 'UNAUTHENTICATED', 'NOT_A_MEMBER', 'TERMS_REQUIRED');

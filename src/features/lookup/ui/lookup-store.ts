@@ -6,11 +6,14 @@
 //
 // A layer appears at once while its explanation loads, then shows it, or the failure: offline
 // when the request got no response, otherwise `Couldn't explain this.`; Retry sends the same
-// operationId again. The requests go through the query client, so a session that ended is handled
-// like on every other request. Nothing is fetched again on its own: refocusing the page or coming
-// back online never calls the AI (.docs/design/rules.md, 缓存).
+// operationId again. Asking for an explanation or a new example is a write of the page's query
+// client, so an access error is answered by the rule every write shares, and a failure the page
+// changes for closes the layer or leaves the example without a notice. Nothing is fetched again
+// on its own: refocusing the page or coming back online never calls the AI (.docs/design/rules.md,
+// 缓存).
 import type { QueryClient } from '@tanstack/react-query';
 import { create } from 'zustand';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import type { LookupContext, LookupTarget } from '../../../lib/ui/lookup-bridge.ts';
 import { CHANGED_ELSEWHERE, NEW_EXAMPLE_FAILED } from '../../../lib/ui/messages.ts';
@@ -88,18 +91,17 @@ function client(): QueryClient {
 async function fetchExplanation(layer: Layer) {
   changeLayer(layer.key, () => ({ status: 'loading' }));
   try {
-    const result = await client().fetchQuery({
-      queryKey: ['lookup', layer.operationId],
-      queryFn: () => requestLookup(layer.context, layer.selection, layer.operationId),
-      staleTime: 0,
-      gcTime: 0,
-    });
+    const result = await requestLookup(client(), layer.context, layer.selection, layer.operationId);
     changeLayer(layer.key, (current) => ({
       status: 'ready',
       result,
       exampleIndex: Math.min(current.exampleIndex, Math.max(0, result.examples.length - 1)),
     }));
   } catch (error) {
+    if (leavesPage(error)) {
+      removeLayer(layer.key);
+      return;
+    }
     if (hasErrorCode(error, 'INVALID_INPUT', 'HIDDEN_RANGE')) {
       removeLayer(layer.key);
       showToast(hasErrorCode(error, 'HIDDEN_RANGE') ? HIDDEN_WORD : TOO_LONG);
@@ -212,15 +214,12 @@ function reloadExplanation(key: number) {
 async function sendRefresh(key: number, lookupId: string, exampleId: string, operationId: string) {
   changeLayer(key, () => ({ refreshing: exampleId }));
   try {
-    const example = await client().fetchQuery({
-      queryKey: ['lookup', 'refresh', operationId],
-      queryFn: () => requestNewExample(lookupId, exampleId, operationId),
-      staleTime: 0,
-      gcTime: 0,
-    });
-    putExample(key, example);
+    putExample(key, await requestNewExample(client(), lookupId, exampleId, operationId));
   } catch (error) {
     changeLayer(key, () => ({ refreshing: null }));
+    if (leavesPage(error)) {
+      return;
+    }
     if (hasErrorCode(error, 'CONFLICT')) {
       showToast(CHANGED_ELSEWHERE);
       reloadExplanation(key);

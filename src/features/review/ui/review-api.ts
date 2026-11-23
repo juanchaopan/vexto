@@ -2,8 +2,11 @@
 
 // The browser side of the review endpoints (.docs/design/interfaces.md, 复习): the next question of
 // a mode and submitting an answer. Each submit carries the operationId of the person's action:
-// Retry sends the same one with the same answer again, a changed answer is a new operation.
+// Retry sends the same one with the same answer again, a changed answer is a new operation. A
+// submit is a write, so an access error is answered by the rule every write shares.
+import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
+import { writeRequest } from '../../../lib/api/access-handling.ts';
 import { apiRequest, dataBody, isoTime } from '../../../lib/api/client.ts';
 import type { ReviewableMode } from '../domain/schedule.ts';
 
@@ -75,8 +78,11 @@ export type Submission = {
 };
 
 /** `POST /api/review/submit`. */
-export async function requestSubmit(submission: Submission): Promise<SubmitResult> {
-  const { data } = await apiRequest('/api/review/submit', dataBody(resultSchema), {
+export async function requestSubmit(
+  queryClient: QueryClient,
+  submission: Submission,
+): Promise<SubmitResult> {
+  const { data } = await writeRequest(queryClient, '/api/review/submit', dataBody(resultSchema), {
     method: 'POST',
     body: submission,
   });

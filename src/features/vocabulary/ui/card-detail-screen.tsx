@@ -9,10 +9,12 @@
 // Closing goes back to Vocabulary as it was, with the focus on this card. A card that is gone,
 // found when it loads, refreshes an example or plays audio, sends the person back to Vocabulary,
 // which reads its list again, with `This word was deleted.`. Another failure to load shows in
-// place of the card with Retry; the close button stays.
+// place of the card with Retry; the close button stays. A refresh refused with an access error
+// the page changes for says nothing.
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import { Button } from '../../../lib/ui/button.tsx';
 import { ExampleCarousel } from '../../../lib/ui/example-carousel.tsx';
@@ -75,8 +77,11 @@ function useExampleRefresh(card: CardDetail, onDeleted: () => void) {
   const send = async (exampleId: string, operationId: string) => {
     setRefreshing(exampleId);
     try {
-      put(await requestNewCardExample(card.id, exampleId, operationId));
+      put(await requestNewCardExample(queryClient, card.id, exampleId, operationId));
     } catch (error) {
+      if (leavesPage(error)) {
+        return;
+      }
       if (hasErrorCode(error, 'NOT_FOUND')) {
         onDeleted();
       } else if (hasErrorCode(error, 'CONFLICT')) {

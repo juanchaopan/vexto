@@ -1,12 +1,14 @@
 // Saving an explanation (.docs/design/screens.md, 保存到生词本, screens 28–29 and 58–59) through
 // the saver the host provides, against a stand-in for the vocabulary endpoints: a saved word, a
 // failed or unanswered save with Retry, failures without Retry, the replace question with Cancel
-// and Replace, a failed replacement whose notice stays usable over the dialog, and a card changed
-// or gone on another device.
+// and Replace, a failed replacement whose notice stays usable over the dialog, a card changed or
+// gone on another device, and writes refused with an access error (.docs/design/rules.md, 错误和
+// 断网): not sent again after the session is renewed, and silent when the page changes.
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
+import type { AccessHandling } from '../../../lib/api/access-handling.ts';
 import {
   onSavedWord,
   useWordSaver,
@@ -98,16 +100,21 @@ function replaceRoute(answer: () => Response): Route {
 const duplicate = () =>
   json(409, errorBody('DUPLICATE_WORD', false, { savedCard: duplicateDetails }));
 
-async function openHost(...routes: Route[]) {
+async function openHostWith(access: AccessHandling | undefined, routes: Route[]) {
   const sent = standIn(fetchMock, ...routes);
   renderWithCache(
     <>
       <WordSaverHost />
       <SaverProbe />
     </>,
+    access,
   );
   await waitFor(() => expect(captured.saver).not.toBeNull());
   return sent;
+}
+
+function openHost(...routes: Route[]) {
+  return openHostWith(undefined, routes);
 }
 
 function save(): Promise<string | null> {
@@ -271,6 +278,74 @@ describe('the replace question', () => {
 
     expect(await screen.findByText('This word changed on another device.')).toBeVisible();
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText("Couldn't replace the word.")).toBeNull();
+    expect(announced).not.toHaveBeenCalled();
+  });
+});
+
+describe('a save refused with an access error', () => {
+  /** The account part's handling, with a session that renews or not. */
+  function accessHandling(sessionAlive: boolean) {
+    return {
+      renewSession: vi.fn(async () => sessionAlive),
+      openSignIn: vi.fn(),
+      accessChanged: vi.fn(),
+    };
+  }
+
+  const refused = (status: number, code: string) => () => json(status, errorBody(code));
+
+  it('is not sent again after the session is renewed, and fails without Retry', async () => {
+    const access = accessHandling(true);
+    const sent = await openHostWith(access, [saveRoute(refused(401, 'UNAUTHENTICATED'))]);
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(saves(sent)).toHaveLength(1);
+    expect(access.renewSession).toHaveBeenCalledTimes(1);
+    expect(access.openSignIn).not.toHaveBeenCalled();
+    expect(announced).not.toHaveBeenCalled();
+  });
+
+  it('opens the sign-in page without a notice when the session ended', async () => {
+    const access = accessHandling(false);
+    const sent = await openHostWith(access, [saveRoute(refused(401, 'UNAUTHENTICATED'))]);
+
+    expect(await save()).toBeNull();
+
+    expect(access.openSignIn).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Couldn't save the word.")).toBeNull();
+    expect(saves(sent)).toHaveLength(1);
+  });
+
+  it.each(['NOT_A_MEMBER', 'TERMS_REQUIRED'])(
+    'shows the page the access calls for without a notice on %s',
+    async (code) => {
+      const access = accessHandling(true);
+      await openHostWith(access, [saveRoute(refused(403, code))]);
+
+      expect(await save()).toBeNull();
+
+      expect(access.accessChanged).toHaveBeenCalledWith(null);
+      expect(access.renewSession).not.toHaveBeenCalled();
+      expect(screen.queryByText("Couldn't save the word.")).toBeNull();
+    },
+  );
+
+  it('closes the replace question without a notice when the page changes', async () => {
+    const access = accessHandling(false);
+    await openHostWith(access, [
+      saveRoute(duplicate),
+      replaceRoute(refused(401, 'UNAUTHENTICATED')),
+    ]);
+
+    const dialog = await askToReplace();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(access.openSignIn).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Couldn't replace the word.")).toBeNull();
     expect(announced).not.toHaveBeenCalled();
   });

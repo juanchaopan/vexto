@@ -6,6 +6,7 @@ import { useClerk } from '@clerk/nextjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { z } from 'zod';
+import { writeRequest } from '../../../lib/api/access-handling.ts';
 import { apiRequest, dataBody } from '../../../lib/api/client.ts';
 import { runSignOutCleanups } from '../../../lib/ui/sign-out-cleanup.ts';
 import { hasAcceptedTerms } from '../domain/terms.ts';
@@ -56,7 +57,7 @@ export function useAcceptTerms() {
   return useMutation({
     mutationFn: async (version: number) =>
       (
-        await apiRequest('/api/terms/acceptance', dataBody(acceptanceSchema), {
+        await writeRequest(queryClient, '/api/terms/acceptance', dataBody(acceptanceSchema), {
           method: 'POST',
           body: { version },
         })

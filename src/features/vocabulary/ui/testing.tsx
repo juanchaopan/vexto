@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { MockInstance } from 'vitest';
+import {
+  createAccessHandledClient,
+  type AccessHandling,
+} from '../../../lib/api/access-handling.ts';
 import { ToastViewport } from '../../../lib/ui/toast.tsx';
 import { clearVocabularyReturn } from '../../../lib/ui/vocabulary-return.ts';
 import { DEFAULT_VOCABULARY_QUERY } from '../domain/vocabulary-query.ts';
@@ -123,11 +127,16 @@ export function freshVocabulary(): void {
   clearVocabularyReturn();
 }
 
-/** Renders the screen inside a fresh cache, with the notices. */
-export function renderWithCache(screen: ReactNode) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+const defaultOptions = { queries: { retry: false }, mutations: { retry: false } };
+
+/**
+ * Renders the screen inside a fresh cache, with the notices. With `access`, the cache answers
+ * access errors by that handling, as the application's providers do.
+ */
+export function renderWithCache(screen: ReactNode, access?: AccessHandling) {
+  const queryClient = access
+    ? createAccessHandledClient(access, defaultOptions)
+    : new QueryClient({ defaultOptions });
   return render(
     <QueryClientProvider client={queryClient}>
       {screen}

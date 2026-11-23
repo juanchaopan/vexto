@@ -11,12 +11,15 @@
 //     behind the dialog (screen 29); a replacement shows the check through announceSavedWord;
 //   - the card changed or went meanwhile: `This word changed on another device.`, and the lists
 //     are read again;
+//   - an access error the page changes for: nothing more, and the replace question closes, since
+//     the sign-in, no access or terms page takes the screen's place;
 //   - another failure: `Couldn't save the word.` or `Couldn't replace the word.`, with Retry
 //     sending the same operation again when that can help. A failed replacement keeps the dialog
 //     open, and its notice is drawn above the dialog's backdrop.
 // Every change asks for the review counts again and drops the loaded Vocabulary lists.
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import {
   announceSavedWord,
@@ -93,13 +96,15 @@ function ReplaceDialog({ question, onClose }: { question: ReplaceQuestion; onClo
   const replace = async () => {
     setBusy(true);
     try {
-      const card = await requestReplace(saved, lookup.id, operationId);
+      const card = await requestReplace(queryClient, saved, lookup.id, operationId);
       vocabularyChanged(queryClient, card.id);
       announceSavedWord(lookup.id, card.id);
       showToast(REPLACED);
       onClose();
     } catch (error) {
-      if (hasErrorCode(error, 'NOT_FOUND', 'CONFLICT')) {
+      if (leavesPage(error)) {
+        onClose();
+      } else if (hasErrorCode(error, 'NOT_FOUND', 'CONFLICT')) {
         vocabularyChanged(queryClient, saved.id);
         showToast(CHANGED_ELSEWHERE);
         onClose();
@@ -141,12 +146,15 @@ export function WordSaverHost() {
   useEffect(() => {
     const save = async (lookup: SavableLookup, operationId: string): Promise<string | null> => {
       try {
-        const card = await requestSave(lookup.id, operationId);
+        const card = await requestSave(queryClient, lookup.id, operationId);
         vocabularyChanged(queryClient);
         announceSavedWord(lookup.id, card.id);
         showToast(SAVED);
         return card.id;
       } catch (error) {
+        if (leavesPage(error)) {
+          return null;
+        }
         const saved = hasErrorCode(error, 'DUPLICATE_WORD')
           ? savedCardOf(error.details)
           : undefined;

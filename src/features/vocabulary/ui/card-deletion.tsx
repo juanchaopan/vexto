@@ -9,10 +9,12 @@
 // `<N> words deleted.` shows, and the focus moves to the next card, or the one before without a
 // next. A single card that was already gone counts as deleted, without a notice. When some chosen
 // cards are gone, nothing is deleted: the dialog closes, they leave the list and the selection,
-// and selection mode stays. Any other failure closes the dialog and keeps the selection, with
-// Retry sending the same operation again when that can help.
+// and selection mode stays. An access error the page changes for closes the dialog without a
+// notice. Any other failure closes the dialog and keeps the selection, with Retry sending the
+// same operation again when that can help.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import { refreshReviewCounts } from '../../../lib/ui/review-counts.ts';
 import { showToast } from '../../../lib/ui/toast.tsx';
@@ -102,9 +104,12 @@ export function useDeletion({ query, items, onDeleted }: DeletionOptions) {
   const run = async (ids: string[], operationId: string) => {
     setBusy(true);
     try {
-      await requestDelete(ids, operationId);
+      await requestDelete(queryClient, ids, operationId);
       deleted(ids, true);
     } catch (error) {
+      if (leavesPage(error)) {
+        return;
+      }
       if (ids.length === 1 && hasErrorCode(error, 'NOT_FOUND')) {
         deleted(ids, false);
       } else if (hasErrorCode(error, 'SELECTION_CHANGED')) {

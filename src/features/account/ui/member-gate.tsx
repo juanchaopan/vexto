@@ -8,7 +8,8 @@
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { hasErrorCode, isAccessError, offersRetry } from '../../../lib/api/client.ts';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
+import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
 import { Button } from '../../../lib/ui/button.tsx';
 import { Icon } from '../../../lib/ui/icon.tsx';
@@ -36,7 +37,8 @@ const ACCEPT_FAILED = "Couldn't save your answer.";
 /**
  * The terms page before the first acceptance of the current version. I agree records the
  * version the page shows and opens Articles. When that version is no longer current the page
- * reloads to show the current terms; other failures keep the page and say so in a notice.
+ * reloads to show the current terms; a failure the page changes for shows nothing more, and
+ * other failures keep the page and say so in a notice.
  */
 export function AcceptTermsScreen() {
   const router = useRouter();
@@ -49,7 +51,7 @@ export function AcceptTermsScreen() {
       onError: (error) => {
         if (hasErrorCode(error, 'CONFLICT')) {
           window.location.reload();
-        } else if (!isAccessError(error)) {
+        } else if (!leavesPage(error)) {
           showToast(ACCEPT_FAILED, offersRetry(error) ? { retry: agree } : {});
         }
       },

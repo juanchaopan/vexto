@@ -9,12 +9,15 @@
 //   - CONFLICT: the question was answered on another device or its card changed, said in the
 //     yellow row `This word changed on another device.`;
 //   - NOT_FOUND: the card was deleted, `This word was deleted.`, and the next question comes;
+//   - an access error the page changes for: the answer can be changed again and nothing more is
+//     said, since the sign-in, no access or terms page takes the screen's place;
 //   - another failure: the server saved nothing, so the answer can be changed again, and
 //     `Couldn't save your answer.` offers Retry with the same answer when another try can help.
 // Whatever may have changed the progress asks for the review counts again and drops the loaded
 // Vocabulary lists and cards, whose rounds and due times are no longer right. A submit that ends
 // after the person moved on to another question changes nothing on screen.
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { leavesPage } from '../../../lib/api/access-handling.ts';
 import { hasErrorCode, offersRetry } from '../../../lib/api/client.ts';
 import { refreshReviewCounts } from '../../../lib/ui/review-counts.ts';
 import { showToast } from '../../../lib/ui/toast.tsx';
@@ -49,7 +52,9 @@ export type Answering = {
 
 export function useAnswering(mode: ReviewableMode, question: Question): Answering {
   const queryClient = useQueryClient();
-  const { mutateAsync } = useMutation({ mutationFn: requestSubmit });
+  const { mutateAsync } = useMutation({
+    mutationFn: (submission: Submission) => requestSubmit(queryClient, submission),
+  });
   const session = sessionOf(mode);
 
   const failed = (error: unknown, submission: Submission, again: () => void) => {
@@ -64,7 +69,9 @@ export function useAnswering(mode: ReviewableMode, question: Question): Answerin
       askNext(mode);
     } else {
       session.setState({ sending: false, outcome: null, ...answerOf(submission) });
-      showToast(SUBMIT_FAILED, offersRetry(error) ? { retry: again } : {});
+      if (!leavesPage(error)) {
+        showToast(SUBMIT_FAILED, offersRetry(error) ? { retry: again } : {});
+      }
     }
   };
 

@@ -3,13 +3,15 @@
 // loads the sign-in page in full, and one that finds the person no longer a member or the terms
 // not accepted reads the profile again, so the gate shows the no access page or the terms page.
 // A read refused while the session is still alive, as when Clerk is renewing its token, is sent
-// again after the session gives a fresh token.
-import { useMutation, useQuery } from '@tanstack/react-query';
+// again after the session gives a fresh token; a write refused that way is not, and fails
+// (.docs/design/rules.md, 错误和断网).
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { act, cleanup, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { z } from 'zod';
+import { leavesPage, writeRequest } from '../../../lib/api/access-handling.ts';
 import { apiRequest, dataBody } from '../../../lib/api/client.ts';
 import { sharedConfig } from '../../../lib/config/shared-config.ts';
 import { dismissToast } from '../../../lib/ui/toast.tsx';
@@ -70,7 +72,7 @@ const member = () => profile(sharedConfig.terms.version);
 
 /** The answers of the profile reads in order; the last one answers every later read too. */
 let profileReads: (() => Response)[];
-/** The answers of the page's reads in order; the last one answers every later read too. */
+/** The answers of the page's requests in order; the last one answers every later one too. */
 let pageAnswers: (() => Response)[];
 const sentPaths: string[] = [];
 
@@ -88,6 +90,9 @@ function next(answers: (() => Response)[]) {
   return (answers.length > 1 ? answers.shift()! : answers[0])();
 }
 
+/** The paths the page itself sends to: its own data and the terms acceptance. */
+const pagePaths = new Set(['/api/page', '/api/terms/acceptance']);
+
 beforeEach(() => {
   takeSessionAway();
   sentPaths.length = 0;
@@ -99,7 +104,7 @@ beforeEach(() => {
     if (path === '/api/me') {
       return next(profileReads);
     }
-    return path === '/api/page' ? next(pageAnswers) : json(500, errorBody('INTERNAL'));
+    return pagePaths.has(path) ? next(pageAnswers) : json(500, errorBody('INTERNAL'));
   });
   window.navigation.addEventListener('navigate', stopLoad);
 });
@@ -125,15 +130,24 @@ function ReadingPage() {
   return <p>{page.data ? 'Page content' : 'Page loading'}</p>;
 }
 
-/** A page that changes its data when its button is pressed. */
+/**
+ * A page that changes its data when its button is pressed, and says so when the change fails,
+ * unless the page changes for the failure.
+ */
 function WritingPage() {
-  const change = useMutation({
-    mutationFn: () => apiRequest('/api/page', pageSchema, { method: 'POST' }),
-  });
+  const queryClient = useQueryClient();
+  const [failed, setFailed] = useState(false);
+  const change = () =>
+    writeRequest(queryClient, '/api/page', pageSchema, { method: 'POST' }).catch((error: unknown) =>
+      setFailed(!leavesPage(error)),
+    );
   return (
-    <button type="button" onClick={() => change.mutate()}>
-      Change page
-    </button>
+    <>
+      <button type="button" onClick={() => void change()}>
+        Change page
+      </button>
+      {failed ? <p>Change failed</p> : null}
+    </>
   );
 }
 
@@ -146,11 +160,11 @@ function renderGate(page: ReactNode) {
 }
 
 const profileReadCount = () => sentPaths.filter((path) => path === '/api/me').length;
-const pageReadCount = () => sentPaths.filter((path) => path === '/api/page').length;
+const pageRequestCount = (path = '/api/page') => sentPaths.filter((sent) => sent === path).length;
 const signInPage = () => new URL('/sign-in', window.location.href).href;
 const refused = () => json(401, errorBody('UNAUTHENTICATED'));
 
-describe('a request that answers with an access error', () => {
+describe('a read that answers with an access error', () => {
   it('loads the sign-in page in full when the session ended', async () => {
     profileReads = [member];
     pageAnswers = [refused];
@@ -171,7 +185,7 @@ describe('a request that answers with an access error', () => {
 
     expect(await screen.findByText('Page content')).toBeVisible();
     expect(getToken).toHaveBeenCalledTimes(1);
-    expect(pageReadCount()).toBe(2);
+    expect(pageRequestCount()).toBe(2);
     expect(loads).toEqual([]);
   });
 
@@ -183,7 +197,7 @@ describe('a request that answers with an access error', () => {
     renderGate(<ReadingPage />);
 
     await vi.waitFor(() => expect(loads).toEqual([signInPage()]));
-    expect(pageReadCount()).toBe(2);
+    expect(pageRequestCount()).toBe(2);
   });
 
   it('loads the sign-in page when the session gives no token', async () => {
@@ -194,7 +208,7 @@ describe('a request that answers with an access error', () => {
     renderGate(<ReadingPage />);
 
     await vi.waitFor(() => expect(loads).toEqual([signInPage()]));
-    expect(pageReadCount()).toBe(1);
+    expect(pageRequestCount()).toBe(1);
   });
 
   it('reads the profile again and shows No access when the person is no longer a member', async () => {
@@ -211,18 +225,79 @@ describe('a request that answers with an access error', () => {
     expect(profileReadCount()).toBe(2);
     expect(loads).toEqual([]);
   });
+});
+
+describe('a write that answers with an access error', () => {
+  async function change() {
+    await userEvent.click(await screen.findByRole('button', { name: 'Change page' }));
+  }
+
+  it('is not sent again when the session gives a fresh token, and fails on the page', async () => {
+    const getToken = vi.fn(async () => 'fresh-token');
+    giveSession(getToken);
+    profileReads = [member];
+    pageAnswers = [refused, () => json(200, { data: { ok: true } })];
+    renderGate(<WritingPage />);
+
+    await change();
+
+    expect(await screen.findByText('Change failed')).toBeVisible();
+    expect(getToken).toHaveBeenCalledTimes(1);
+    expect(pageRequestCount()).toBe(1);
+    expect(loads).toEqual([]);
+  });
+
+  it('loads the sign-in page in full, saying nothing, when the session ended', async () => {
+    profileReads = [member];
+    pageAnswers = [refused];
+    renderGate(<WritingPage />);
+
+    await change();
+
+    await vi.waitFor(() => expect(loads).toEqual([signInPage()]));
+    expect(pageRequestCount()).toBe(1);
+    expect(screen.queryByText('Change failed')).toBeNull();
+  });
+
+  it('reads the profile again and shows No access when the person is no longer a member', async () => {
+    profileReads = [member, () => json(403, errorBody('NOT_A_MEMBER'))];
+    pageAnswers = [() => json(403, errorBody('NOT_A_MEMBER'))];
+    renderGate(<WritingPage />);
+
+    await change();
+
+    expect(await screen.findByRole('heading', { name: 'No access' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Change page' })).toBeNull();
+    expect(screen.queryByText('Change failed')).toBeNull();
+    expect(profileReadCount()).toBe(2);
+    expect(loads).toEqual([]);
+  });
 
   it('reads the profile again and shows the terms page when the terms are not accepted', async () => {
     profileReads = [member, () => profile(null)];
     pageAnswers = [() => json(403, errorBody('TERMS_REQUIRED'))];
     renderGate(<WritingPage />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Change page' }));
+    await change();
 
     expect(await screen.findByRole('heading', { name: 'Terms of use' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'I agree' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Change page' })).toBeNull();
     expect(profileReadCount()).toBe(2);
+    expect(loads).toEqual([]);
+  });
+
+  it('accepting the terms is not sent again after a renewal, and says it was not saved', async () => {
+    giveSession(async () => 'fresh-token');
+    profileReads = [() => profile(null)];
+    pageAnswers = [refused];
+    renderGate(<WritingPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'I agree' }));
+
+    expect(await screen.findByText("Couldn't save your answer.")).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(pageRequestCount('/api/terms/acceptance')).toBe(1);
     expect(loads).toEqual([]);
   });
 });

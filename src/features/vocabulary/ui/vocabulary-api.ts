@@ -4,6 +4,8 @@
 // batches, one card, and the writes. A list keeps the batches it loaded and their order until its
 // query changes or a write changes the vocabulary, so coming back to it shows the same cards.
 // Every write carries the operationId of the person's action; Retry sends the same one again.
+// The writes go through the page's query client, so an access error is answered by the rule every
+// write shares.
 import {
   useInfiniteQuery,
   useQuery,
@@ -11,6 +13,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
+import { writeRequest } from '../../../lib/api/access-handling.ts';
 import { apiRequest, dataBody, isoTime, listBody } from '../../../lib/api/client.ts';
 import { loadedItems } from '../../../lib/ui/batched-list.ts';
 import { REVIEW_MODES } from '../domain/review-progress.ts';
@@ -115,8 +118,12 @@ export function useCard(id: string) {
 }
 
 /** `POST /api/vocabulary`: the saved card. */
-export async function requestSave(lookupId: string, operationId: string): Promise<CardDetail> {
-  const { data } = await apiRequest('/api/vocabulary', dataBody(cardSchema), {
+export async function requestSave(
+  queryClient: QueryClient,
+  lookupId: string,
+  operationId: string,
+): Promise<CardDetail> {
+  const { data } = await writeRequest(queryClient, '/api/vocabulary', dataBody(cardSchema), {
     method: 'POST',
     body: { operationId, lookupId },
   });
@@ -125,11 +132,13 @@ export async function requestSave(lookupId: string, operationId: string): Promis
 
 /** `POST /api/vocabulary/:id/replace`: the card with the explanation's meaning and examples. */
 export async function requestReplace(
+  queryClient: QueryClient,
   card: SavedCard,
   lookupId: string,
   operationId: string,
 ): Promise<CardDetail> {
-  const { data } = await apiRequest(`${cardPath(card.id)}/replace`, dataBody(cardSchema), {
+  const path = `${cardPath(card.id)}/replace`;
+  const { data } = await writeRequest(queryClient, path, dataBody(cardSchema), {
     method: 'POST',
     body: { operationId, lookupId, updatedAt: card.updatedAt },
   });
@@ -138,12 +147,13 @@ export async function requestReplace(
 
 /** `POST /api/vocabulary/:id/examples/:exampleId/refresh`: the new example. */
 export async function requestNewCardExample(
+  queryClient: QueryClient,
   cardId: string,
   exampleId: string,
   operationId: string,
 ): Promise<CardExample> {
   const path = `${cardPath(cardId)}/examples/${encodeURIComponent(exampleId)}/refresh`;
-  const { data } = await apiRequest(path, dataBody(exampleSchema), {
+  const { data } = await writeRequest(queryClient, path, dataBody(exampleSchema), {
     method: 'POST',
     body: { operationId },
   });
@@ -153,12 +163,19 @@ export async function requestNewCardExample(
 const noContent = z.undefined();
 
 /** `DELETE /api/vocabulary/:id`, or `POST /api/vocabulary/bulk-delete` for more than one card. */
-export async function requestDelete(ids: readonly string[], operationId: string): Promise<void> {
+export async function requestDelete(
+  queryClient: QueryClient,
+  ids: readonly string[],
+  operationId: string,
+): Promise<void> {
   if (ids.length === 1) {
-    await apiRequest(cardPath(ids[0]), noContent, { method: 'DELETE', body: { operationId } });
+    await writeRequest(queryClient, cardPath(ids[0]), noContent, {
+      method: 'DELETE',
+      body: { operationId },
+    });
     return;
   }
-  await apiRequest('/api/vocabulary/bulk-delete', noContent, {
+  await writeRequest(queryClient, '/api/vocabulary/bulk-delete', noContent, {
     method: 'POST',
     body: { operationId, ids },
   });

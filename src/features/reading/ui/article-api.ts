@@ -12,6 +12,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
+import { writeRequest } from '../../../lib/api/access-handling.ts';
 import { apiRequest, dataBody, isoTime, listBody } from '../../../lib/api/client.ts';
 import type { ArticleQuery } from '../domain/article-query.ts';
 
@@ -136,9 +137,13 @@ export function fetchArticle(queryClient: QueryClient, id: string) {
   });
 }
 
-/** Records the visit and shows its time on the article's card in every loaded list. */
+/**
+ * Records the visit and shows its time on the article's card in every loaded list. It is a
+ * write, so an access error is answered by the rule every write shares.
+ */
 export async function recordVisit(queryClient: QueryClient, id: string) {
-  const { data } = await apiRequest(
+  const { data } = await writeRequest(
+    queryClient,
     `/api/articles/${encodeURIComponent(id)}/visit`,
     dataBody(z.object({ lastVisitedAt: isoTime })),
     { method: 'PUT' },
