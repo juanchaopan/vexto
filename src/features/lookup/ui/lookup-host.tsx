@@ -4,7 +4,8 @@
 // nearly as wide as the screen, their bottom just above the screen's bottom bar (the reader's
 // player) or just above the screen's bottom edge without one, each as tall as its content. The
 // host provides the lookup bridge, so the reader, card details and review questions open
-// explanations and the Select words helper through it.
+// explanations and the Select words helper through it, and it shows the check on an explanation
+// the vocabulary announces as saved.
 //
 // Pressing a blank part of the screen closes the top explanation, and so does Escape; pressing
 // text that can be looked up, a control or a panel does not. Moving to another screen closes every
@@ -13,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { useBottomBarHeight } from '../../../lib/ui/bottom-bar.ts';
-import { provideLookup, useWordSaver } from '../../../lib/ui/lookup-bridge.ts';
+import { onSavedWord, provideLookup, useWordSaver } from '../../../lib/ui/lookup-bridge.ts';
 import { onSignOut } from '../../../lib/ui/sign-out-cleanup.ts';
 import { stopSpeech } from '../../../lib/ui/speech-audio.ts';
 import { LookupLayer } from './lookup-layer.tsx';
@@ -22,6 +23,7 @@ import {
   closeTopLayer,
   connectLookups,
   lookUp,
+  markSaved,
   useLookupStore,
 } from './lookup-store.ts';
 import {
@@ -56,7 +58,7 @@ function useClosingGestures() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isSelectionToolOpen()) {
+      if (event.key === 'Escape' && !isSelectionToolOpen() && !event.defaultPrevented) {
         closeTopLayer();
       }
     };
@@ -109,6 +111,8 @@ export function LookupHost() {
     () => provideLookup({ lookUp: (target) => lookUp(target, false), openSelectionTool }),
     [],
   );
+
+  useEffect(() => onSavedWord(markSaved), []);
 
   useEffect(
     () =>

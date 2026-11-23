@@ -60,7 +60,7 @@ function AddWordButton({ layer, saver }: { layer: Layer; saver: WordSaver | null
     saver(result)
       .then((cardId) => {
         if (cardId) {
-          markSaved(layer.key, cardId);
+          markSaved(result.id, cardId);
         }
       })
       .catch(() => undefined)

@@ -177,10 +177,14 @@ export function showExample(key: number, index: number): void {
   changeLayer(key, () => ({ exampleIndex: index }));
 }
 
-/** Records that the layer's explanation was saved as this card. */
-export function markSaved(key: number, cardId: string): void {
-  changeLayer(key, (layer) => ({
-    result: layer.result && { ...layer.result, savedCardId: cardId },
+/** Records that the explanation of this lookup, in every layer showing it, is saved as this card. */
+export function markSaved(lookupId: string, cardId: string): void {
+  useLookupStore.setState((state) => ({
+    layers: state.layers.map((layer) =>
+      layer.result?.id === lookupId
+        ? { ...layer, result: { ...layer.result, savedCardId: cardId } }
+        : layer,
+    ),
   }));
 }
 

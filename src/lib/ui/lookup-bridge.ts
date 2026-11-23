@@ -2,9 +2,10 @@
 // person can look up, such as the reader, card details or a review question, turns a tapped word
 // or a finished selection into a lookup target and hands it here; the lookup part of the interface
 // provides the bridge that opens the explanation. Saving an explanation to the vocabulary goes the
-// other way: the vocabulary part provides the saver the explanation's Add word button calls. The
-// parts never import each other: features reach each other in the browser only through lib.
-// Without a bridge nothing is looked up; without a saver nothing can be saved.
+// other way: the vocabulary part provides the saver the explanation's Add word button calls, and
+// announces every explanation it saved, also one saved later by a Retry, so the explanation shows
+// the check. The parts never import each other: features reach each other in the browser only
+// through lib. Without a bridge nothing is looked up; without a saver nothing can be saved.
 import { useSyncExternalStore } from 'react';
 
 /** An example a lookup can be made in, named as `POST /api/lookups` takes it. */
@@ -65,10 +66,13 @@ export type SavableLookup = {
 
 /**
  * Saves an explanation to the vocabulary and resolves to the saved card's ID, or to null when it
- * was not saved (such as a replacement the person cancelled). The saver shows its own notices
- * and dialogs; a rejection is treated like null.
+ * was not saved (such as a replacement the person cancelled, or a failure). The saver shows its
+ * own notices and dialogs; a rejection is treated like null.
  */
 export type WordSaver = (lookup: SavableLookup) => Promise<string | null>;
+
+/** Told that the explanation with this lookup ID is saved as this card. */
+export type SavedWordListener = (lookupId: string, cardId: string) => void;
 
 function slot<T>() {
   let value: T | null = null;
@@ -101,6 +105,7 @@ function slot<T>() {
 
 const bridgeSlot = slot<LookupBridge>();
 const saverSlot = slot<WordSaver>();
+const savedWordListeners = new Set<SavedWordListener>();
 
 /** Makes `next` the bridge lookups go through; the returned function takes it away again. */
 export function provideLookup(next: LookupBridge): () => void {
@@ -125,4 +130,19 @@ export function provideWordSaver(next: WordSaver): () => void {
 /** The current saver, followed as it is provided and taken away. */
 export function useWordSaver(): WordSaver | null {
   return useSyncExternalStore(saverSlot.subscribe, saverSlot.current, () => null);
+}
+
+/** Tells the explanations on screen that this lookup is saved as this card. */
+export function announceSavedWord(lookupId: string, cardId: string): void {
+  for (const listener of savedWordListeners) {
+    listener(lookupId, cardId);
+  }
+}
+
+/** Listens for saved explanations; the returned function stops listening. */
+export function onSavedWord(listener: SavedWordListener): () => void {
+  savedWordListeners.add(listener);
+  return () => {
+    savedWordListeners.delete(listener);
+  };
 }

@@ -42,3 +42,6 @@ export {
   vocabularyCards,
   vocabularyExamples,
 } from './server/schema.ts';
+export { CardDetailScreen } from './ui/card-detail-screen.tsx';
+export { VocabularyScreen } from './ui/vocabulary-screen.tsx';
+export { WordSaverHost } from './ui/word-saver.tsx';

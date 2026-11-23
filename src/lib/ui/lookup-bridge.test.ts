@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { currentLookup, provideLookup, provideWordSaver } from './lookup-bridge.ts';
+import {
+  announceSavedWord,
+  currentLookup,
+  onSavedWord,
+  provideLookup,
+  provideWordSaver,
+} from './lookup-bridge.ts';
 
 function bridge() {
   return { lookUp: vi.fn(), openSelectionTool: vi.fn() };
@@ -35,5 +41,18 @@ describe('provideWordSaver', () => {
 
     expect(currentLookup()).toBeNull();
     remove();
+  });
+});
+
+describe('announceSavedWord', () => {
+  it('tells every listener until it stops listening', () => {
+    const listener = vi.fn();
+    const stop = onSavedWord(listener);
+
+    announceSavedWord('lookup', 'card');
+    stop();
+    announceSavedWord('lookup', 'other card');
+
+    expect(listener).toHaveBeenCalledExactlyOnceWith('lookup', 'card');
   });
 });
