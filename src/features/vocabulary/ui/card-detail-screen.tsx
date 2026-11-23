@@ -24,6 +24,7 @@ import { useSpeech } from '../../../lib/ui/speech-audio.ts';
 import { SpeechButton, SpeechFailureRow } from '../../../lib/ui/speech-controls.tsx';
 import { showToast } from '../../../lib/ui/toast.tsx';
 import { returnToVocabulary } from '../../../lib/ui/vocabulary-return.ts';
+import { cardTitleSelector, VOCABULARY_PATH } from './paths.ts';
 import { ProgressGroups } from './progress-groups.tsx';
 import {
   cardKey,
@@ -33,14 +34,11 @@ import {
   type CardDetail,
   type CardExample,
 } from './vocabulary-api.ts';
-import { VOCABULARY_PATH } from './vocabulary-screen.tsx';
 
 const LOAD_FAILED = "Couldn't load this word.";
 const DELETED = 'This word was deleted.';
 const CHANGED = 'This word changed on another device.';
 const REFRESH_FAILED = "Couldn't get a new example.";
-
-const cardFocus = (cardId: string) => `[data-card-id="${CSS.escape(cardId)}"] [data-card-title]`;
 
 /** Back to Vocabulary, once, after the card turned out to be gone: the list is read again. */
 function useWordDeleted() {
@@ -235,7 +233,7 @@ export function CardDetailScreen({ cardId }: { cardId: string }) {
           shape="icon"
           aria-label="Close word and return to Vocabulary"
           onClick={() => {
-            returnToVocabulary(cardFocus(cardId));
+            returnToVocabulary(cardTitleSelector(cardId));
             close();
           }}
         >

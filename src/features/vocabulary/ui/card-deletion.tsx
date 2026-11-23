@@ -18,6 +18,7 @@ import { refreshReviewCounts } from '../../../lib/ui/review-counts.ts';
 import { showToast } from '../../../lib/ui/toast.tsx';
 import type { VocabularyQuery } from '../domain/vocabulary-query.ts';
 import { DialogAction, ModalDialog } from './modal-dialog.tsx';
+import { cardTitleSelector } from './paths.ts';
 import {
   dropOtherLists,
   forgetCards,
@@ -69,11 +70,7 @@ export function useDeletion({ query, items, onDeleted }: DeletionOptions) {
 
   useEffect(() => {
     const target = focusTarget.current;
-    const title = target
-      ? document.querySelector<HTMLElement>(
-          `[data-card-id="${CSS.escape(target)}"] [data-card-title]`,
-        )
-      : null;
+    const title = target ? document.querySelector<HTMLElement>(cardTitleSelector(target)) : null;
     if (title) {
       focusTarget.current = null;
       title.focus();

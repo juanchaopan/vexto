@@ -223,16 +223,17 @@ describe('the list', () => {
 });
 
 describe('coming back', () => {
-  it('keeps the search and sort when card details closed', async () => {
+  it('keeps the search and sort and puts the focus back on the card that was opened', async () => {
     useVocabularyStore.setState({
       query: { ...useVocabularyStore.getState().query, q: 'run', sort: 'spellRound' },
     });
-    returnToVocabulary(null);
+    returnToVocabulary('[data-card-id="card-2"] [data-card-title]');
 
     const sent = await openScreen(listRoute(() => listAnswer(three)));
 
-    expect(lists(sent)[0].params.get('q')).toBe('run');
-    expect(lists(sent)[0].params.get('sort')).toBe('spellRound');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'word02' })).toHaveFocus());
+    expect(lists(sent).every((request) => request.params.get('q') === 'run')).toBe(true);
+    expect(lists(sent).every((request) => request.params.get('sort') === 'spellRound')).toBe(true);
   });
 
   it('starts over any other way, keeping only the tab and the round filters', async () => {
@@ -250,9 +251,9 @@ describe('coming back', () => {
 
     const sent = await openScreen(listRoute(() => listAnswer(three)));
 
-    const params = lists(sent)[0].params;
+    await waitFor(() => expect(lists(sent).at(-1)?.params.get('sort')).toBe('word'));
+    const params = lists(sent).at(-1)!.params;
     expect(params.get('q')).toBeNull();
-    expect(params.get('sort')).toBe('word');
     expect(params.get('direction')).toBe('asc');
     expect(params.get('state')).toBe('new');
     expect(params.getAll('rounds.spell')).toEqual(['2']);
