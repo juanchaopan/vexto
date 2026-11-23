@@ -73,6 +73,11 @@ function startPostgres(network: StartedNetwork | undefined) {
   ).start();
 }
 
+/**
+ * S3Mock counts as started once it lists the test bucket: the first request of the S3 interface
+ * makes it set up its request handling, which takes seconds on a busy machine, so it is made
+ * here rather than by the first test that stores an object.
+ */
 function startS3Mock(network: StartedNetwork | undefined) {
   const container = new GenericContainer(S3MOCK_IMAGE)
     .withExposedPorts(S3MOCK_PORT)
@@ -80,7 +85,7 @@ function startS3Mock(network: StartedNetwork | undefined) {
       COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: BUCKET,
       COM_ADOBE_TESTING_S3MOCK_STORE_REGION: REGION,
     })
-    .withWaitStrategy(Wait.forHttp('/favicon.ico', S3MOCK_PORT).forStatusCode(200));
+    .withWaitStrategy(Wait.forHttp(`/${BUCKET}?list-type=2`, S3MOCK_PORT).forStatusCode(200));
   return (network ? container.withNetwork(network).withNetworkAliases('s3') : container).start();
 }
 

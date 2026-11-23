@@ -25,6 +25,13 @@ import {
 let repo: string;
 const sha: Record<string, string> = {};
 
+// Every git call is a process of its own. Building the history takes about twenty of them, and
+// the cases below several each; with the whole unit suite running side by side, one call can
+// take most of a second, so the setup and the cases that run git have more room than the
+// defaults.
+const SETUP_TIMEOUT = 60_000;
+const GIT_CASE_TIMEOUT = 20_000;
+
 const run = (...args: string[]) => git(args, { cwd: repo }).trim();
 
 async function commitFile(file: string, content: string, subject: string) {
@@ -56,13 +63,13 @@ beforeAll(async () => {
   run('switch', '--quiet', 'feature/2-work');
   run('merge', '--quiet', '--no-ff', '--no-edit', 'main');
   sha.mainMerge = run('rev-parse', 'HEAD');
-});
+}, SETUP_TIMEOUT);
 
 afterAll(() => {
   rmSync(repo, { recursive: true, force: true });
 });
 
-describe('mergesMain', () => {
+describe('mergesMain', { timeout: GIT_CASE_TIMEOUT }, () => {
   it('is true for a merge whose merged-in parent is a commit of main', () => {
     expect(mergesMain(parentsOf(sha.mainMerge, repo), 'main', repo)).toBe(true);
   });
@@ -77,7 +84,7 @@ describe('mergesMain', () => {
   });
 });
 
-describe('commits and changed files', () => {
+describe('commits and changed files', { timeout: GIT_CASE_TIMEOUT }, () => {
   it('lists the commits of a range oldest first', () => {
     expect(commitsIn('main..feature/2-work', repo)).toEqual([
       sha.work,
@@ -114,7 +121,7 @@ describe('commits and changed files', () => {
   });
 });
 
-describe('messages and trailers', () => {
+describe('messages and trailers', { timeout: GIT_CASE_TIMEOUT }, () => {
   const written = [
     'chore(scaffold): add hooks (#1)',
     '',

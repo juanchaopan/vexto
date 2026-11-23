@@ -9,12 +9,16 @@ import {
 
 const page = readFileSync(new URL('./fixtures/article-page.html', import.meta.url), 'utf8');
 
+// The first extraction loads jsdom and Readability, which takes seconds when the whole suite
+// runs side by side; the later cases of the file find them loaded.
+const FIRST_LOAD_TIMEOUT = 60_000;
+
 describe('extractPage', () => {
   let extracted: ExtractedPage | null;
 
   beforeAll(async () => {
     extracted = await extractPage(page, 'https://news.example.org/stories/river-sensors');
-  });
+  }, FIRST_LOAD_TIMEOUT);
 
   it('finds the article and keeps its headings and paragraphs in order', () => {
     expect(extracted?.paragraphs).toHaveLength(6);

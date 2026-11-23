@@ -1,23 +1,31 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterAll, describe, expect, it } from 'vitest';
-import { closeDatabase, inTransaction, type Transaction } from '../../../lib/db/client.ts';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Transaction } from '../../../lib/db/client.ts';
 import { COLLECT_LEASE_NAME } from '../domain/collection-state.ts';
+import { isolatedDatabase, type IsolatedDatabase } from '../testing.ts';
 import { jobLeases } from './schema.ts';
 
 // The migration leaves one lease row for the collection job, already expired. These cases take
-// and release it the way rules.md describes, inside transactions that are rolled back, so the row
-// stays as the migration left it for the other tests.
+// and release it the way rules.md describes, inside transactions that are rolled back. They read
+// a database of their own, migrated from empty: the shared test database's lease row is taken and
+// released by the job runs of other test files while these cases run.
+
+let db: IsolatedDatabase;
+
+beforeAll(async () => {
+  db = await isolatedDatabase();
+}, 120_000);
 
 afterAll(async () => {
-  await closeDatabase();
+  await db?.close();
 });
 
 class Rollback extends Error {}
 
 async function rolledBack(work: (tx: Transaction) => Promise<void>) {
   await expect(
-    inTransaction(async (tx) => {
+    db.database.transaction(async (tx) => {
       await work(tx);
       throw new Rollback();
     }),

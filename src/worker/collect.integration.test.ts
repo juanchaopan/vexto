@@ -32,6 +32,11 @@ import { main } from './collect.ts';
 const FEED_URL = 'https://feeds.example.org/aeronautics.xml';
 const config = testConfig({ 'nasa-aeronautics': { url: FEED_URL, body: 'feed', perRun: 2 } });
 
+// Each case runs the whole job against the database. The first run that collects an article
+// also loads jsdom and Readability, and with the integration suite running side by side a run
+// takes several seconds, so the cases have more room than the default.
+const RUN_TIMEOUT = 30_000;
+
 const feeds = feedServer();
 let db: IsolatedDatabase;
 let logged: Record<string, unknown>[];
@@ -82,7 +87,7 @@ function serveFeed() {
   );
 }
 
-describe('vexto-collect', () => {
+describe('vexto-collect', { timeout: RUN_TIMEOUT }, () => {
   it('exits 0 without loading the speech model when nothing is due', async () => {
     const synthesizer = synthesizerDouble();
 
