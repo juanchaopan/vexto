@@ -7,17 +7,16 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { collectionConfig, type CollectionConfig } from '../../../lib/config/collection-config.ts';
 import { sharedConfig, type FeedDisplay } from '../../../lib/config/shared-config.ts';
+import { speechConfig } from '../../../lib/config/speech-config.ts';
 import { getDatabase, type Database } from '../../../lib/db/client.ts';
 import { log } from '../../../lib/log.ts';
 import { objectStorageFromEnv, type ObjectStorage } from '../../../lib/storage/object-storage.ts';
 import { SYNTHESIS_WINDOW_MINUTES } from '../domain/collection-state.ts';
 import { systemResolver, type HostResolver } from './address-policy.ts';
-import {
-  unimplementedAudioStorageRoom,
-  unimplementedSynthesizerLoader,
-  type ArticleSynthesizer,
-  type ArticleSynthesizerLoader,
-  type AudioStorageRoom,
+import type {
+  ArticleSynthesizer,
+  ArticleSynthesizerLoader,
+  AudioStorageRoom,
 } from './article-synthesizer.ts';
 import { synthesizeDueArticles } from './article-synthesis.ts';
 import { collectDueFeeds } from './feed-collection.ts';
@@ -25,6 +24,8 @@ import { releaseCollectionLease, takeCollectionLease } from './lease.ts';
 import { FETCH_LIMITS, fetchLimited, type FetchLimits } from './limited-fetch.ts';
 import { removeExpiredRows } from './retention.ts';
 import type { CollectionRun, ResourceKind } from './run-context.ts';
+import { speechSynthesizerLoader } from './speech-synthesizer.ts';
+import { createAudioStorageRoom } from './storage-room.ts';
 import { collectionUserAgent } from './user-agent.ts';
 
 export type CollectionDependencies = {
@@ -45,14 +46,15 @@ export type CollectionDependencies = {
 
 export type CollectionSummary = { runId: string; leased: boolean };
 
-type Defaults = { [Key in keyof CollectionDependencies]: () => CollectionDependencies[Key] };
+/** The dependencies the synthesis and the storage room are made from. */
+type BaseDependencies = Omit<CollectionDependencies, 'loadSynthesizer' | 'storageRoom'>;
+
+type Defaults = { [Key in keyof BaseDependencies]: () => BaseDependencies[Key] };
 
 /** The production dependencies, each made only when the caller does not give it. */
 const productionDefaults: Defaults = {
   database: () => getDatabase({ applicationName: 'vexto-collect', max: 2 }),
   storage: () => objectStorageFromEnv(),
-  loadSynthesizer: () => unimplementedSynthesizerLoader,
-  storageRoom: () => unimplementedAudioStorageRoom,
   resolveHost: () => systemResolver,
   fetchLimits: () => FETCH_LIMITS,
   config: () => collectionConfig,
@@ -62,10 +64,26 @@ const productionDefaults: Defaults = {
   synthesisWindowMs: () => SYNTHESIS_WINDOW_MINUTES * 60_000,
 };
 
+/**
+ * The given dependencies with the production ones for the rest. The production synthesizer and
+ * storage room work on the run's database and bucket.
+ */
 function withDefaults(given: Partial<CollectionDependencies>): CollectionDependencies {
-  const keys = Object.keys(productionDefaults) as (keyof CollectionDependencies)[];
+  const keys = Object.keys(productionDefaults) as (keyof BaseDependencies)[];
   const entries = keys.map((key) => [key, given[key] ?? productionDefaults[key]()]);
-  return Object.fromEntries(entries) as CollectionDependencies;
+  const base = Object.fromEntries(entries) as BaseDependencies;
+  return {
+    ...base,
+    loadSynthesizer: given.loadSynthesizer ?? speechSynthesizerLoader(base.storage, speechConfig),
+    storageRoom:
+      given.storageRoom ??
+      createAudioStorageRoom({
+        database: base.database,
+        storage: base.storage,
+        config: base.config,
+        speech: speechConfig,
+      }),
+  };
 }
 
 const ACCEPT: Readonly<Record<ResourceKind, string>> = {
@@ -115,8 +133,8 @@ function runOf(runId: string, dependencies: CollectionDependencies): CollectionR
 
 /**
  * Runs the pipeline once. Dependencies that are not given are the production ones: the shared
- * database at DATABASE_URL, the bucket of the S3_* values, the system resolver, the committed
- * configuration and the real clocks.
+ * database at DATABASE_URL, the bucket of the S3_* values, the speech model at MODEL_DIR, the
+ * system resolver, the committed configuration and the real clocks.
  */
 export async function runCollection(
   given: Partial<CollectionDependencies> = {},

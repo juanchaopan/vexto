@@ -1,7 +1,8 @@
-// What the collection job needs from speech synthesis and from the audio storage, as interfaces
-// another feature implements (.docs/design/rules.md, 合成和发布 and 朗读和存储上限). The job
-// keeps the article's state, attempts, audio row, usage record, monthly synthesis tally and the
-// publishing transaction; the synthesizer only turns sentences into one uploaded MP3.
+// What the collection job needs from speech synthesis and from the audio storage
+// (.docs/design/rules.md, 合成和发布 and 朗读和存储上限). The job keeps the article's state,
+// attempts, audio row, usage record, monthly synthesis tally and the publishing transaction; the
+// synthesizer only turns sentences into one uploaded MP3 (speech-synthesizer.ts), and the storage
+// room keeps the stored audio under its cap (storage-room.ts). Tests give stand-ins for both.
 import type { SynthesisErrorCode } from '../../articles/index.ts';
 
 /** How the audio is made; recorded on the audio row and the usage record. */
@@ -77,18 +78,3 @@ export class ArticleSynthesisError extends Error {
     this.code = code;
   }
 }
-
-function notBuilt(what: string): never {
-  throw new Error(`${what} is not implemented.`);
-}
-
-/** Stands in for the speech model, which this build does not have: loading it throws. */
-export const unimplementedSynthesizerLoader: ArticleSynthesizerLoader = async () =>
-  notBuilt('Article synthesis');
-
-/** Stands in for the storage eviction, which this build does not have: it throws. */
-export const unimplementedAudioStorageRoom: AudioStorageRoom = {
-  async makeRoomFor() {
-    notBuilt('Audio storage eviction');
-  },
-};

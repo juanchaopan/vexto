@@ -2,7 +2,7 @@
 // Scheduler or by hand. It exits 0 when the run ends normally, including when another run holds
 // the lease and when single articles or feeds fail, and 1 when the run itself fails
 // (.docs/design/interfaces.md). The database pool is closed before the process exits.
-// Run with: node src/worker/collect.ts
+// Run with: node src/worker/collect.ts   (reads DATABASE_URL, S3_* and MODEL_DIR)
 import { runCollection, type CollectionDependencies } from '../features/collection/index.ts';
 import { closeDatabase } from '../lib/db/client.ts';
 import { errorFields, log } from '../lib/log.ts';
