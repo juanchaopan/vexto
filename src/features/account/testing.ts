@@ -12,8 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { sharedConfig } from '../../lib/config/shared-config.ts';
 import { getDatabase } from '../../lib/db/client.ts';
-import type { MemberStatus } from './domain/member.ts';
-import { members } from './server/schema.ts';
+import { members, type MemberStatus } from '../../lib/db/schema.ts';
 
 type ClerkEmail = { id: string; emailAddress: string; verification: { status: string } | null };
 type ClerkUser = { id: string; primaryEmailAddressId: string | null; emailAddresses: ClerkEmail[] };

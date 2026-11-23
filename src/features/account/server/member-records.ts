@@ -3,8 +3,8 @@
 // its first request, and recording the accepted terms version.
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../../lib/db/client.ts';
+import { members } from '../../../lib/db/schema.ts';
 import type { TermsAcceptance } from '../domain/terms.ts';
-import { members } from './schema.ts';
 
 /** The signed-in member a request acts for. */
 export type Member = TermsAcceptance & { id: string; email: string };

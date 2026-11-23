@@ -4,7 +4,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, jsonb, pgTable, unique, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { englishDocument, timestamptz, tsvector, uuidPrimaryKey } from '../../../lib/db/columns.ts';
-import { members } from '../../account/index.ts';
+import { members } from '../../../lib/db/schema.ts';
 import {
   exampleChecks,
   exampleColumns,

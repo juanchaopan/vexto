@@ -1,5 +1,4 @@
-export { MEMBER_STATUSES, type MemberStatus } from './domain/member.ts';
-export { members } from './server/schema.ts';
+export { MEMBER_STATUSES, members, type MemberStatus } from '../../lib/db/schema.ts';
 export type { Member } from './server/member-records.ts';
 export {
   handleMemberRequest,

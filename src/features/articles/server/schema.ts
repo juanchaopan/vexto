@@ -19,7 +19,7 @@ import {
   tsvector,
   uuidPrimaryKey,
 } from '../../../lib/db/columns.ts';
-import { members } from '../../account/index.ts';
+import { members } from '../../../lib/db/schema.ts';
 import { audioAssets } from '../../audio/index.ts';
 import {
   ARTICLE_STATES,

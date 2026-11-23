@@ -3,7 +3,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
 import { isBetween, isOneOf, timestamptz } from '../../../lib/db/columns.ts';
-import { members } from '../../account/index.ts';
+import { members } from '../../../lib/db/schema.ts';
 import { vocabularyCards } from '../../vocabulary/index.ts';
 import { FINAL_ROUND, REVIEW_MODES, type ReviewMode } from '../domain/review-progress.ts';
 

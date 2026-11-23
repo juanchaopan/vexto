@@ -13,7 +13,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { isOneOf, uuidPrimaryKey } from '../../../lib/db/columns.ts';
-import { members } from '../../account/index.ts';
+import { members } from '../../../lib/db/schema.ts';
 import {
   MEANING_MAX_LENGTH,
   PARTS_OF_SPEECH,

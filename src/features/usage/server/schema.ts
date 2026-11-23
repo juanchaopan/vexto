@@ -3,7 +3,7 @@
 // good, and a revoked member's rows keep their place without an owner.
 import { bigint, check, integer, numeric, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 import { isOneOf, timestamptz, uuidPrimaryKey } from '../../../lib/db/columns.ts';
-import { members } from '../../account/index.ts';
+import { members } from '../../../lib/db/schema.ts';
 import { USAGE_KINDS, USAGE_STATUSES, type UsageKind, type UsageStatus } from '../domain/usage.ts';
 
 export const usageRecords = pgTable(
