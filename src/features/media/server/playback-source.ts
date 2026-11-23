@@ -7,9 +7,9 @@ import { ApiError } from '../../../lib/api/errors.ts';
 import type { Executor } from '../../../lib/db/client.ts';
 import { articles } from '../../articles/index.ts';
 import { audioAssets } from '../../audio/index.ts';
-import { examples, lookupEntries } from '../../lookup/index.ts';
+import { lookupEntries, lookupExample } from '../../lookup/index.ts';
 import type { PlayableAudio, SpeechUsageKind } from '../../playback/index.ts';
-import { vocabularyCards, vocabularyExamples } from '../../vocabulary/index.ts';
+import { cardSources, vocabularyCards } from '../../vocabulary/index.ts';
 import { speechUsageKindOf, type PlaybackLocator, type SpeechLocator } from '../domain/locator.ts';
 
 export type PlaybackSource =
@@ -35,26 +35,6 @@ async function lookupWord(executor: Executor, ownerId: string, lookupId: string)
   return row?.text;
 }
 
-async function lookupExample(
-  executor: Executor,
-  ownerId: string,
-  lookupId: string,
-  exampleId: string,
-) {
-  const [row] = await executor
-    .select({ text: examples.text })
-    .from(examples)
-    .innerJoin(lookupEntries, eq(lookupEntries.id, examples.lookupEntryId))
-    .where(
-      and(
-        eq(examples.id, exampleId),
-        eq(examples.lookupEntryId, lookupId),
-        eq(lookupEntries.ownerId, ownerId),
-      ),
-    );
-  return row?.text;
-}
-
 async function cardWord(executor: Executor, ownerId: string, cardId: string) {
   const [row] = await executor
     .select({ text: vocabularyCards.lemma })
@@ -63,31 +43,17 @@ async function cardWord(executor: Executor, ownerId: string, cardId: string) {
   return row?.text;
 }
 
-async function cardExample(executor: Executor, ownerId: string, cardId: string, exampleId: string) {
-  const [row] = await executor
-    .select({ text: vocabularyExamples.text })
-    .from(vocabularyExamples)
-    .innerJoin(vocabularyCards, eq(vocabularyCards.id, vocabularyExamples.cardId))
-    .where(
-      and(
-        eq(vocabularyExamples.id, exampleId),
-        eq(vocabularyExamples.cardId, cardId),
-        eq(vocabularyCards.ownerId, ownerId),
-      ),
-    );
-  return row?.text;
-}
-
-function speechText(executor: Executor, ownerId: string, locator: SpeechLocator) {
+async function speechText(executor: Executor, ownerId: string, locator: SpeechLocator) {
   switch (locator.kind) {
     case 'lookup-word':
       return lookupWord(executor, ownerId, locator.lookupId);
     case 'lookup-example':
-      return lookupExample(executor, ownerId, locator.lookupId, locator.exampleId);
+      return (await lookupExample(executor, ownerId, locator.lookupId, locator.exampleId))?.text;
     case 'card-word':
       return cardWord(executor, ownerId, locator.cardId);
     case 'card-example':
-      return cardExample(executor, ownerId, locator.cardId, locator.exampleId);
+      return (await cardSources.cardExample(executor, ownerId, locator.cardId, locator.exampleId))
+        ?.text;
   }
 }
 

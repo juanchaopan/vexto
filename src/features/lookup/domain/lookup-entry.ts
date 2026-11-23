@@ -21,3 +21,12 @@ export const MEANING_MAX_LENGTH = 30;
 
 /** Where a target word sits in an example: a UTF-16 range [start, end). */
 export type TargetRange = [start: number, end: number];
+
+/**
+ * The key cards of the same lemma are found by (.docs/design/rules.md, 输出): the lemma in NFC,
+ * lower case, without spaces at its ends, runs of white space made one space and curly
+ * apostrophes made straight.
+ */
+export function lemmaKey(lemma: string): string {
+  return lemma.normalize('NFC').toLowerCase().trim().replace(/\s+/gu, ' ').replace(/’/gu, "'");
+}
