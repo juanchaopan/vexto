@@ -1,6 +1,6 @@
 // Runs inside the Playwright container that scripts/test-e2e.ts starts: installs the Linux
-// dependencies, builds the application and runs Playwright, which starts the built application
-// on a free port and stops it when the tests end.
+// dependencies, builds the application and runs Playwright, which starts the stand-in for OpenAI
+// and the built application on free ports and stops them when the tests end.
 // Usage: node scripts/e2e-in-container.ts [playwright test arguments...]
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -45,6 +45,16 @@ async function handBackOutputs() {
   }
 }
 
+/** Two different free ports: the application's and the stand-in's for OpenAI. */
+async function twoFreePorts(): Promise<[number, number]> {
+  const first = await freePort();
+  let second = await freePort();
+  while (second === first) {
+    second = await freePort();
+  }
+  return [first, second];
+}
+
 if (!pnpmVersion) {
   console.error('package.json has no packageManager pnpm version.');
   process.exit(1);
@@ -61,7 +71,8 @@ await mustRun(pnpm, [
 ]);
 await mustRun(pnpm, ['exec', 'next', 'build']);
 
-const testEnv = { ...env, E2E_PORT: String(await freePort()) };
+const [appPort, openAiPort] = await twoFreePorts();
+const testEnv = { ...env, E2E_PORT: String(appPort), E2E_OPENAI_PORT: String(openAiPort) };
 const playwrightArgs = ['test', ...process.argv.slice(2)];
 const code = await runPackageBin('@playwright/test', 'playwright', playwrightArgs, {
   env: testEnv,

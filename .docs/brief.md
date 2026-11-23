@@ -27,6 +27,7 @@ vexto 是一个网页应用：用户听读预置英文订阅源里的文章，�
    - Translate：从四个中文释义里选出正确的一个。
 10. **用量记录**：每次调用 AI、语音合成或语音判定，都记录用量和估算费用，供项目所有者查账；第一版不做费用看板。
 11. **数据存储**：生词本和复习进度保存在服务端，用户在任何设备上登录，看到的都是同一份数据。
+12. **使用条款**：朗读的声音由 AI 生成。模型 Supertonic 的许可证（OpenRAIL-M）要求用户遵守它的使用限制，其中一条是对外传播生成的内容时要说明它是机器生成的。所以用户第一次登录时确认一次使用条款，条款说明声音由 AI 生成，并包含这些使用限制；音频文件里写明是 AI 生成的声音；条款页和账号菜单里可以打开许可证全文。界面上的播放键旁边不另加标注。
 
 不在范围内：
 
@@ -53,7 +54,7 @@ vexto 是一个网页应用：用户听读预置英文订阅源里的文章，�
 ## 参考项目
 
 - **lingocurrent**（https://github.com/juanchaopan/lingocurrent）：英文阅读、AI 查词、生词本和三种间隔复习（Speak、Spell、Translate）的网页应用。Next.js 应用部署在 Vercel，数据库和文件放在 Neon，用 Clerk 做受邀 Google 登录。它只完成了工程骨架、设计和一个朗读选型 spike，没有产品功能，生产也从未部署。vexto 的功能范围以它为准，只改了几处：只做手机布局、可以抓原网页、订阅源写在配置文件里、用户只有少数几个人。分析见 `.docs/reference/lingocurrent/`。
-- vexto 接替 lingocurrent：lingocurrent 停用，vexto 接手它的 Vercel 项目、Neon 项目和 Clerk 应用。
+- vexto 接替 lingocurrent：lingocurrent 停用，vexto 接手它的 Vercel 项目和 Neon 项目；登录用 vexto 自己的 Clerk 应用 `vexto`。
 
 ## 语言
 
@@ -71,4 +72,4 @@ vexto 是一个网页应用：用户听读预置英文订阅源里的文章，�
 - 公开仓库在 GitHub 的任何套餐下都强制执行分支规则和必过检查，也支持按环境保存密钥。
 - issue 的引用格式是 `#12`。
 
-Last changed: #1 (2026-11-21)
+Last changed: #3 (2026-11-22)

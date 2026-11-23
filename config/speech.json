@@ -1,0 +1,14 @@
+{
+  "provider": "supertonic",
+  "voice": "F1",
+  "language": "en",
+  "totalSteps": 8,
+  "speed": 1.05,
+  "sentenceGapMs": 300,
+  "encoding": {
+    "version": "mp3-mono-32k-v1",
+    "bitrateKbps": 32,
+    "sampleRateHz": 44100,
+    "comment": "AI-generated voice (Supertonic 3)"
+  }
+}

@@ -1,7 +1,10 @@
-# Deploys one commit to one target: copies the runtime values into the target's Vercel project,
-# applies the database migrations, builds and deploys with the Vercel CLI, then runs the smoke
-# tests against the target's address. Called by ci for staging after every passing push to main,
-# and by the manual deploy workflow.
+# Deploys one commit to one target. In order: copies the web application's runtime values into
+# the target's Vercel project, applies the database migrations, builds the web application, logs
+# in to Google Cloud, copies the Cloud Run secrets into Secret Manager, builds and pushes the
+# worker image, points the Cloud Run job and services at it, deploys the web application, and
+# runs the smoke tests against the target. The web application and Cloud Run always run the same
+# commit. Called by ci for staging after every passing push to main, and by the manual deploy
+# workflow.
 #
 # ci's runs on main do not cancel each other, so an older commit's run can reach its staging
 # deployment after a newer commit's. ci therefore sets only-if-main-head: the job then checks,
@@ -12,16 +15,23 @@
 #
 # The job runs in the GitHub environment named after the target, which is the only place the
 # target's values are kept. It reads from it:
-#   secret   VERCEL_TOKEN       Vercel token for this target only; the CLI reads it from the
-#                               environment, so it never appears on a command line
-#   variable VERCEL_ORG_ID      Vercel team of the project
-#   variable VERCEL_PROJECT_ID  Vercel project of the target
-#   variable APP_URL            address the smoke tests visit
+#   secret   VERCEL_TOKEN                Vercel token for this target only; the CLI reads it from
+#                                        the environment, so it never appears on a command line
+#   variable VERCEL_ORG_ID               Vercel team of the project
+#   variable VERCEL_PROJECT_ID           Vercel project of the target
+#   variable APP_URL                     address the smoke tests visit
+#   variable GCP_PROJECT_ID, GCP_REGION  the target's Google Cloud project and region; every
+#                                        resource name follows from them (scripts/lib/google-cloud.ts)
+#   variable GCP_DEPLOY_PROVIDER         Workload Identity Federation provider that accepts this
+#                                        repository's tokens for this environment
+#   variable GCP_DEPLOY_SERVICE_ACCOUNT  service account the job acts as on Google Cloud
 #   the runtime values listed in scripts/lib/runtime-env.ts, secrets as environment secrets and
-#   the rest as environment variables. Before every deployment they overwrite the copies in the
-#   Production environment of the Vercel project, which every target deploys to with --prod; a
-#   value not set yet is skipped. Migrations use DATABASE_URL_UNPOOLED, or DATABASE_URL when
-#   that is not set, and need neither until drizzle/ has scripts.
+#   the rest as environment variables. Before every deployment they overwrite their copies: the
+#   Production environment of the Vercel project, which every target deploys to with --prod, the
+#   target's Secret Manager, and the Cloud Run resources' environment. A value not set yet is
+#   skipped. Migrations use DATABASE_URL_UNPOOLED, or DATABASE_URL when that is not set, and need
+#   neither until drizzle/ has scripts. The smoke tests call vexto-tts at TTS_SERVICE_URL and read
+#   the object it writes from the bucket of the S3_* values.
 # The production environment is not set up yet, so a production deployment stops at the
 # settings check until its environment, variables and token exist.
 #
@@ -29,10 +39,15 @@
 # caller passes its secrets, and the caller cannot name them, because it runs outside the
 # environment. Every step still names each secret it uses, so no step receives the others.
 #
-# The sync step names each runtime value in its env, a secret from the secrets context and a
-# variable from the vars context only, plus a flag per name telling whether the other context also
-# holds that name, so a value stored under the wrong kind stops the sync. Its env must match
-# syncStepEnv() in scripts/lib/runtime-env.ts, which a unit test checks.
+# Each sync step names each runtime value it copies in its env, a secret from the secrets context
+# and a variable from the vars context only, plus a flag per name telling whether the other
+# context also holds that name, so a value stored under the wrong kind stops the sync. Their envs
+# must match syncStepEnv() in scripts/lib/runtime-env.ts, which a unit test checks.
+#
+# The Google Cloud login writes a short-lived credentials file into the workspace for gcloud.
+# The steps that run the project's build code (the migrations and the web application's build)
+# come before it, and the worker image's build context leaves out everything but the files it
+# names (.dockerignore).
 #
 # The local setup action is referenced as ./...: actionlint cannot parse GitHub's
 # self-repository form $/... yet, so zizmor's self-repository finding is ignored on that line.
@@ -61,9 +76,10 @@ jobs:
   deploy:
     name: deploy (${{ inputs.target }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
+      id-token: write # the OIDC token Workload Identity Federation exchanges for Google Cloud access
     environment:
       name: ${{ inputs.target }}
       url: ${{ vars.APP_URL }}
@@ -78,10 +94,12 @@ jobs:
       # dependencies would fail the project's dependency audit.
       # renovate: datasource=npm depName=vercel
       VERCEL_CLI_VERSION: 66.6.0
-      # The team and the project are plain variables, so the whole job reads them; the token is
-      # given only to the steps that need it.
+      # The team, the project and the Google Cloud target are plain variables, so the whole job
+      # reads them; secrets are given only to the steps that need them.
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
     steps:
       - name: Check the target and the environment's settings
         env:
@@ -89,6 +107,9 @@ jobs:
           REF: ${{ inputs.ref }}
           HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
           APP_URL: ${{ vars.APP_URL }}
+          GCP_DEPLOY_PROVIDER: ${{ vars.GCP_DEPLOY_PROVIDER }}
+          GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          TTS_SERVICE_URL: ${{ vars.TTS_SERVICE_URL }}
         run: |
           case "$TARGET" in
             staging | production) ;;
@@ -106,8 +127,17 @@ jobs:
           [ -n "$VERCEL_ORG_ID" ] || missing+=("variable VERCEL_ORG_ID")
           [ -n "$VERCEL_PROJECT_ID" ] || missing+=("variable VERCEL_PROJECT_ID")
           [ -n "$APP_URL" ] || missing+=("variable APP_URL")
+          [ -n "$GCP_PROJECT_ID" ] || missing+=("variable GCP_PROJECT_ID")
+          [ -n "$GCP_REGION" ] || missing+=("variable GCP_REGION")
+          [ -n "$GCP_DEPLOY_PROVIDER" ] || missing+=("variable GCP_DEPLOY_PROVIDER")
+          [ -n "$GCP_DEPLOY_SERVICE_ACCOUNT" ] || missing+=("variable GCP_DEPLOY_SERVICE_ACCOUNT")
+          [ -n "$TTS_SERVICE_URL" ] || missing+=("variable TTS_SERVICE_URL")
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "::error::The GitHub environment $TARGET is missing: ${missing[*]}."
+            exit 1
+          fi
+          if ! [[ "$TTS_SERVICE_URL" =~ ^https://[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::TTS_SERVICE_URL must be the https:// address of the vexto-tts service."
             exit 1
           fi
 
@@ -152,16 +182,24 @@ jobs:
         with:
           cache: 'false'
 
+      # Checks the names before anything changes; the later steps read them from its outputs.
+      - name: Name the Google Cloud resources
+        id: names
+        if: steps.head.outputs.deploy == 'true'
+        env:
+          COMMIT: ${{ inputs.ref }}
+        run: node scripts/google-cloud-names.ts >> "$GITHUB_OUTPUT"
+
       # Runs before the migrations, so a value stored under the wrong kind stops the deployment
-      # before the database changes. Each value goes to the CLI on standard input.
+      # before the database changes. Every value the Cloud Run resources read is also one the web
+      # application reads, so this step checks them all. Each value goes to the CLI on standard
+      # input.
       - name: Copy the runtime values to the Vercel project
         if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_STORED_AS_VARIABLE: ${{ vars.DATABASE_URL != '' }}
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-          DATABASE_URL_UNPOOLED_STORED_AS_VARIABLE: ${{ vars.DATABASE_URL_UNPOOLED != '' }}
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           CLERK_SECRET_KEY_STORED_AS_VARIABLE: ${{ vars.CLERK_SECRET_KEY != '' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -170,8 +208,6 @@ jobs:
           S3_ACCESS_KEY_ID_STORED_AS_VARIABLE: ${{ vars.S3_ACCESS_KEY_ID != '' }}
           S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           S3_SECRET_ACCESS_KEY_STORED_AS_VARIABLE: ${{ vars.S3_SECRET_ACCESS_KEY != '' }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          CRON_SECRET_STORED_AS_VARIABLE: ${{ vars.CRON_SECRET != '' }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY_STORED_AS_SECRET: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' }}
           S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
@@ -180,6 +216,12 @@ jobs:
           S3_REGION_STORED_AS_SECRET: ${{ secrets.S3_REGION != '' }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
           S3_BUCKET_STORED_AS_SECRET: ${{ secrets.S3_BUCKET != '' }}
+          TTS_SERVICE_URL: ${{ vars.TTS_SERVICE_URL }}
+          TTS_SERVICE_URL_STORED_AS_SECRET: ${{ secrets.TTS_SERVICE_URL != '' }}
+          GCP_VERCEL_PROVIDER: ${{ vars.GCP_VERCEL_PROVIDER }}
+          GCP_VERCEL_PROVIDER_STORED_AS_SECRET: ${{ secrets.GCP_VERCEL_PROVIDER != '' }}
+          GCP_TTS_INVOKER_SERVICE_ACCOUNT: ${{ vars.GCP_TTS_INVOKER_SERVICE_ACCOUNT }}
+          GCP_TTS_INVOKER_SERVICE_ACCOUNT_STORED_AS_SECRET: ${{ secrets.GCP_TTS_INVOKER_SERVICE_ACCOUNT != '' }}
         run: node scripts/sync-vercel-env.ts
 
       - name: Apply the database migrations
@@ -197,23 +239,96 @@ jobs:
 
       # The build works from the pulled settings and needs no token, so the project's build code
       # never sees it.
-      - name: Build
+      - name: Build the web application
         if: steps.head.outputs.deploy == 'true'
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod
 
-      - name: Deploy
+      - name: Log in to Google Cloud
+        if: steps.head.outputs.deploy == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_DEPLOY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        if: steps.head.outputs.deploy == 'true'
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          # renovate: datasource=docker depName=gcr.io/google.com/cloudsdktool/google-cloud-cli
+          version: 594.0.1
+
+      # Each value goes to gcloud on standard input; a value that has not changed adds no version.
+      - name: Copy the Cloud Run secrets to Secret Manager
+        if: steps.head.outputs.deploy == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_STORED_AS_VARIABLE: ${{ vars.DATABASE_URL != '' }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_ACCESS_KEY_ID_STORED_AS_VARIABLE: ${{ vars.S3_ACCESS_KEY_ID != '' }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          S3_SECRET_ACCESS_KEY_STORED_AS_VARIABLE: ${{ vars.S3_SECRET_ACCESS_KEY != '' }}
+        run: node scripts/sync-secret-manager.ts
+
+      # The image of the previous deployment, tagged latest, lends the layers whose inputs have
+      # not changed, so the registry stores them once.
+      - name: Build and push the worker image
+        if: steps.head.outputs.deploy == 'true'
+        env:
+          REGISTRY: ${{ steps.names.outputs.registry }}
+          REPOSITORY: ${{ steps.names.outputs.repository }}
+          IMAGE: ${{ steps.names.outputs.image }}
+        run: |
+          gcloud auth configure-docker "$REGISTRY" --quiet
+          task build-worker IMAGE="$IMAGE" CACHE_FROM="$REPOSITORY:latest"
+          docker tag "$IMAGE" "$REPOSITORY:latest"
+          docker push "$IMAGE"
+          docker push "$REPOSITORY:latest"
+
+      - name: Update the Cloud Run job and services
+        if: steps.head.outputs.deploy == 'true'
+        env:
+          COMMIT: ${{ inputs.ref }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_ENDPOINT_STORED_AS_SECRET: ${{ secrets.S3_ENDPOINT != '' }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_REGION_STORED_AS_SECRET: ${{ secrets.S3_REGION != '' }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_BUCKET_STORED_AS_SECRET: ${{ secrets.S3_BUCKET != '' }}
+        run: node scripts/deploy-cloud-run.ts
+
+      - name: Deploy the web application
         if: steps.head.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --prod
 
-      # Production runs only the smoke tests that are safe against real user data.
+      # Production runs only the smoke tests that are safe against real user data. The speech
+      # service's smoke test calls vexto-tts with an identity token of the deployment's service
+      # account for TTS_SERVICE_URL, then reads the fixed smoke object it wrote from the bucket to
+      # check it is a playable MP3. The token is masked in the log; it and the bucket credentials
+      # reach the tests in their environment only.
       - name: Run the smoke tests
         if: steps.head.outputs.deploy == 'true'
         env:
           TARGET: ${{ inputs.target }}
           APP_URL: ${{ vars.APP_URL }}
+          TTS_SERVICE_URL: ${{ vars.TTS_SERVICE_URL }}
+          GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
         run: |
+          TTS_ID_TOKEN="$(gcloud auth print-identity-token \
+            --impersonate-service-account="$GCP_DEPLOY_SERVICE_ACCOUNT" \
+            --audiences="$TTS_SERVICE_URL" --include-email)"
+          if [ -z "$TTS_ID_TOKEN" ]; then
+            echo "::error::No identity token for $TTS_SERVICE_URL."
+            exit 1
+          fi
+          echo "::add-mask::$TTS_ID_TOKEN"
+          export TTS_ID_TOKEN
           if [ "$TARGET" = production ]; then
             task test-smoke -- "$APP_URL" --production-safe
           else

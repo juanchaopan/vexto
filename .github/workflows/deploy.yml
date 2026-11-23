@@ -8,7 +8,9 @@
 # It uses `secrets: inherit`: the target GitHub environment's secrets reach the reusable
 # workflow's job only when the caller passes its secrets, and the caller cannot name them,
 # because it runs outside the environment. deploy-target.yml hands each step only the secrets the
-# step names, so zizmor's secrets-inherit finding is ignored on that line too.
+# step names, so zizmor's secrets-inherit finding is ignored on that line too. A called workflow
+# gets at most the permissions of its caller, so the deploy job grants the id-token permission
+# the deployment needs for its Google Cloud login.
 name: deploy
 run-name: deploy ${{ inputs.version }} to ${{ inputs.target }}
 
@@ -99,6 +101,7 @@ jobs:
     needs: resolve
     permissions:
       contents: read
+      id-token: write
     uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository,secrets-inherit]
     with:
       target: ${{ inputs.target }}

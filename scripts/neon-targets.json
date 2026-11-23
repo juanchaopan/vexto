@@ -1,0 +1,11 @@
+{
+  "staging": {
+    "projectId": "bold-water-71503400",
+    "branchId": "br-cool-king-bdzirfp0",
+    "database": "neondb"
+  },
+  "production": {
+    "projectId": "misty-art-39773764",
+    "branchId": "br-mute-sea-bdqamwb7"
+  }
+}

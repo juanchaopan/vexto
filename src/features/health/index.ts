@@ -1,1 +1,1 @@
-export { createHealthResponse, createMethodNotAllowedResponse } from './server/health-response';
+export { createHealthResponse, createMethodNotAllowedResponse } from './server/health-response.ts';

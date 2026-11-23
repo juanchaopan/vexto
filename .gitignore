@@ -18,6 +18,8 @@
 /playwright/.cache/
 __screenshots__/
 __traces__/
+# failure screenshots of the component tests
+/.vitest/
 
 # next.js
 /.next/
@@ -48,3 +50,6 @@ secrets.local.env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# speech model files downloaded by `task model-download`
+/.models/

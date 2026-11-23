@@ -1,0 +1,62 @@
+{
+  "repositoryUrl": "https://github.com/juanchaopan/vexto",
+  "words": { "min": 150, "max": 1000 },
+  "planningAverageWords": 600,
+  "dailyArticleLimit": 10,
+  "job": { "vcpu": 2, "memoryGiB": 2 },
+  "freeTier": { "vcpuSeconds": 240000, "gibSeconds": 450000 },
+  "budgetRatio": 0.8,
+  "synthesisEstimate": {
+    "wordsPerMinute": 150,
+    "vcpuSecondsPerAudioMinute": 136,
+    "daysPerMonth": 31
+  },
+  "storage": {
+    "capBytes": 5000000000,
+    "evictAtRatio": 0.95,
+    "evictToRatio": 0.9,
+    "evictBatchSize": 50
+  },
+  "feeds": {
+    "nasa-technology": {
+      "url": "https://www.nasa.gov/technology/feed/",
+      "body": "feed",
+      "timeZone": "America/New_York",
+      "times": ["09:00"],
+      "perRun": 2,
+      "enabled": true
+    },
+    "nasa-aeronautics": {
+      "url": "https://www.nasa.gov/aeronautics/feed/",
+      "body": "feed",
+      "timeZone": "America/New_York",
+      "times": ["09:00"],
+      "perRun": 2,
+      "enabled": true
+    },
+    "nih-research-matters": {
+      "url": "https://www.nih.gov/nih-research-matters/feed.xml",
+      "body": "page",
+      "timeZone": "America/New_York",
+      "times": ["09:00"],
+      "perRun": 2,
+      "enabled": true
+    },
+    "nist-news": {
+      "url": "https://www.nist.gov/news-events/news/rss.xml",
+      "body": "page",
+      "timeZone": "America/New_York",
+      "times": ["09:00"],
+      "perRun": 2,
+      "enabled": true
+    },
+    "loc-inside-adams": {
+      "url": "https://blogs.loc.gov/inside_adams/feed/",
+      "body": "feed",
+      "timeZone": "America/New_York",
+      "times": ["09:00"],
+      "perRun": 2,
+      "enabled": true
+    }
+  }
+}

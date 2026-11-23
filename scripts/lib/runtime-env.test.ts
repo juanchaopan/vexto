@@ -4,19 +4,22 @@ import { describe, expect, it } from 'vitest';
 import { repoRoot } from './node-tools.ts';
 import {
   cliEnv,
+  cloudRunSecrets,
+  cloudRunVariables,
   envAddArgs,
   otherKindFlag,
   planSync,
   runtimeValues,
   syncStepEnv,
+  webValues,
   type RuntimeValue,
 } from './runtime-env.ts';
 
 const values: RuntimeValue[] = [
-  { name: 'DB_URL', kind: 'secret' },
-  { name: 'API_KEY', kind: 'secret' },
-  { name: 'BUCKET', kind: 'variable' },
-  { name: 'REGION', kind: 'variable' },
+  { name: 'DB_URL', kind: 'secret', readers: ['web', 'collect'] },
+  { name: 'API_KEY', kind: 'secret', readers: ['web'] },
+  { name: 'BUCKET', kind: 'variable', readers: ['web', 'tts'] },
+  { name: 'REGION', kind: 'variable', readers: ['web'] },
 ];
 
 /** A step environment where every name is passed and none is stored under the wrong kind. */
@@ -29,7 +32,6 @@ function stepEnv(entries: Record<string, string>) {
 }
 
 const workflowsDir = path.join(repoRoot, '.github', 'workflows');
-const syncStepName = 'Copy the runtime values to the Vercel project';
 
 function indentOf(line: string) {
   return line.length - line.trimStart().length;
@@ -84,9 +86,10 @@ function readStepEnv(workflow: string, stepName: string) {
 }
 
 describe('runtimeValues', () => {
-  it('lists every name once', () => {
+  it('lists every name once, each with at least one reader', () => {
     const names = runtimeValues.map((value) => value.name);
     expect(new Set(names).size).toBe(names.length);
+    expect(runtimeValues.filter((value) => value.readers.length === 0)).toEqual([]);
   });
 
   it('keeps browser-visible values out of the secrets', () => {
@@ -99,6 +102,20 @@ describe('runtimeValues', () => {
   it('gives no flag a name that is also a runtime value', () => {
     const names = new Set(runtimeValues.map((value) => value.name));
     expect(runtimeValues.map(otherKindFlag).filter((flag) => names.has(flag))).toEqual([]);
+  });
+
+  it('copies to Cloud Run only what the collection job or the speech service reads', () => {
+    expect(cloudRunSecrets.map((value) => value.name)).toEqual([
+      'DATABASE_URL',
+      'S3_ACCESS_KEY_ID',
+      'S3_SECRET_ACCESS_KEY',
+    ]);
+    expect(cloudRunVariables.map((value) => value.name)).toEqual([
+      'S3_ENDPOINT',
+      'S3_REGION',
+      'S3_BUCKET',
+    ]);
+    expect(webValues).toHaveLength(runtimeValues.length);
   });
 });
 
@@ -113,13 +130,26 @@ describe('syncStepEnv', () => {
   });
 });
 
-describe('the sync step of deploy-target.yml', () => {
+describe('the sync steps of deploy-target.yml', () => {
   const workflow = readFileSync(path.join(workflowsDir, 'deploy-target.yml'), 'utf8');
 
-  it('passes exactly the listed runtime values, each from its own kind, and the Vercel token', () => {
-    expect(readStepEnv(workflow, syncStepName)).toEqual({
+  it('passes the Vercel step exactly the values the web application reads, and the token', () => {
+    expect(readStepEnv(workflow, 'Copy the runtime values to the Vercel project')).toEqual({
       VERCEL_TOKEN: '${{ secrets.VERCEL_TOKEN }}',
-      ...syncStepEnv(),
+      ...syncStepEnv(webValues),
+    });
+  });
+
+  it('passes the Secret Manager step exactly the secrets Cloud Run reads', () => {
+    expect(readStepEnv(workflow, 'Copy the Cloud Run secrets to Secret Manager')).toEqual(
+      syncStepEnv(cloudRunSecrets),
+    );
+  });
+
+  it('passes the Cloud Run step exactly the variables Cloud Run reads, and the commit', () => {
+    expect(readStepEnv(workflow, 'Update the Cloud Run job and services')).toEqual({
+      COMMIT: '${{ inputs.ref }}',
+      ...syncStepEnv(cloudRunVariables),
     });
   });
 });
@@ -168,16 +198,16 @@ describe('the workflows', () => {
 });
 
 describe('planSync', () => {
-  it('uploads the values that are set, in list order, and skips the rest', () => {
+  it('copies the values that are set, in list order, and skips the rest', () => {
     const plan = planSync(
       stepEnv({ API_KEY: 'k', DB_URL: 'postgres://x', REGION: '', BUCKET: 'b', OTHER: 'o' }),
       values,
     );
     expect(plan).toEqual({
       upload: [
-        { name: 'DB_URL', kind: 'secret', value: 'postgres://x' },
-        { name: 'API_KEY', kind: 'secret', value: 'k' },
-        { name: 'BUCKET', kind: 'variable', value: 'b' },
+        { ...values[0], value: 'postgres://x' },
+        { ...values[1], value: 'k' },
+        { ...values[2], value: 'b' },
       ],
       skipped: ['REGION'],
       errors: [],

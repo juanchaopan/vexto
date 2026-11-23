@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
@@ -8,22 +7,26 @@ import { defineConfig } from 'vitest/config';
 //   *.integration.test.ts integration tests from the route entry inward
 //   *.security.test.ts    sign-in, permission, data isolation and hostile input cases
 //   *.migration.test.ts   migration scripts run against data in the previous format
-// The named Node kinds are listed with the directories their tests live in.
-const nodeTestRoots = {
-  integration: ['src'],
-  security: ['src'],
-  migration: ['src', 'drizzle'],
+// The named Node kinds are listed with the directories their tests live in, and whether they run
+// against the throwaway PostgreSQL and S3Mock containers of scripts/lib/test-services.ts.
+const nodeTestKinds = [
+  { kind: 'integration', roots: ['src', 'scripts'], services: true },
+  { kind: 'security', roots: ['src'], services: true },
+  { kind: 'migration', roots: ['src', 'drizzle'], services: false },
+];
+const namedNodeTests = nodeTestKinds.map(({ kind }) => `**/*.${kind}.test.ts`);
+
+// The global setup starts the containers once per run and the setup file puts their runtime
+// values into process.env of every test file.
+const testServices = {
+  globalSetup: ['scripts/test-services-setup.ts'],
+  setupFiles: ['scripts/test-services-env.ts'],
 };
-const nodeTestKinds = Object.entries(nodeTestRoots);
-const namedNodeTests = nodeTestKinds.map(([kind]) => `**/*.${kind}.test.ts`);
 
 // Phone-size viewport, matching the devices the application is built for.
 const phoneViewport = { width: 390, height: 844 };
 
 export default defineConfig({
-  resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
-  },
   test: {
     projects: [
       {
@@ -49,12 +52,13 @@ export default defineConfig({
           },
         },
       },
-      ...nodeTestKinds.map(([kind, roots]) => ({
+      ...nodeTestKinds.map(({ kind, roots, services }) => ({
         extends: true as const,
         test: {
           name: kind,
           environment: 'node',
           include: roots.map((root) => `${root}/**/*.${kind}.test.ts`),
+          ...(services ? testServices : {}),
         },
       })),
     ],

@@ -82,10 +82,11 @@ jobs:
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - run: task typecheck
 
+  # Builds the web application and the Cloud Run image; the image is not pushed.
   build:
     name: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -245,6 +246,9 @@ jobs:
         run: task browsers -- --with-deps
       - run: task test-component
 
+  # lame is the MP3 encoder the Cloud Run image installs from its distribution's packages; with
+  # it on the runner, the encoder's integration tests run against the real program instead of
+  # being skipped.
   test-integration:
     name: test-integration
     runs-on: ubuntu-24.04
@@ -256,6 +260,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
+      - name: Install lame
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends lame
       - run: task test-integration
 
   test-security:
@@ -272,9 +278,10 @@ jobs:
       - run: task test-security
 
   # Migration tests run only when a change touches the migrations: the scripts in drizzle/, the
-  # migration tests, the table definitions they are generated from, the drizzle-kit configuration
-  # or the migration program. The decision is made inside the job, so the required check still
-  # reports success when there is nothing to test.
+  # migration tests, the table definitions they are generated from (each feature's, and the
+  # shared ones in src/lib/db/schema.ts), the drizzle-kit configuration or the migration program.
+  # The decision is made inside the job, so the required check still reports success when there
+  # is nothing to test.
   test-migration:
     name: test-migration
     runs-on: ubuntu-24.04
@@ -298,6 +305,7 @@ jobs:
             drizzle/
             ':(glob)**/*.migration.test.ts'
             ':(glob)src/features/*/server/schema.ts'
+            src/lib/db/schema.ts
             drizzle.config.ts
             scripts/migrate.ts
           )
@@ -333,6 +341,9 @@ jobs:
 
   # Runs Playwright in the pinned container through Docker on the runner. The container's named
   # volumes start empty on every runner, so each run installs the Linux dependencies afresh.
+  # The tests sign in through the Clerk development instance in Clerk's testing mode; its keys
+  # come from the repository secret and variable of the same names, and scripts/test-e2e.ts hands
+  # them to the container by name.
   test-e2e:
     name: test-e2e
     runs-on: ubuntu-24.04
@@ -345,6 +356,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup # zizmor: ignore[self-repository]
       - run: task test-e2e
+        env:
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       - name: Keep the report and screenshot differences of a failed run
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -387,7 +401,9 @@ jobs:
           task commits-check FROM="origin/$BASE_REF" TO="$HEAD_SHA" BRANCH="$HEAD_REF"
 
   # only-if-main-head makes the deployment skip, successfully, a commit that is no longer the
-  # head of main when its turn to deploy comes (see deploy-target.yml).
+  # head of main when its turn to deploy comes (see deploy-target.yml). A called workflow gets at
+  # most the permissions of its caller, so this job grants the id-token permission the
+  # deployment needs for its Google Cloud login.
   deploy-staging:
     name: deploy-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -411,6 +427,7 @@ jobs:
       - test-e2e
     permissions:
       contents: read
+      id-token: write
     uses: ./.github/workflows/deploy-target.yml # zizmor: ignore[self-repository,secrets-inherit]
     with:
       target: staging

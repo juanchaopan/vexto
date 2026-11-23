@@ -1,0 +1,15 @@
+{
+  "webOnlyDependencies": [
+    "@aws-sdk/s3-request-presigner",
+    "@clerk/nextjs",
+    "@tanstack/react-query",
+    "@vercel/oidc",
+    "@vercel/otel",
+    "next",
+    "openai",
+    "react",
+    "react-dom",
+    "server-only",
+    "zustand"
+  ]
+}

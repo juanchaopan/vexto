@@ -1,8 +1,9 @@
-// Copies the runtime values listed in scripts/lib/runtime-env.ts from a GitHub environment into
-// the Production environment of the target's Vercel project, overwriting what Vercel holds, so
-// the GitHub environment stays the only place the values are kept. Secrets are stored as
-// Sensitive, variables as plain values. A name with no value in the GitHub environment is
-// skipped and keeps whatever Vercel has, so a target can be set up one value at a time.
+// Copies the runtime values the web application reads (webValues in scripts/lib/runtime-env.ts)
+// from a GitHub environment into the Production environment of the target's Vercel project,
+// overwriting what Vercel holds, so the GitHub environment stays the only place the values are
+// kept. Secrets are stored as Sensitive, variables as plain values. A name with no value in the
+// GitHub environment is skipped and keeps whatever Vercel has, so a target can be set up one
+// value at a time.
 //
 // Usage: node scripts/sync-vercel-env.ts [--dry-run]
 // Reads from its environment:
@@ -17,13 +18,13 @@
 //
 // Each value reaches `vercel env add` on standard input and never on a command line. The runtime
 // values and their flags are removed from the CLI's environment, so the CLI sees no other value.
-import { cliEnv, envAddArgs, planSync } from './lib/runtime-env.ts';
+import { cliEnv, envAddArgs, planSync, webValues } from './lib/runtime-env.ts';
 import { runPnpm } from './lib/node-tools.ts';
 
 const dryRun = process.argv.slice(2).includes('--dry-run');
 const cliVersion = process.env.VERCEL_CLI_VERSION ?? '';
 
-const plan = planSync(process.env);
+const plan = planSync(process.env, webValues);
 
 if (plan.errors.length > 0) {
   for (const error of plan.errors) {
@@ -37,7 +38,7 @@ if (!dryRun && !/^\d+\.\d+\.\d+$/.test(cliVersion)) {
   process.exit(1);
 }
 
-const env = cliEnv(process.env);
+const env = cliEnv(process.env, webValues);
 
 let failed = 0;
 for (const { name, kind, value } of plan.upload) {

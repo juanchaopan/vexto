@@ -1,0 +1,590 @@
+{
+  "words": [
+    {
+      "lemma": "resilient",
+      "pos": "adjective",
+      "meaningZh": "有适应力的；能迅速恢复的",
+      "acceptedForms": ["resilient"],
+      "examples": [
+        "A resilient city can adapt to unexpected challenges.",
+        "She remained resilient during a difficult first year abroad."
+      ],
+      "wrongMeanings": ["持久的；持续很久的", "准确的；精确的", "脆弱的；易受损的"],
+      "correctPosition": 1,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": -30
+        },
+        "translate": {
+          "round": 2,
+          "dueInMinutes": -5
+        }
+      }
+    },
+    {
+      "lemma": "allocate",
+      "pos": "verb",
+      "meaningZh": "分配；划拨",
+      "acceptedForms": ["allocate", "allocates", "allocated", "allocating"],
+      "examples": ["The school will allocate more time to reading next term."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": -20
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 180
+        }
+      }
+    },
+    {
+      "lemma": "in the long run",
+      "pos": "phrase",
+      "meaningZh": "从长远来看",
+      "acceptedForms": ["in the long run"],
+      "examples": ["Saving a little each month pays off in the long run."],
+      "wrongMeanings": ["马上；立刻", "偶尔；有时", "无论如何"],
+      "correctPosition": 2,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "translate": {
+          "round": 0,
+          "dueInMinutes": null
+        }
+      }
+    },
+    {
+      "lemma": "sustain",
+      "pos": "verb",
+      "meaningZh": "维持；使持续",
+      "acceptedForms": ["sustain", "sustains", "sustained", "sustaining"],
+      "examples": ["Solar panels can sustain a small research station through the winter."],
+      "wrongMeanings": ["打断；中断", "隐藏；遮盖", "比较；对照"],
+      "correctPosition": 1,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": -1
+        },
+        "translate": {
+          "round": 3,
+          "dueInMinutes": -3
+        }
+      }
+    },
+    {
+      "lemma": "underlying",
+      "pos": "adjective",
+      "meaningZh": "潜在的；根本的",
+      "acceptedForms": ["underlying"],
+      "examples": ["Engineers studied the underlying reasons for the repeated failures."],
+      "wrongMeanings": ["明亮的；鲜艳的", "临时的；暂时的", "吵闹的；喧哗的"],
+      "correctPosition": 2,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "translate": {
+          "round": 0,
+          "dueInMinutes": null
+        }
+      }
+    },
+    {
+      "lemma": "gradually",
+      "pos": "adverb",
+      "meaningZh": "逐渐地",
+      "acceptedForms": ["gradually"],
+      "examples": ["The river gradually wore a deep channel through the rock."],
+      "wrongMeanings": ["突然地", "大声地", "准确地"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 4,
+          "dueInMinutes": 10080
+        },
+        "translate": {
+          "round": 3,
+          "dueInMinutes": 2
+        }
+      }
+    },
+    {
+      "lemma": "take into account",
+      "pos": "phrase",
+      "meaningZh": "考虑到",
+      "acceptedForms": [
+        "take into account",
+        "takes into account",
+        "took into account",
+        "taken into account",
+        "taking into account"
+      ],
+      "examples": ["Planners must take into account how people actually use the park."],
+      "wrongMeanings": ["忽视；不理会", "提前完成", "轮流做"],
+      "correctPosition": 1,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 7,
+          "dueInMinutes": null
+        },
+        "translate": {
+          "round": 2,
+          "dueInMinutes": 0.4
+        }
+      }
+    },
+    {
+      "lemma": "perspective",
+      "pos": "noun",
+      "meaningZh": "观点；视角",
+      "acceptedForms": ["perspective", "perspectives"],
+      "examples": ["Living abroad gave him a new perspective on his hometown."],
+      "wrongMeanings": ["距离；间隔", "工具；器具", "季节；时节"],
+      "correctPosition": 1,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 7,
+          "dueInMinutes": null
+        },
+        "translate": {
+          "round": 7,
+          "dueInMinutes": null
+        }
+      }
+    },
+    {
+      "lemma": "consistent",
+      "pos": "adjective",
+      "meaningZh": "一致的；始终如一的",
+      "acceptedForms": ["consistent"],
+      "examples": ["Her test results have been consistent over the past year."],
+      "wrongMeanings": ["昂贵的；高价的", "陌生的；不熟悉的", "狭窄的；窄小的"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 7,
+          "dueInMinutes": null
+        },
+        "translate": {
+          "round": 7,
+          "dueInMinutes": null
+        }
+      }
+    }
+  ],
+  "moreWords": [
+    {
+      "lemma": "abundant",
+      "pos": "adjective",
+      "meaningZh": "丰富的；充裕的",
+      "acceptedForms": ["abundant"],
+      "examples": ["In this situation, abundant is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "benchmark",
+      "pos": "noun",
+      "meaningZh": "基准；参照标准",
+      "acceptedForms": ["benchmark"],
+      "examples": ["In this situation, benchmark is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "coherent",
+      "pos": "adjective",
+      "meaningZh": "连贯的；有条理的",
+      "acceptedForms": ["coherent"],
+      "examples": ["In this situation, coherent is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "deploy",
+      "pos": "verb",
+      "meaningZh": "部署；调动",
+      "acceptedForms": ["deploy"],
+      "examples": ["In this situation, deploy is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "emerge",
+      "pos": "verb",
+      "meaningZh": "出现；浮现",
+      "acceptedForms": ["emerge"],
+      "examples": ["In this situation, emerge is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "feasible",
+      "pos": "adjective",
+      "meaningZh": "可行的",
+      "acceptedForms": ["feasible"],
+      "examples": ["In this situation, feasible is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "generate",
+      "pos": "verb",
+      "meaningZh": "产生；生成",
+      "acceptedForms": ["generate"],
+      "examples": ["In this situation, generate is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "hazard",
+      "pos": "noun",
+      "meaningZh": "危险；隐患",
+      "acceptedForms": ["hazard"],
+      "examples": ["In this situation, hazard is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "implement",
+      "pos": "verb",
+      "meaningZh": "实施；执行",
+      "acceptedForms": ["implement"],
+      "examples": ["In this situation, implement is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "justify",
+      "pos": "verb",
+      "meaningZh": "证明……合理",
+      "acceptedForms": ["justify"],
+      "examples": ["In this situation, justify is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "landmark",
+      "pos": "noun",
+      "meaningZh": "地标；里程碑",
+      "acceptedForms": ["landmark"],
+      "examples": ["In this situation, landmark is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "moderate",
+      "pos": "adjective",
+      "meaningZh": "适度的；中等的",
+      "acceptedForms": ["moderate"],
+      "examples": ["In this situation, moderate is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "notion",
+      "pos": "noun",
+      "meaningZh": "概念；想法",
+      "acceptedForms": ["notion"],
+      "examples": ["In this situation, notion is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "obtain",
+      "pos": "verb",
+      "meaningZh": "获得；得到",
+      "acceptedForms": ["obtain"],
+      "examples": ["In this situation, obtain is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "precise",
+      "pos": "adjective",
+      "meaningZh": "精确的；准确的",
+      "acceptedForms": ["precise"],
+      "examples": ["In this situation, precise is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    },
+    {
+      "lemma": "retain",
+      "pos": "verb",
+      "meaningZh": "保留；保持",
+      "acceptedForms": ["retain"],
+      "examples": ["In this situation, retain is a useful word to remember."],
+      "wrongMeanings": ["拒绝；回绝", "收集；采集", "修理；修复"],
+      "correctPosition": 0,
+      "progress": {
+        "speak": {
+          "round": 0,
+          "dueInMinutes": null
+        },
+        "spell": {
+          "round": 2,
+          "dueInMinutes": 4320
+        },
+        "translate": {
+          "round": 1,
+          "dueInMinutes": 300
+        }
+      }
+    }
+  ]
+}

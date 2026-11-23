@@ -1,5 +1,8 @@
 import { connection } from 'next/server';
-import { createHealthResponse, createMethodNotAllowedResponse } from '@/features/health';
+import {
+  createHealthResponse,
+  createMethodNotAllowedResponse,
+} from '../../../features/health/index.ts';
 
 // Next.js answers methods without an exported handler with 405 and serves HEAD from GET.
 export async function GET(): Promise<Response> {

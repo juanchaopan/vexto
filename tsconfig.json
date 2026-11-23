@@ -13,16 +13,14 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
         "name": "next"
       }
-    ],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    ]
   },
   "include": [
     "next-env.d.ts",

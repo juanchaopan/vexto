@@ -1,0 +1,352 @@
+// Saving an explanation (.docs/design/screens.md, 保存到生词本, screens 28–29 and 58–59) through
+// the saver the host provides, against a stand-in for the vocabulary endpoints: a saved word, a
+// failed or unanswered save with Retry, failures without Retry, the replace question with Cancel
+// and Replace, a failed replacement whose notice stays usable over the dialog, a card changed or
+// gone on another device, and writes refused with an access error (.docs/design/rules.md, 错误和
+// 断网): not sent again after the session is renewed, and silent when the page changes.
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import { useEffect } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
+import type { AccessHandling } from '../../../lib/api/access-handling.ts';
+import {
+  onSavedWord,
+  useWordSaver,
+  type SavableLookup,
+  type WordSaver,
+} from '../../../lib/ui/lookup-bridge.ts';
+import { dismissToast } from '../../../lib/ui/toast.tsx';
+import {
+  cardDetail,
+  errorBody,
+  json,
+  renderWithCache,
+  standIn,
+  type Route,
+  type SentRequest,
+} from './testing.tsx';
+import { WordSaverHost } from './word-saver.tsx';
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/articles/a',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}));
+
+const fetchMock = vi.spyOn(window, 'fetch');
+
+const captured: { saver: WordSaver | null } = { saver: null };
+
+function SaverProbe() {
+  const saver = useWordSaver();
+  useEffect(() => {
+    captured.saver = saver;
+  }, [saver]);
+  return null;
+}
+
+const lookup: SavableLookup = {
+  id: 'lookup-1',
+  lemma: 'resilient',
+  pos: 'adjective',
+  meaningZh: '有韧性的；经得起损耗的',
+  examples: [
+    { id: 'lookup-example-1', position: 0, text: 'The new coating keeps the camera resilient.' },
+    { id: 'lookup-example-2', position: 1, text: 'Resilient materials return to their shape.' },
+  ],
+};
+
+const savedCard = cardDetail('card-1');
+
+/** The saved card as a DUPLICATE_WORD answer carries it. */
+const duplicateDetails = {
+  id: savedCard.id,
+  lemma: savedCard.lemma,
+  pos: savedCard.pos,
+  meaningZh: savedCard.meaningZh,
+  examples: savedCard.examples,
+  updatedAt: savedCard.updatedAt,
+};
+
+const announced = vi.fn();
+let stopListening: () => void = () => undefined;
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  announced.mockReset();
+  captured.saver = null;
+  stopListening = onSavedWord(announced);
+});
+
+afterEach(() => {
+  stopListening();
+  act(() => dismissToast());
+  cleanup();
+});
+
+const saves = (sent: SentRequest[]) =>
+  sent.filter((request) => request.method === 'POST' && request.path === '/api/vocabulary');
+const replacements = (sent: SentRequest[]) =>
+  sent.filter((request) => request.path === '/api/vocabulary/card-1/replace');
+
+function saveRoute(answer: () => Response | Promise<Response>): Route {
+  return (request) =>
+    request.method === 'POST' && request.path === '/api/vocabulary' ? answer() : undefined;
+}
+
+function replaceRoute(answer: () => Response): Route {
+  return (request) => (request.path === '/api/vocabulary/card-1/replace' ? answer() : undefined);
+}
+
+const duplicate = () =>
+  json(409, errorBody('DUPLICATE_WORD', false, { savedCard: duplicateDetails }));
+
+async function openHostWith(access: AccessHandling | undefined, routes: Route[]) {
+  const sent = standIn(fetchMock, ...routes);
+  renderWithCache(
+    <>
+      <WordSaverHost />
+      <SaverProbe />
+    </>,
+    access,
+  );
+  await waitFor(() => expect(captured.saver).not.toBeNull());
+  return sent;
+}
+
+function openHost(...routes: Route[]) {
+  return openHostWith(undefined, routes);
+}
+
+function save(): Promise<string | null> {
+  let result!: Promise<string | null>;
+  act(() => {
+    result = captured.saver!(lookup);
+  });
+  return result;
+}
+
+/** Saves, which ends as soon as the replace question opens, and returns the question. */
+async function askToReplace() {
+  expect(await save()).toBeNull();
+  return screen.findByRole('dialog', { name: 'Replace saved word?' });
+}
+
+describe('the saver', () => {
+  it('saves the explanation, says so and tells the explanation', async () => {
+    const sent = await openHost(saveRoute(() => json(201, { data: cardDetail('card-9') })));
+
+    expect(await save()).toBe('card-9');
+
+    expect(saves(sent)[0].body).toEqual({ operationId: expect.any(String), lookupId: 'lookup-1' });
+    expect(await screen.findByText('Saved to Vocabulary.')).toBeVisible();
+    expect(announced).toHaveBeenCalledWith('lookup-1', 'card-9');
+  });
+
+  it('offers Retry when saving fails, which sends the same operation and marks it saved', async () => {
+    let fail = true;
+    const sent = await openHost(
+      saveRoute(() =>
+        fail
+          ? json(503, errorBody('UNAVAILABLE', true))
+          : json(201, { data: cardDetail('card-9') }),
+      ),
+    );
+
+    expect(await save()).toBeNull();
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    fail = false;
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(announced).toHaveBeenCalledWith('lookup-1', 'card-9'));
+    expect(saves(sent)).toHaveLength(2);
+    expect(saves(sent)[1].body).toEqual(saves(sent)[0].body);
+  });
+
+  it('offers Retry when saving got no response', async () => {
+    await openHost(saveRoute(() => Promise.reject(new TypeError('Failed to fetch'))));
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(announced).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure nothing can fix without Retry', async () => {
+    await openHost(saveRoute(() => json(404, errorBody('NOT_FOUND'))));
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('shows an operation ID used for another request as a failure without Retry', async () => {
+    await openHost(saveRoute(() => json(409, errorBody('OPERATION_MISMATCH'))));
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('says the word changed on another device when the cards changed meanwhile', async () => {
+    await openHost(saveRoute(() => json(409, errorBody('CONFLICT'))));
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText('This word changed on another device.')).toBeVisible();
+  });
+});
+
+describe('the replace question', () => {
+  it('compares the saved and the new meaning, and Replace keeps the progress', async () => {
+    const sent = await openHost(
+      saveRoute(duplicate),
+      replaceRoute(() => json(200, { data: cardDetail('card-1') })),
+    );
+
+    const dialog = await askToReplace();
+    expect(within(dialog).getByText('resilient · adjective')).toBeVisible();
+    const saved = within(dialog).getByRole('region', { name: 'Saved' });
+    expect(within(saved).getByText(savedCard.meaningZh)).toBeVisible();
+    expect(within(saved).getByText(savedCard.examples[0].text)).toBeVisible();
+    const fresh = within(dialog).getByRole('region', { name: 'New' });
+    expect(within(fresh).getByText(lookup.meaningZh)).toBeVisible();
+    expect(within(fresh).getByText(lookup.examples[1].text)).toBeVisible();
+    expect(within(dialog).getByText('Review progress stays the same.')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+    expect(
+      await screen.findByText('Saved word replaced. Review progress is unchanged.'),
+    ).toBeVisible();
+    expect(replacements(sent)[0].body).toEqual({
+      operationId: expect.any(String),
+      lookupId: 'lookup-1',
+      updatedAt: savedCard.updatedAt,
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(announced).toHaveBeenCalledWith('lookup-1', 'card-1');
+  });
+
+  it('changes nothing on Cancel', async () => {
+    const sent = await openHost(saveRoute(duplicate));
+
+    const dialog = await askToReplace();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(replacements(sent)).toHaveLength(0);
+    expect(announced).not.toHaveBeenCalled();
+  });
+
+  it('stays open when replacing fails, with Retry usable above the backdrop', async () => {
+    let fail = true;
+    const sent = await openHost(
+      saveRoute(duplicate),
+      replaceRoute(() =>
+        fail ? json(500, errorBody('INTERNAL', true)) : json(200, { data: cardDetail('card-1') }),
+      ),
+    );
+
+    const dialog = await askToReplace();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+    expect(await within(dialog).findByText("Couldn't replace the word.")).toBeVisible();
+    fail = false;
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(announced).toHaveBeenCalledWith('lookup-1', 'card-1'));
+    expect(replacements(sent)).toHaveLength(2);
+    expect(replacements(sent)[1].body).toEqual(replacements(sent)[0].body);
+  });
+
+  it.each([
+    ['changed', 409, 'CONFLICT'],
+    ['was deleted', 404, 'NOT_FOUND'],
+  ])('closes when the saved card %s on another device', async (_, status, code) => {
+    await openHost(
+      saveRoute(duplicate),
+      replaceRoute(() => json(status, errorBody(code))),
+    );
+
+    const dialog = await askToReplace();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+    expect(await screen.findByText('This word changed on another device.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText("Couldn't replace the word.")).toBeNull();
+    expect(announced).not.toHaveBeenCalled();
+  });
+});
+
+describe('a save refused with an access error', () => {
+  /** The account part's handling, with a session that renews or not. */
+  function accessHandling(sessionAlive: boolean) {
+    return {
+      renewSession: vi.fn(async () => sessionAlive),
+      openSignIn: vi.fn(),
+      accessChanged: vi.fn(),
+    };
+  }
+
+  const refused = (status: number, code: string) => () => json(status, errorBody(code));
+
+  it('is not sent again after the session is renewed, and fails without Retry', async () => {
+    const access = accessHandling(true);
+    const sent = await openHostWith(access, [saveRoute(refused(401, 'UNAUTHENTICATED'))]);
+
+    expect(await save()).toBeNull();
+
+    expect(await screen.findByText("Couldn't save the word.")).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(saves(sent)).toHaveLength(1);
+    expect(access.renewSession).toHaveBeenCalledTimes(1);
+    expect(access.openSignIn).not.toHaveBeenCalled();
+    expect(announced).not.toHaveBeenCalled();
+  });
+
+  it('opens the sign-in page without a notice when the session ended', async () => {
+    const access = accessHandling(false);
+    const sent = await openHostWith(access, [saveRoute(refused(401, 'UNAUTHENTICATED'))]);
+
+    expect(await save()).toBeNull();
+
+    expect(access.openSignIn).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Couldn't save the word.")).toBeNull();
+    expect(saves(sent)).toHaveLength(1);
+  });
+
+  it.each(['NOT_A_MEMBER', 'TERMS_REQUIRED'])(
+    'shows the page the access calls for without a notice on %s',
+    async (code) => {
+      const access = accessHandling(true);
+      await openHostWith(access, [saveRoute(refused(403, code))]);
+
+      expect(await save()).toBeNull();
+
+      expect(access.accessChanged).toHaveBeenCalledWith(null);
+      expect(access.renewSession).not.toHaveBeenCalled();
+      expect(screen.queryByText("Couldn't save the word.")).toBeNull();
+    },
+  );
+
+  it('closes the replace question without a notice when the page changes', async () => {
+    const access = accessHandling(false);
+    await openHostWith(access, [
+      saveRoute(duplicate),
+      replaceRoute(refused(401, 'UNAUTHENTICATED')),
+    ]);
+
+    const dialog = await askToReplace();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(access.openSignIn).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Couldn't replace the word.")).toBeNull();
+    expect(announced).not.toHaveBeenCalled();
+  });
+});
