@@ -14,8 +14,9 @@
 //
 // Every shown word of an example can be looked up: a tap on a word, or a selection made with the
 // handles and let go, reports the range of the example's text. A tap within 400 milliseconds of
-// a swipe looks nothing up. The text is marked as lookup text, so pressing it does not count as
-// pressing outside an explanation.
+// a swipe looks nothing up; before the first swipe every tap counts, also one made right after
+// the page loaded. The text is marked as lookup text, so pressing it does not count as pressing
+// outside an explanation.
 import {
   useEffect,
   useRef,
@@ -184,10 +185,18 @@ function SegmentedText({ segments }: { segments: readonly ExampleSegment[] }) {
   );
 }
 
+/**
+ * Whether a tap at `tappedAt` comes within the pause after the last swipe. Both are event times,
+ * counted from the page's time origin, so they start near zero on a page that just loaded.
+ */
+function rightAfterSwipe(tappedAt: number, lastSwipeAt: number | null): boolean {
+  return lastSwipeAt !== null && tappedAt - lastSwipeAt < TAP_AFTER_SWIPE_MS;
+}
+
 type ExampleTextProps = {
   example: CarouselExample;
-  /** When the last swipe ended, so a tap right after it looks nothing up. */
-  lastSwipeAt: RefObject<number>;
+  /** When the last swipe ended, or null before the first one. */
+  lastSwipeAt: RefObject<number | null>;
   onLookUp?: (example: CarouselExample, range: TextRangeChoice) => void;
 };
 
@@ -201,7 +210,7 @@ function ExampleText({ example, lastSwipeAt, onLookUp }: ExampleTextProps) {
       !onLookUp ||
       !word ||
       !window.getSelection()?.isCollapsed ||
-      event.timeStamp - lastSwipeAt.current < TAP_AFTER_SWIPE_MS
+      rightAfterSwipe(event.timeStamp, lastSwipeAt.current)
     ) {
       return;
     }
@@ -234,7 +243,7 @@ export function ExampleCarousel({
   controls,
 }: ExampleCarouselProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
-  const lastSwipeAt = useRef(0);
+  const lastSwipeAt = useRef<number | null>(null);
   const example = examples[index];
 
   const move = (delta: number) => {
