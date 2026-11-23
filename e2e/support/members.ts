@@ -11,7 +11,8 @@ function connect() {
   return postgres(url, { max: 1, onnotice: () => {} });
 }
 
-async function withDatabase<T>(work: (sql: postgres.Sql) => Promise<T>): Promise<T> {
+/** Runs `work` on a connection of its own to the application's database, then closes it. */
+export async function withDatabase<T>(work: (sql: postgres.Sql) => Promise<T>): Promise<T> {
   const sql = connect();
   try {
     return await work(sql);
@@ -20,9 +21,13 @@ async function withDatabase<T>(work: (sql: postgres.Sql) => Promise<T>): Promise
   }
 }
 
-/** Puts the address on the member list as a new active member who has not signed in yet. */
+/**
+ * Puts the address on the member list as a new active member who has not signed in yet. A
+ * member row of an earlier test with this address goes first, with the visits that refer to it.
+ */
 export function inviteMember(email: string): Promise<void> {
   return withDatabase(async (sql) => {
+    await sql`DELETE FROM visits WHERE owner_id IN (SELECT id FROM members WHERE email = ${email})`;
     await sql`DELETE FROM members WHERE email = ${email}`;
     await sql`INSERT INTO members (email, status) VALUES (${email}, 'active')`;
   });
@@ -31,6 +36,7 @@ export function inviteMember(email: string): Promise<void> {
 /** Takes the address off the member list, so its account is not a member. */
 export function forgetMember(email: string): Promise<void> {
   return withDatabase(async (sql) => {
+    await sql`DELETE FROM visits WHERE owner_id IN (SELECT id FROM members WHERE email = ${email})`;
     await sql`DELETE FROM members WHERE email = ${email}`;
   });
 }

@@ -9,6 +9,11 @@ import { acceptedTermsVersion, forgetMember, inviteMember } from './support/memb
 // Clerk's sign-in component is loaded from Clerk's servers when the page opens.
 const CLERK_LOAD_TIMEOUT = 20_000;
 
+// Signing in takes a good part of the default 30 seconds, and the Articles screen a member lands
+// on loads its first batch; with every test file running side by side in both browsers, a test
+// that signs in needs more room than the default.
+test.describe.configure({ timeout: 60_000 });
+
 test.beforeAll(async () => {
   await clerkSetup();
 });
