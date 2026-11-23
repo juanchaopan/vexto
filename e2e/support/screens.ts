@@ -201,6 +201,19 @@ export function acceptTermsLikeDemo(email: string): Promise<void> {
 }
 
 /**
+ * Stops the page's clock at `time`, with the page left blank: open a screen next. Playwright puts
+ * its clock into a page that is already open in two steps, and in between the page reads a time
+ * in January 1970. Clerk writing its cookies in that moment gives them an expiry in the past, so
+ * the browser drops them and the next page has no session; a blank page writes nothing, and every
+ * page opened afterwards starts with the clock in place. Later changes of the clock happen on the
+ * blank page too, so a running Clerk never sees its time jump.
+ */
+async function setScreenClock(page: Page, time: Date): Promise<void> {
+  await page.goto('about:blank');
+  await page.clock.setFixedTime(time);
+}
+
+/**
  * Gives the member the demo vocabulary again, so the top bar shows the design's counts. Call it
  * right before opening a screen: the due times count from just ahead of the database's clock.
  */
@@ -210,7 +223,7 @@ export async function withDemoCounts(email: string): Promise<void> {
 
 /**
  * Gives the member the demo vocabulary (or `seeds`) and makes the page's clock show the moment
- * its due times count from, so every due time reads as the design's.
+ * its due times count from, so every due time reads as the design's. The page is left blank.
  */
 export async function withDemoWords(
   page: Page,
@@ -218,16 +231,16 @@ export async function withDemoWords(
   seeds: readonly ReviewCardSeed[] = DEMO_WORDS,
 ): Promise<void> {
   const moment = await seedVocabulary(email, seeds);
-  await page.clock.setFixedTime(moment);
+  await setScreenClock(page, moment);
 }
 
 /**
  * Gives the member the demo vocabulary for the counts and makes the page's clock show the demo's
- * now, so the article and terms dates read as the design's.
+ * now, so the article and terms dates read as the design's. The page is left blank.
  */
 export async function withDemoDay(page: Page, email: string): Promise<void> {
   await withDemoCounts(email);
-  await page.clock.setFixedTime(DEMO_NOW);
+  await setScreenClock(page, DEMO_NOW);
 }
 
 /**
