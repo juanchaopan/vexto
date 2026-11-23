@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { currentLookup, provideLookup } from './lookup-bridge.ts';
+import { currentLookup, provideLookup, provideWordSaver } from './lookup-bridge.ts';
 
 function bridge() {
   return { lookUp: vi.fn(), openSelectionTool: vi.fn() };
@@ -26,5 +26,14 @@ describe('provideLookup', () => {
 
     expect(currentLookup()).toBe(newer);
     removeNewer();
+  });
+});
+
+describe('provideWordSaver', () => {
+  it('keeps the saver apart from the bridge', () => {
+    const remove = provideWordSaver(async () => 'card');
+
+    expect(currentLookup()).toBeNull();
+    remove();
   });
 });

@@ -113,28 +113,41 @@ describe('articleSelection', () => {
   it('places a selection inside one sentence', () => {
     expect(
       articleSelection(sentences, { sentence: 0, offset: 5 }, { sentence: 0, offset: 9 }),
-    ).toEqual({ firstSentence: 0, lastSentence: 0, start: 5, end: 9, text: 'dust' });
+    ).toEqual({
+      firstSentence: 0,
+      lastSentence: 0,
+      contextText: 'Moon dust is sticky.',
+      start: 5,
+      end: 9,
+    });
   });
 
   it('places a selection across a paragraph break, in either order', () => {
     const expected = {
       firstSentence: 1,
       lastSentence: 2,
+      contextText: 'It clings to suits.\n\nEngineers want shields.',
       start: 13,
       end: 30,
-      text: 'suits.\n\nEngineers',
     };
     const anchor = { sentence: 1, offset: 13 };
     const focus = { sentence: 2, offset: 9 };
 
     expect(articleSelection(sentences, anchor, focus)).toEqual(expected);
     expect(articleSelection(sentences, focus, anchor)).toEqual(expected);
+    expect(expected.contextText.slice(expected.start, expected.end)).toBe('suits.\n\nEngineers');
   });
 
   it('leaves out the spaces at the ends and the sentences only they touch', () => {
     expect(
       articleSelection(sentences, { sentence: 0, offset: 20 }, { sentence: 1, offset: 9 }),
-    ).toEqual({ firstSentence: 1, lastSentence: 1, start: 0, end: 9, text: 'It clings' });
+    ).toEqual({
+      firstSentence: 1,
+      lastSentence: 1,
+      contextText: 'It clings to suits.',
+      start: 0,
+      end: 9,
+    });
   });
 
   it('is null when the selection holds no text', () => {

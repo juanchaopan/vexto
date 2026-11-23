@@ -6,8 +6,9 @@
 //
 // Looking words up starts here (.docs/design/screens.md, 选词): a tap on a word, or a selection
 // made by dragging the handles and let go, becomes a lookup target in the article's context: the
-// sentences the selection touches and its place in their text. The target goes to the lookup
-// bridge of src/lib/ui/lookup-bridge.ts; without a bridge nothing happens.
+// sentences the selection touches, their text and the selection's place in it. The target goes to
+// the lookup bridge of src/lib/ui/lookup-bridge.ts; without a bridge nothing happens. The text is
+// marked as lookup text, so pressing it does not count as pressing outside an explanation.
 import { useEffect, useRef, type MouseEvent, type RefObject } from 'react';
 import { Icon } from '../../../lib/ui/icon.tsx';
 import { useLookupBridge, type LookupBridge } from '../../../lib/ui/lookup-bridge.ts';
@@ -62,8 +63,8 @@ function lookUpRange(
         firstSentence: selection.firstSentence,
         lastSentence: selection.lastSentence,
       },
+      contextText: selection.contextText,
       selection: { start: selection.start, end: selection.end },
-      text: selection.text,
     });
   }
 }
@@ -144,7 +145,7 @@ export function ReaderText({
   };
 
   return (
-    <div ref={container} className="px-2 py-[9px] select-text">
+    <div ref={container} data-lookup-text className="px-2 py-[9px] select-text">
       {sentences.map((sentence, index) => {
         const isSelected = selected === sentence.index;
         const isActive = active === sentence.index;

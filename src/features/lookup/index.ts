@@ -1,6 +1,7 @@
-// Looking up words: the lookup endpoints, the AI tasks and the lookup tables. Web only: the Cloud
-// Run entries never import this feature. Import it from route handlers and the server layer of
-// other features.
+// Looking up words: the lookup endpoints, the AI tasks, the lookup tables and the explanations in
+// the interface. Web only: the Cloud Run entries never import this feature. Import it from server
+// components, route handlers and the server layer of other features; client components of other
+// features reach lookups through the lookup bridge of src/lib/ui.
 export {
   acceptedFormsWith,
   exampleOf,
@@ -39,3 +40,4 @@ export {
   meaningChecks,
   meaningColumns,
 } from './server/schema.ts';
+export { LookupHost } from './ui/lookup-host.tsx';

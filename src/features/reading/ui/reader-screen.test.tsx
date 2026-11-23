@@ -422,7 +422,7 @@ describe('failures', () => {
 });
 
 describe('looking words up', () => {
-  it('sends a tapped word with its place in the sentence to the lookup bridge', async () => {
+  it('sends a tapped word with its sentence and its place in it to the lookup bridge', async () => {
     const bridge = { lookUp: vi.fn(), openSelectionTool: vi.fn() };
     const remove = provideLookup(bridge);
     await openReader();
@@ -431,8 +431,8 @@ describe('looking words up', () => {
 
     expect(bridge.lookUp).toHaveBeenCalledWith({
       context: { kind: 'article', articleId: 'a', firstSentence: 2, lastSentence: 2 },
+      contextText: 'Engineers want shields.',
       selection: { start: 15, end: 22 },
-      text: 'shields',
     });
     await userEvent.click(screen.getByRole('button', { name: 'Select words for lookup' }));
     expect(bridge.openSelectionTool).toHaveBeenCalledWith(

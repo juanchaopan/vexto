@@ -103,10 +103,10 @@ export type SentencePoint = { sentence: number; offset: number };
 export type ArticleSelection = {
   firstSentence: number;
   lastSentence: number;
-  /** The selection's place in the text of the sentences from first to last. */
+  /** The text of the sentences from first to last, which the selection's place is counted in. */
+  contextText: string;
   start: number;
   end: number;
-  text: string;
 };
 
 function before(a: SentencePoint, b: SentencePoint) {
@@ -152,8 +152,8 @@ export function articleSelection(
   return {
     firstSentence: from.sentence + first,
     lastSentence: from.sentence + last,
+    contextText: sentenceContext(sentences, from.sentence + first, from.sentence + last).text,
     start: start - shift,
     end: end - shift,
-    text: span.text.slice(start, end),
   };
 }
