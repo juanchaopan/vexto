@@ -5,13 +5,14 @@
 // for 24 hours; the collection job deletes older ones.
 //
 // A handler calls findOperationResult() before its external calls, so a repeated request does
-// not call the AI again, and then does its writes inside runOperation(), which settles requests
-// that arrive at the same time: the later one waits for the earlier transaction to end and then
-// reads its receipt.
+// not call the AI again, and then does its writes inside runOperation(), which holds the member's
+// row first: a member revoked meanwhile gets NOT_A_MEMBER with nothing written, and requests that
+// arrive at the same time take turns, the later one reading the earlier one's receipt.
 import { and, eq, sql } from 'drizzle-orm';
 import { ApiError, errorBody } from '../api/errors.ts';
 import type { ApiResult } from '../api/responses.ts';
 import { requestDigest } from '../digest.ts';
+import { lockActiveMember } from './active-member.ts';
 import type { Executor, Transaction } from './client.ts';
 import { operationReceipts, type OperationKind } from './schema.ts';
 
@@ -86,20 +87,20 @@ async function runAndAnswer(
 
 /**
  * Runs the writes of an operation once, inside the caller's transaction, and stores the result
- * as its receipt. A repeated request gets the stored result without running `work`. When `work`
- * throws an ApiError that resending cannot fix (such as NOT_FOUND), its writes are rolled back
- * and that error is the stored answer; any other error rolls back the whole transaction and
- * stores nothing, so the client can resend with the same operationId.
+ * as its receipt. The member's row is held first, so a second request with this operationId waits
+ * for this transaction to end, and a member who is no longer active gets NOT_A_MEMBER with no
+ * receipt. A repeated request gets the stored result without running `work`. When `work` throws
+ * an ApiError that resending cannot fix (such as NOT_FOUND), its writes are rolled back and that
+ * error is the stored answer; any other error rolls back the whole transaction and stores
+ * nothing, so the client can resend with the same operationId.
  */
 export async function runOperation(
   tx: Transaction,
   operation: Operation & { requestId: string },
   work: (tx: Transaction) => Promise<ApiResult>,
 ): Promise<ApiResult> {
+  await lockActiveMember(tx, operation.ownerId);
   const digest = requestDigest(operation.request);
-  // Held until the transaction ends, so a second request with this operationId waits here.
-  const lockKey = `${operation.ownerId}/${operation.operationId}`;
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
   await tx.delete(operationReceipts).where(and(receiptOf(operation), isExpired));
   const receipt = await currentReceipt(tx, operation);
   if (receipt) {

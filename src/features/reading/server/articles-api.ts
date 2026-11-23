@@ -1,8 +1,10 @@
 // The article endpoints (.docs/design/interfaces.md, 文章): the list, the ordered IDs of a query,
 // one article, and recording a visit. The member has been checked by the caller; the list and the
-// IDs carry that member's own visit times.
+// IDs carry that member's own visit times. The visit is written in a transaction that holds the
+// member's row first, so no visit lands after the member is revoked.
 import { dataResult, listResult, type ApiResult } from '../../../lib/api/responses.ts';
-import { getDatabase, type Executor } from '../../../lib/db/client.ts';
+import { lockActiveMember } from '../../../lib/db/active-member.ts';
+import { getDatabase, inTransaction, type Executor } from '../../../lib/db/client.ts';
 import { articleIds, listArticles } from './article-list.ts';
 import { readArticle, recordVisit } from './article-reading.ts';
 import { articleIdsRequest, articleListRequest, articlePathId } from './article-request.ts';
@@ -36,10 +38,10 @@ export async function articleResult(
 }
 
 /** `PUT /api/articles/:id/visit`: the member's visit time. */
-export async function visitResult(
-  ownerId: string,
-  id: string,
-  executor: Executor = getDatabase(),
-): Promise<ApiResult> {
-  return dataResult(await recordVisit(executor, ownerId, articlePathId(id)));
+export async function visitResult(ownerId: string, id: string): Promise<ApiResult> {
+  const articleId = articlePathId(id);
+  return inTransaction(async (tx) => {
+    await lockActiveMember(tx, ownerId);
+    return dataResult(await recordVisit(tx, ownerId, articleId));
+  });
 }

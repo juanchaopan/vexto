@@ -2,8 +2,8 @@
 // explanation, replacing a saved card, refreshing one of a card's examples, and deleting one or a
 // batch of cards. The writes carry an operationId: a repeated request gets the first answer
 // without calling the AI again. The AI is called outside any transaction; the writes and the
-// receipt go in one transaction afterwards, which holds the member's row (or the card's, for an
-// example) and checks again that what the calls were made for still stands.
+// receipt go in one transaction afterwards, inside runOperation, which holds the member's row
+// first; the writes then check again that what the calls were made for still stands.
 import { randomInt, randomUUID } from 'node:crypto';
 import { ApiError } from '../../../lib/api/errors.ts';
 import {
@@ -42,7 +42,6 @@ import {
   cardSourceOf,
   deleteCards,
   insertCard,
-  lockMember,
   ownCardIds,
   readCard,
   replaceCardContent,
@@ -184,7 +183,6 @@ function saveWrites(
   random: TranslationRandom,
 ) {
   return async (tx: Transaction): Promise<ApiResult> => {
-    await lockMember(tx, ownerId);
     const source = await cardSourceOf(tx, ownerId, lookupId);
     if (!source) {
       throw lookupNotFound();
@@ -310,7 +308,6 @@ export async function replaceCardResult(
   );
   return inTransaction((tx) =>
     runOperation(tx, { ...operation, requestId }, async (work) => {
-      await lockMember(work, ownerId);
       const current = await cardHeadOf(work, ownerId, target.cardId, true);
       if (!current) {
         throw cardNotFound();
@@ -405,7 +402,6 @@ export async function deleteCardResult(
   };
   return inTransaction((tx) =>
     runOperation(tx, { ...operation, requestId }, async (work) => {
-      await lockMember(work, ownerId);
       const deleted = await deleteCards(work, ownerId, [target.cardId]);
       if (deleted.length === 0) {
         throw cardNotFound();
@@ -435,7 +431,6 @@ export async function bulkDeleteResult(
   };
   return inTransaction((tx) =>
     runOperation(tx, { ...operation, requestId }, async (work) => {
-      await lockMember(work, ownerId);
       const missing = missingIds(ids, await ownCardIds(work, ownerId, ids));
       if (missing.length > 0) {
         throw new ApiError('SELECTION_CHANGED', 'Some of the selected cards no longer exist.', {

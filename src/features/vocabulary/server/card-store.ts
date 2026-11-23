@@ -1,6 +1,7 @@
 // Reading and writing a member's cards (.docs/design/data.md, 生词本). Every read goes through the
-// card's owner, so another member's card is not there. Saving, replacing and deleting first hold
-// the member's row (`SELECT … FOR UPDATE`), so one member's writes to the vocabulary take turns.
+// card's owner, so another member's card is not there. The writes run inside runOperation, which
+// holds the member's row (`SELECT … FOR UPDATE`) first, so one member's writes to the vocabulary
+// take turns and none lands after the member is revoked.
 //
 // `updated_at` is kept to whole milliseconds and always moves forward, so the time the interface
 // sends back with a replacement compares equal to the stored one exactly when nothing changed.
@@ -8,7 +9,6 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { ApiError } from '../../../lib/api/errors.ts';
 import type { Executor, Transaction } from '../../../lib/db/client.ts';
 import { isoOrNull } from '../../../lib/db/columns.ts';
-import { members } from '../../../lib/db/schema.ts';
 import { sha256Hex } from '../../../lib/digest.ts';
 import {
   examples,
@@ -172,11 +172,6 @@ export function savedCardOf(card: CardView): SavedCard {
     examples: card.examples,
     updatedAt: card.updatedAt,
   };
-}
-
-/** Holds the member's row until the transaction ends, so the member's vocabulary writes take turns. */
-export async function lockMember(tx: Transaction, ownerId: string): Promise<void> {
-  await tx.select({ id: members.id }).from(members).where(eq(members.id, ownerId)).for('update');
 }
 
 /** An explanation of the member's as a card is made from it. */
