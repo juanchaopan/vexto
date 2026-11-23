@@ -1,9 +1,10 @@
 'use client';
 
 // The review counts (.docs/design/rules.md, 计数): for Spell and Translate, how many questions are
-// due and how many are new words. The Vocabulary screen's mode buttons show them, and every change
-// to the vocabulary (saving, replacing, deleting) asks for them again. A failure shows nothing and
-// keeps the counts already on screen (.docs/design/screens.md, 错误的显示).
+// due and how many are new words. The top bar's Vocabulary button shows them added together and
+// the Vocabulary screen's mode buttons show each mode's; every change to the vocabulary (saving,
+// replacing, deleting) and every submitted answer asks for them again. A failure shows nothing
+// new and keeps the counts already on screen (.docs/design/screens.md, 错误的显示).
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { apiRequest, dataBody } from '../api/client.ts';
@@ -29,7 +30,7 @@ export function useReviewCounts(): ReviewCounts | undefined {
   return counts.data;
 }
 
-/** Asks for the counts again, as after a change to the vocabulary. */
+/** Asks for the counts again, as after a change to the vocabulary or an answer. */
 export function refreshReviewCounts(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: REVIEW_COUNTS_KEY });
 }
