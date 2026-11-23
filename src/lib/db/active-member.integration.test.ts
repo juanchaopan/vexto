@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { eq, sql } from 'drizzle-orm';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { ApiError } from '../api/errors.ts';
 import { lockActiveMember } from './active-member.ts';
 import { closeDatabase, getDatabase, inTransaction } from './client.ts';
 import { members, type MemberStatus } from './schema.ts';
+import { revokeHeldOpen } from './testing.ts';
 
 // The tests run against the throwaway database the integration setup migrated, each with a
 // member of its own.
@@ -31,15 +31,6 @@ function write(memberId: string): Promise<unknown> {
   }).catch((error: unknown) => error);
 }
 
-/** A promise with the function that settles it. */
-function deferred<T>() {
-  let settle: (value: T) => void = () => {};
-  const promise = new Promise<T>((resolve) => {
-    settle = resolve;
-  });
-  return { promise, settle };
-}
-
 describe('lockActiveMember', () => {
   it('lets the transaction of an active member go on', async () => {
     expect(await write(await newMember())).toBe('written');
@@ -56,26 +47,11 @@ describe('lockActiveMember', () => {
 
   it('waits for a revoke that holds the member, then refuses the member it revoked', async () => {
     const memberId = await newMember();
-    const release = deferred<undefined>();
-    const revokerPid = deferred<number>();
-    const revoking = db.transaction(async (tx) => {
-      await tx.select().from(members).where(eq(members.id, memberId)).for('update');
-      await tx.update(members).set({ status: 'revoked' }).where(eq(members.id, memberId));
-      const [row] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
-      revokerPid.settle(row.pid);
-      await release.promise;
-    });
-    const pid = await revokerPid.promise;
+    const revoke = await revokeHeldOpen(db, memberId);
 
     const writing = write(memberId);
-    await vi.waitFor(async () => {
-      const [row] = await db.execute<{ waiting: number }>(
-        sql`select count(*)::int as waiting from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
-      );
-      expect(row.waiting).toBe(1);
-    });
-    release.settle(undefined);
-    await revoking;
+    await revoke.waitedFor();
+    await revoke.commit();
 
     expect(await writing).toMatchObject({ code: 'NOT_A_MEMBER' });
   });

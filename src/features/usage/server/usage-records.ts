@@ -4,9 +4,15 @@
 // the outcome is known. Usage that is not known stays null and is never written as 0, and so does
 // the cost it would need. The records are written on the database itself, outside any
 // transaction, as external calls are.
+//
+// A record is kept for the cost even when the member it was made for is revoked, but it names
+// only an active member: `task member -- revoke` clears the owner of the records it finds, and a
+// record started after that, by a request that passed the member check just before, gets no
+// owner either.
 import { eq, sql } from 'drizzle-orm';
 import { priceConfig, priceOf, type PriceConfig } from '../../../lib/config/price-config.ts';
 import type { Executor } from '../../../lib/db/client.ts';
+import { members } from '../../../lib/db/schema.ts';
 import { estimateCost } from '../domain/cost.ts';
 import type { FinishedUsageStatus, UsageKind } from '../domain/usage.ts';
 import { usageRecords } from './schema.ts';
@@ -36,11 +42,26 @@ export type UsageOutcome = {
   errorCode?: string;
 };
 
+/**
+ * The member's ID while the member is active, otherwise null, read in the insert's own
+ * statement. `for share` waits for a revoke that holds the member's row and then reads the row as
+ * the revoke left it; the lock ends with the statement, so nothing is held during the call.
+ */
+function activeOwner(ownerId: string) {
+  return sql`(select ${members.id} from ${members} where ${members.id} = ${ownerId} and ${members.status} = 'active' for share)`;
+}
+
 /** Records that a call is about to be made and returns the record's ID. */
 export async function startUsage(executor: Executor, start: UsageStart): Promise<string> {
+  const { ownerId, ...call } = start;
   const [record] = await executor
     .insert(usageRecords)
-    .values({ ...start, status: 'pending', startedAt: sql`now()` })
+    .values({
+      ...call,
+      ownerId: ownerId === undefined ? null : activeOwner(ownerId),
+      status: 'pending',
+      startedAt: sql`now()`,
+    })
     .returning({ id: usageRecords.id });
   return record.id;
 }

@@ -5,6 +5,7 @@ import { aiConfig } from '../../../lib/config/ai-config.ts';
 import { priceConfig } from '../../../lib/config/price-config.ts';
 import { speechConfig } from '../../../lib/config/speech-config.ts';
 import { closeDatabase, getDatabase } from '../../../lib/db/client.ts';
+import { revokeHeldOpen } from '../../../lib/db/testing.ts';
 import { members } from '../../account/index.ts';
 import { usageRecords } from './schema.ts';
 import {
@@ -38,6 +39,14 @@ function pricedLookupCall(): UsageStart {
   };
 }
 
+async function newMember(status: 'active' | 'revoked' = 'active'): Promise<string> {
+  const [member] = await db
+    .insert(members)
+    .values({ email: `usage-${randomUUID()}@example.com`, status })
+    .returning({ id: members.id });
+  return member.id;
+}
+
 async function record(id: string) {
   const [row] = await db.select().from(usageRecords).where(eq(usageRecords.id, id));
   return row;
@@ -53,16 +62,13 @@ async function recordsFor(resourceId: string) {
 
 describe('startUsage and finishUsage', () => {
   it('write a pending record before the call and complete it after', async () => {
-    const [member] = await db
-      .insert(members)
-      .values({ email: `usage-${randomUUID()}@example.com`, status: 'active' })
-      .returning({ id: members.id });
+    const memberId = await newMember();
     const call = lookupCall();
     const resourceId = randomUUID();
 
     const id = await startUsage(db, {
       ...call,
-      ownerId: member.id,
+      ownerId: memberId,
       resourceType: 'lookup',
       resourceId,
     });
@@ -73,7 +79,7 @@ describe('startUsage and finishUsage', () => {
       provider: 'openai',
       model: call.model,
       status: 'pending',
-      ownerId: member.id,
+      ownerId: memberId,
       resourceType: 'lookup',
       resourceId,
       finishedAt: null,
@@ -125,6 +131,26 @@ describe('startUsage and finishUsage', () => {
       cpuMs: 680_000,
       byteCount: 1_200_000,
     });
+  });
+
+  it('keep the record of a call for a revoked member, without the owner', async () => {
+    const memberId = await newMember('revoked');
+    const call = lookupCall();
+
+    const id = await startUsage(db, { ...call, ownerId: memberId });
+
+    expect(await record(id)).toMatchObject({ model: call.model, status: 'pending', ownerId: null });
+  });
+
+  it('wait for a revoke that holds the member, then keep the record without the owner', async () => {
+    const memberId = await newMember();
+    const revoke = await revokeHeldOpen(db, memberId);
+
+    const starting = startUsage(db, { ...lookupCall(), ownerId: memberId });
+    await revoke.waitedFor();
+    await revoke.commit();
+
+    expect((await record(await starting)).ownerId).toBeNull();
   });
 });
 
