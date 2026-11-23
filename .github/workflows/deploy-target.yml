@@ -30,7 +30,8 @@
 #   Production environment of the Vercel project, which every target deploys to with --prod, the
 #   target's Secret Manager, and the Cloud Run resources' environment. A value not set yet is
 #   skipped. Migrations use DATABASE_URL_UNPOOLED, or DATABASE_URL when that is not set, and need
-#   neither until drizzle/ has scripts. The smoke tests call vexto-tts at TTS_SERVICE_URL.
+#   neither until drizzle/ has scripts. The smoke tests call vexto-tts at TTS_SERVICE_URL and read
+#   the object it writes from the bucket of the S3_* values.
 # The production environment is not set up yet, so a production deployment stops at the
 # settings check until its environment, variables and token exist.
 #
@@ -303,8 +304,9 @@ jobs:
 
       # Production runs only the smoke tests that are safe against real user data. The speech
       # service's smoke test calls vexto-tts with an identity token of the deployment's service
-      # account for TTS_SERVICE_URL. The token is masked in the log and reaches the tests in their
-      # environment only.
+      # account for TTS_SERVICE_URL, then reads the fixed smoke object it wrote from the bucket to
+      # check it is a playable MP3. The token is masked in the log; it and the bucket credentials
+      # reach the tests in their environment only.
       - name: Run the smoke tests
         if: steps.head.outputs.deploy == 'true'
         env:
@@ -312,6 +314,11 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           TTS_SERVICE_URL: ${{ vars.TTS_SERVICE_URL }}
           GCP_DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
         run: |
           TTS_ID_TOKEN="$(gcloud auth print-identity-token \
             --impersonate-service-account="$GCP_DEPLOY_SERVICE_ACCOUNT" \
