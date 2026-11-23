@@ -1,1 +1,50 @@
 @import 'tailwindcss';
+
+/* The colours of .docs/design/screens.md (视觉), each with its dark pair; the page follows the
+   system's light or dark setting. Components use these names, never the hex values. */
+@theme {
+  --color-page: light-dark(#f4f6f9, #151b25);
+  --color-surface: light-dark(#fff, #1d2634);
+  --color-ink: light-dark(#26344b, #e2e9f4);
+  --color-muted: light-dark(#637187, #a9b7cb);
+  --color-line: light-dark(#d8dfe9, #3b475b);
+  --color-accent: light-dark(#245ab8, #9bbdff);
+  --color-on-accent: light-dark(#fff, #15284a);
+  --color-soft: light-dark(#edf3fe, #263a58);
+  --color-danger: light-dark(#ba3c40, #ff9b9e);
+  --color-on-danger: light-dark(#fff, #311216);
+  --color-warning: light-dark(#89590b, #f8cb75);
+  --color-success: light-dark(#24745a, #83d5b7);
+  --color-badge-new: light-dark(#f2c94c, #e9bb3f);
+  --color-on-badge-new: #483600;
+  --color-backdrop: #10223d66;
+
+  --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-page);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Inputs use 16px so iOS does not zoom the page when one gets focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

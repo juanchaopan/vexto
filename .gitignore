@@ -18,6 +18,8 @@
 /playwright/.cache/
 __screenshots__/
 __traces__/
+# failure screenshots of the component tests
+/.vitest/
 
 # next.js
 /.next/
