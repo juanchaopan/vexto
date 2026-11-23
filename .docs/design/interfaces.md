@@ -29,6 +29,7 @@ Cache-Control: no-store
 
 - 路径都在 `/api/` 下；请求和响应都是 JSON，输入用 Zod 校验，多余的字段算无效输入。响应都带 `Cache-Control: no-store`。
 - 时间是 ISO 8601 的 UTC 时间。文字位置是 UTF-16 的左闭右开区间 `[start, end)`。
+- 资源 ID 都是 UUID。路径里的 ID 不是 UUID 时返回 404 `NOT_FOUND`，和资源不存在一样；请求正文里的 ID 不是 UUID 时返回 422。
 - 成功的状态：读取和更新 200，新建 201，删除 204（没有正文）。成功的正文是 `{ "data": ..., "meta": ... }`，`meta` 只在列表里出现：`{ "nextCursor": "...", "totalCount": 23 }`，`nextCursor` 为空表示已经到底。
 - 列表用不透明的游标分批，每批固定 20 条，不能改。
 
@@ -113,7 +114,7 @@ Cache-Control: no-store
 | 路径 | `GET /api/articles`                                                                                                                                                                                         |
 | 参数 | `q`（不超过 200 字符）；`feed`（可重复，订阅源的键）；`category`（可重复，分类的键）；`sort`：`collected`（默认）、`visited`、`article`、`source`、`category`；`direction`：`asc`、`desc`（默认）；`cursor` |
 | 响应 | 200，`data` 每篇 `{ id, title, excerpt, feedKey, categoryKey, collectedAt, lastVisitedAt }`，`excerpt` 是正文第一句，没访问过时 `lastVisitedAt` 为空；`meta` 有 `nextCursor`、`totalCount`                  |
-| 错误 | 422（参数无效，包括不认识的键）                                                                                                                                                                             |
+| 错误 | 422（参数无效：不认识的参数名；`q`、`sort`、`direction`、`cursor` 给了不止一次；不认识的订阅源或分类的键；`q` 超过 200 字符或含 NUL 字符；游标不是这个查询发出的）                                          |
 
 只返回 `ready` 的文章。排序、搜索和筛选的规则见 `rules.md`。
 
@@ -158,7 +159,7 @@ Cache-Control: no-store
 | 路径 | `POST /api/media/playback`                                                              |
 | 请求 | 一个定位，只用 ID，不接受任意文字；种类和字段见下表                                     |
 | 响应 | 200 `{ url, expiresAt, durationMs }`；`url` 是 10 分钟有效的预签名地址，支持 Range 请求 |
-| 错误 | 404、422、503 `UNAVAILABLE`（朗读服务或存储不可用）                                     |
+| 错误 | 404、422、503 `UNAVAILABLE`（朗读服务或存储不可用、超时，或者音频在合成期间被淘汰）     |
 
 | `kind`           | 其他字段                | 播放什么                     |
 | ---------------- | ----------------------- | ---------------------------- |
@@ -170,6 +171,7 @@ Cache-Control: no-store
 
 - 文章音频总是已经存在。
 - 单词和例句的音频没有 `ready` 的行时，服务端按 `rules.md` 的步骤建 `pending` 的行、同步调用 `vexto-tts`，记录音频和用量后再返回；客户端在读音按钮上显示转圈。
+- 读音的文字是词条或例句的规范文字（规则见 `rules.md`）。规范文字为空或超过 300 字符时不调用朗读服务，按没有预料到的错误返回 500；保存下来的词条和例句不会这么长。
 - 返回的地址只含由音频 ID 组成的对象键，不透露文字。
 - 地址过期时客户端重新请求。
 
@@ -186,7 +188,7 @@ Cache-Control: no-store
 
 | `context.kind`       | 其他字段                                     | 上下文文字                                                                                  |
 | -------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `article`            | `articleId`、`firstSentence`、`lastSentence` | 选区碰到的相邻几句，在 `body_text` 里从第一句起点到最后一句终点的那一段                     |
+| `article`            | `articleId`、`firstSentence`、`lastSentence` | 选区碰到的相邻几句（最多 8 句），在 `body_text` 里从第一句起点到最后一句终点的那一段        |
 | `lookup-example`     | `lookupId`、`exampleId`                      | 查词结果的这条例句                                                                          |
 | `vocabulary-example` | `cardId`、`exampleId`                        | 词卡的这条例句（词卡详情、Translate 题）                                                    |
 | `spell-example`      | `cardId`、`exampleId`                        | 同上，但选区和目标词重叠时返回 `HIDDEN_RANGE`；位置相对于完整例句，由题面的 `segments` 得出 |
@@ -285,34 +287,34 @@ Cache-Control: no-store
 | 响应 | 200 `{ question, nextDueAt }`；有题时 `question` 是题面，`nextDueAt` 为空；没有题时 `question` 为空，`nextDueAt` 是这种模式下一次到期的时间，没有以后到期的题时也为空                                                                            |
 | 题面 | Spell：`{ cardId, mode, nextRound, pos, meaningZh, examples }`，`examples` 每项 `{ id, segments }`，`segments` 是文字段 `{ start, text }`（`start` 是在完整例句里的位置）和挖空 `{ gap: true }` 的序列；不含词条、可接受词形、完整例句和音频地址 |
 |      | Translate：`{ cardId, mode, nextRound, lemma, pos, examples, options }`，`examples` 每项 `{ id, text }`，`options` 每项 `{ id, pos, meaningZh }`；不含正确选项                                                                                   |
-| 错误 | 422（模式无效）                                                                                                                                                                                                                                  |
+| 错误 | 422（`mode` 不是 `spell` 或 `translate`，或者带了别的参数）                                                                                                                                                                                      |
 
 只读，不改任何数据。
 
 ### 提交答案
 
-| 项   | 内容                                                                                                                                                    |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 路径 | `POST /api/review/submit`                                                                                                                               |
-| 请求 | `{ operationId, cardId, mode, answer }`；Spell 的 `answer` 是 `{ text }`（不超过 80 字符），Translate 的是 `{ optionId }`                               |
-| 响应 | 200 `{ result, answer, round, dueAt }`；`result` 是 `correct` 或 `incorrect`；`answer` 是可以公开的正确答案（Spell 是词条，Translate 是正确选项的中文） |
-| 错误 | 404（词卡已删除）、409 `CONFLICT`（还没到期、已完成，或被另一台设备先答了）、422（答案为空或选项无效）                                                  |
+| 项   | 内容                                                                                                                                                                                                                   |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 路径 | `POST /api/review/submit`                                                                                                                                                                                              |
+| 请求 | `{ operationId, cardId, mode, answer }`；Spell 的 `answer` 是 `{ text }`（1–80 字符，不能全是空白），Translate 的是 `{ optionId }`（UUID）                                                                             |
+| 响应 | 200 `{ result, answer, round, dueAt }`；`result` 是 `correct` 或 `incorrect`；`answer` 是可以公开的正确答案（Spell 是词条，Translate 是正确选项的中文）                                                                |
+| 错误 | 404（词卡不存在或不属于当前用户）、409 `CONFLICT`（还没到期、已完成、被另一台设备先答了，或者选项不在这张卡现有的选项里：出题后词卡被替换过）、422（正文无效：答案为空、太长，`optionId` 不是 UUID，模式和答案对不上） |
 
 ## 朗读服务 vexto-tts
 
 Cloud Run 服务，按需合成单词和例句的读音。只有 Web 应用和部署后的冒烟测试调用。
 
-| 项       | 内容                                                                                                                                                                                                                                   |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 路径     | `POST /synthesize`                                                                                                                                                                                                                     |
-| 认证     | Cloud Run 的 IAM 认证，只有 Run Invoker 能调用。Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取身份令牌，放在 `Authorization` 头里                                                                                                |
-| 请求     | `{ key, text, voice, modelRevision, encodingVersion }`；`key` 是要写的对象键，只接受 `speech/<UUID>.mp3` 和冒烟测试的 `smoke/check.mp3`；`text` 是规范文字，1–300 字符                                                                 |
-| 处理     | 用 F1 合成，lame 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，写到 Neon 存储桶的 `key`，已有对象时覆盖                                                                                                    |
-| 响应     | 200 `{ key, byteSize, durationMs, usage: { cpuMs } }`                                                                                                                                                                                  |
-| 错误     | 正文和 Web 应用的相同：`{ error: { code, message, retryable } }`。422 `INVALID_INPUT`：对象键或文字不合格，或声音、模型版本、编码版本不是服务加载的那一套；503 `UNAVAILABLE`：合成或写桶失败。认证失败由 Cloud Run 直接返回 401 或 403 |
-| 超时     | Web 应用等 30 秒，足够冷启动（读约 400 MB 的模型，大约十几秒）；超时时把这次用量记成 `unknown`，对客户端返回 503                                                                                                                       |
-| 不做的事 | 不判断要不要合成，不写数据库；对象键、音频行和用量由 Web 应用负责                                                                                                                                                                      |
-| 限量     | 最多 1 个实例，没人用时缩到 0                                                                                                                                                                                                          |
+| 项       | 内容                                                                                                                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 路径     | `POST /synthesize`                                                                                                                                                                                                                                           |
+| 认证     | Cloud Run 的 IAM 认证，只有 Run Invoker 能调用。Web 应用用 Vercel 的 OIDC 令牌经 Google 身份联合换取身份令牌，放在 `Authorization` 头里                                                                                                                      |
+| 请求     | `{ key, text, voice, modelRevision, encodingVersion }`；`key` 是要写的对象键，只接受 `speech/<UUID>.mp3` 和冒烟测试的 `smoke/check.mp3`；`text` 是规范文字（再做一次规范化也不变），1–300 字符                                                               |
+| 处理     | 用 F1 合成（模型的字符表里没有的字符去掉），lame 编码成单声道 MP3 32 kbps，ID3 注释写 `AI-generated voice (Supertonic 3)`，写到 Neon 存储桶的 `key`，已有对象时覆盖                                                                                          |
+| 响应     | 200 `{ key, byteSize, durationMs, usage: { cpuMs } }`                                                                                                                                                                                                        |
+| 错误     | 正文和 Web 应用的相同：`{ error: { code, message, retryable } }`。422 `INVALID_INPUT`：对象键不合格、文字不是规范文字或长度不对，或声音、模型版本、编码版本不是服务加载的那一套；503 `UNAVAILABLE`：合成或写桶失败。认证失败由 Cloud Run 直接返回 401 或 403 |
+| 超时     | Web 应用等 30 秒，足够冷启动（读约 400 MB 的模型，大约十几秒）；超时或返回的内容读不懂时把这次用量记成 `unknown`，对客户端返回 503                                                                                                                           |
+| 不做的事 | 不判断要不要合成，不写数据库；对象键、音频行和用量由 Web 应用负责                                                                                                                                                                                            |
+| 限量     | 最多 1 个实例，没人用时缩到 0                                                                                                                                                                                                                                |
 
 ## 收集任务 vexto-collect
 
@@ -327,4 +329,4 @@ Cloud Run 任务（Job），一次只运行 1 个任务实例，并行度为 1�
 | 输出   | `articles`、`article_sentences`、`seen_items`、`feed_cursors`、`job_leases`、`synthesis_cpu_months`、`audio_assets`、`usage_records` 的行；存储桶里的 MP3；Cloud Logging 的日志（不含文章正文） |
 | 退出码 | 0：正常结束，包括没拿到租约、合成预算用完、单篇文章或单个订阅源失败；非 0：这次执行本身失败，例如配置校验不通过、连不上数据库或存储桶、没有预料到的异常                                         |
 
-Last changed: #3 (2026-11-22)
+Last changed: #3 (2026-11-23)

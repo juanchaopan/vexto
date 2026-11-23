@@ -20,7 +20,7 @@ vexto 只有手机触屏布局，以 390×844 CSS 像素的屏幕为准，用手
 
 - 左边是 vexto 的标志（蓝底白色字母 v）。
 - 右边是两个导航按钮，只显示图标：Articles（报纸图标）、Vocabulary（书本图标）。按钮有细边框和圆角；当前所在的一组（Articles 和阅读页；Vocabulary、词卡详情和复习）的按钮浅色填充、强调色边框。
-- Vocabulary 按钮右上角有红色和黄色的数字圆点（计数规则见 `rules.md`）；0 时不显示。数字不能点。按钮的可访问名称写明两个数，例如 `Vocabulary, 5 due reviews, 4 new reviews`。
+- Vocabulary 按钮右上角有红色和黄色的数字圆点，是 Spell 和 Translate 相加的到期题数和新词题数（计数规则见 `rules.md`）；0 时不显示。数字不能点。按钮的可访问名称写明两个数，例如 `Vocabulary, 5 due reviews, 4 new reviews`。数字随进度更新：答完一道题，它的数字随即减一（见“复习的共同部分”）。
 - 最右边是头像，显示当前用户姓名的首字母（最多两个，大写），点开账号菜单（51）。
 
 点顶栏的导航按钮进入列表时：
@@ -40,6 +40,7 @@ vexto 只有手机触屏布局，以 390×844 CSS 像素的屏幕为准，用手
 ### 进行中和失败
 
 - 写操作进行中，触发它的按钮禁用并把图标换成转圈，同一个操作不能重复提交。
+- 第一次加载中：Articles 和 Vocabulary 在列表的位置显示禁用的 `Loading…` 和转圈图标，和加载下一批相同（11）；阅读页在文章到达之前只显示 `← Articles`；词卡详情在加载中只显示关闭按钮。
 - 加载失败时，失败文字和 `Retry` 画在内容本来的位置，页面上的返回或关闭按钮保留；加载下一批失败时，已加载的保留，失败画在 Load more 的位置。查词浮窗里的失败画在浮窗里；其余操作的失败用短提示。
 - `Retry` 原样重发同一个请求（同一个 `operationId`）。用户改了内容再提交是新的操作。
 - 每种错误显示在哪里、显示什么，见下面的“错误的显示”。
@@ -48,39 +49,40 @@ vexto 只有手机触屏布局，以 390×844 CSS 像素的屏幕为准，用手
 
 “没有响应”指请求发不出去或连接中断（例如断网）。
 
-| 错误                                               | 在哪里                             | 怎样显示                                                           | 文字或去向                                                                                                    | Retry |
-| -------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----- |
-| `UNAUTHENTICATED`                                  | 任何请求                           | 换页                                                               | 登录页（01）                                                                                                  | 否    |
-| `NOT_A_MEMBER`                                     | 任何请求                           | 换页                                                               | 没有资格页（02）                                                                                              | 否    |
-| `TERMS_REQUIRED`                                   | 任何请求                           | 换页                                                               | 条款页（03）                                                                                                  | 否    |
-| `NOT_FOUND`                                        | 打开文章、连续播放到下一篇         | 回到 Articles，短提示；连续播放接着播队列里的下一篇                | `This article is no longer available.`（55）                                                                  | 否    |
-| `NOT_FOUND`                                        | 打开词卡详情、词卡例句的刷新和读音 | 回到 Vocabulary，列表重新读取，短提示                              | `This word was deleted.`                                                                                      | 否    |
-| `NOT_FOUND`                                        | 替换                               | 对话框关闭，短提示，浮窗和列表重新读取                             | `This word changed on another device.`                                                                        | 否    |
-| `NOT_FOUND`                                        | 单个删除                           | 当作删除成功：词卡从列表消失，不提示                               | —                                                                                                             | —     |
-| `NOT_FOUND`                                        | 提交答案                           | 短提示，取下一题                                                   | `This word was deleted.`                                                                                      | 否    |
-| `CONFLICT`                                         | 保存、替换、两种刷新例句           | 短提示，当前画面重新读取；替换时对话框关闭                         | `This word changed on another device.`                                                                        | 否    |
-| `CONFLICT`                                         | 提交答案                           | 黄色结果行，按钮是 Next（50）                                      | `This word changed on another device.`                                                                        | 否    |
-| `CONFLICT`                                         | 确认条款                           | 重新载入页面，显示当前版本的条款                                   | —                                                                                                             | 否    |
-| `DUPLICATE_WORD`                                   | 保存                               | 打开替换对话框（29）                                               | —                                                                                                             | —     |
-| `SELECTION_CHANGED`                                | 批量删除                           | 确认框关闭，仍在选择模式，已经不存在的词从列表和选择里去掉，短提示 | `Some words changed. Check your selection.`                                                                   | 否    |
-| `HIDDEN_RANGE`                                     | 查词                               | 短提示，不开浮窗                                                   | `Select words on one side of the blank.`                                                                      | 否    |
-| `INVALID_INPUT`                                    | 查词的选区太长                     | 短提示，不开浮窗                                                   | `Select up to 8 words.`（26）                                                                                 | 否    |
-| `NOT_FOUND`、`INVALID_INPUT`、`OPERATION_MISMATCH` | 上面没有列出的情况                 | 和这个操作的 `INTERNAL` 一样，但不带 Retry                         | 见下面几行                                                                                                    | 否    |
-| `INTERNAL`、`UNAVAILABLE`、没有响应                | Articles 第一批 / 下一批           | 列表位置 / Load more 的位置                                        | `Couldn't load articles.`（52）/ `Couldn't load more articles.`（53）                                         | 是    |
-| 同上                                               | Vocabulary 第一批 / 下一批         | 列表位置 / Load more 的位置                                        | `Couldn't load words.`（67）/ `Couldn't load more words.`（68）                                               | 是    |
-| 同上                                               | 阅读页 / 词卡详情 / 下一题         | 内容的位置                                                         | `Couldn't load this article.`（69）/ `Couldn't load this word.`（70）/ `Couldn't load the next review.`（71） | 是    |
-| 同上                                               | 文章的播放地址或播放出错           | 短提示，播放器没在播                                               | `Couldn't play this article.`（54）                                                                           | 是    |
-| 同上                                               | 单词、例句的读音                   | 浮窗或词卡详情里词条下面的错误行                                   | `Audio isn't available right now.`（24）                                                                      | 是    |
-| `INTERNAL`、`UNAVAILABLE`                          | 查词                               | 浮窗内                                                             | `Couldn't explain this.`（25）                                                                                | 是    |
-| 没有响应                                           | 查词                               | 浮窗内                                                             | `You're offline. Connect to look up words.`（56）                                                             | 是    |
-| `INTERNAL`、`UNAVAILABLE`、没有响应                | 刷新例句                           | 短提示，原来的例句不变                                             | `Couldn't get a new example.`（57）                                                                           | 是    |
-| 同上                                               | 保存                               | 短提示，浮窗保持打开                                               | `Couldn't save the word.`（58）                                                                               | 是    |
-| 同上                                               | 替换                               | 短提示，对话框保持打开                                             | `Couldn't replace the word.`（59）                                                                            | 是    |
-| 同上                                               | 删除、批量删除                     | 短提示，确认框关闭，所选的词保留                                   | `Couldn't delete. Try again.`（60）                                                                           | 是    |
-| 同上                                               | 确认条款                           | 短提示，条款页不变                                                 | `Couldn't save your answer.`（61）                                                                            | 是    |
-| `INTERNAL`、`UNAVAILABLE`                          | 提交答案                           | 短提示，答案保留、可以修改                                         | `Couldn't save your answer.`（72）                                                                            | 是    |
-| 没有响应                                           | 提交答案                           | 答案保留只读，红色结果行，按钮换成 Retry                           | `Not saved. Reconnect to check the result.`（49）                                                             | 是    |
-| 任何错误                                           | 计数、记录访问                     | 不提示；计数保留原来的数字                                         | —                                                                                                             | 否    |
+| 错误                                               | 在哪里                             | 怎样显示                                                                                     | 文字或去向                                                                                                    | Retry |
+| -------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----- |
+| `UNAUTHENTICATED`                                  | 任何请求                           | 先续期会话（规则见 `rules.md` 的“错误和断网”）：会话还在时读取重发一次、不换页；续不上才换页 | 登录页（01）                                                                                                  | 否    |
+| `NOT_A_MEMBER`                                     | 任何请求                           | 换页                                                                                         | 没有资格页（02）                                                                                              | 否    |
+| `TERMS_REQUIRED`                                   | 任何请求                           | 换页                                                                                         | 条款页（03）                                                                                                  | 否    |
+| `NOT_FOUND`                                        | 打开文章、连续播放到下一篇         | 回到 Articles，短提示；连续播放接着播队列里的下一篇                                          | `This article is no longer available.`（55）                                                                  | 否    |
+| `NOT_FOUND`                                        | 打开词卡详情、词卡例句的刷新和读音 | 回到 Vocabulary，列表重新读取，短提示                                                        | `This word was deleted.`                                                                                      | 否    |
+| `NOT_FOUND`                                        | 替换                               | 对话框关闭，短提示，浮窗和列表重新读取                                                       | `This word changed on another device.`                                                                        | 否    |
+| `NOT_FOUND`                                        | 单个删除                           | 当作删除成功：词卡从列表消失，不提示                                                         | —                                                                                                             | —     |
+| `NOT_FOUND`                                        | 提交答案                           | 短提示，取下一题                                                                             | `This word was deleted.`                                                                                      | 否    |
+| `CONFLICT`                                         | 保存、替换、两种刷新例句           | 短提示，当前画面重新读取；替换时对话框关闭                                                   | `This word changed on another device.`                                                                        | 否    |
+| `CONFLICT`                                         | 提交答案                           | 黄色结果行，按钮是 Next（50）                                                                | `This word changed on another device.`                                                                        | 否    |
+| `CONFLICT`                                         | 确认条款                           | 重新载入页面，显示当前版本的条款                                                             | —                                                                                                             | 否    |
+| `DUPLICATE_WORD`                                   | 保存                               | 打开替换对话框（29）                                                                         | —                                                                                                             | —     |
+| `SELECTION_CHANGED`                                | 批量删除                           | 确认框关闭，仍在选择模式，已经不存在的词从列表和选择里去掉，短提示                           | `Some words changed. Check your selection.`                                                                   | 否    |
+| `HIDDEN_RANGE`                                     | 查词                               | 短提示，不开浮窗                                                                             | `Select words on one side of the blank.`                                                                      | 否    |
+| `INVALID_INPUT`                                    | 查词的选区太长                     | 短提示，不开浮窗；服务端返回时关掉刚打开的这一层                                             | `Select up to 8 words.`（26）                                                                                 | 否    |
+| `NOT_FOUND`、`INVALID_INPUT`、`OPERATION_MISMATCH` | 上面没有列出的情况                 | 和这个操作的 `INTERNAL` 一样，但不带 Retry                                                   | 见下面几行                                                                                                    | 否    |
+| `INTERNAL`、`UNAVAILABLE`、没有响应                | Articles 第一批 / 下一批           | 列表位置 / Load more 的位置                                                                  | `Couldn't load articles.`（52）/ `Couldn't load more articles.`（53）                                         | 是    |
+| 同上                                               | Vocabulary 第一批 / 下一批         | 列表位置 / Load more 的位置                                                                  | `Couldn't load words.`（67）/ `Couldn't load more words.`（68）                                               | 是    |
+| 同上                                               | 阅读页 / 词卡详情 / 下一题         | 内容的位置                                                                                   | `Couldn't load this article.`（69）/ `Couldn't load this word.`（70）/ `Couldn't load the next review.`（71） | 是    |
+| 同上                                               | 文章的播放地址或播放出错           | 短提示，播放器没在播                                                                         | `Couldn't play this article.`（54）                                                                           | 是    |
+| `NOT_FOUND`                                        | 文章的播放地址                     | 短提示，播放器没在播                                                                         | `Couldn't play this article.`                                                                                 | 否    |
+| `INTERNAL`、`UNAVAILABLE`、没有响应                | 单词、例句的读音                   | 浮窗和词卡详情里在词条下面的错误行（单词和例句的读音都在这里）；Spell 题里在例句下面         | `Audio isn't available right now.`（24）                                                                      | 是    |
+| `INTERNAL`、`UNAVAILABLE`                          | 查词                               | 浮窗内                                                                                       | `Couldn't explain this.`（25）                                                                                | 是    |
+| 没有响应                                           | 查词                               | 浮窗内                                                                                       | `You're offline. Connect to look up words.`（56）                                                             | 是    |
+| `INTERNAL`、`UNAVAILABLE`、没有响应                | 刷新例句                           | 短提示，原来的例句不变                                                                       | `Couldn't get a new example.`（57）                                                                           | 是    |
+| 同上                                               | 保存                               | 短提示，浮窗保持打开                                                                         | `Couldn't save the word.`（58）                                                                               | 是    |
+| 同上                                               | 替换                               | 短提示，对话框保持打开                                                                       | `Couldn't replace the word.`（59）                                                                            | 是    |
+| 同上                                               | 删除、批量删除                     | 短提示，确认框关闭，所选的词保留                                                             | `Couldn't delete. Try again.`（60）                                                                           | 是    |
+| 同上                                               | 确认条款                           | 短提示，条款页不变                                                                           | `Couldn't save your answer.`（61）                                                                            | 是    |
+| `INTERNAL`、`UNAVAILABLE`                          | 提交答案                           | 短提示，答案保留、可以修改                                                                   | `Couldn't save your answer.`（72）                                                                            | 是    |
+| 没有响应                                           | 提交答案                           | 答案保留只读，红色结果行，按钮换成 Retry                                                     | `Not saved. Reconnect to check the result.`（49）                                                             | 是    |
+| 任何错误                                           | 计数、记录访问                     | 不提示；计数保留原来的数字                                                                   | —                                                                                                             | 否    |
 
 ### 浮层和对话框
 
@@ -96,7 +98,8 @@ Articles 和 Vocabulary 都一次加载 20 条：
 - 加载中：按钮位置显示禁用的 `Loading…` 和转圈图标（11）。
 - 加载完成后提示 `More records loaded.`；手动点 Load more 时，焦点移到新加载的第一条。
 - 全部加载后，按钮换成状态文字 `All loaded`。
-- 从阅读页或词卡详情返回列表时，恢复搜索、筛选、排序、已加载的条数、选中的词和滚动位置，焦点回到刚才打开的那一条。
+- Articles：已加载的批次和顺序一直保留，直到改变搜索、筛选或排序，或者重新载入页面。点阅读页的 `← Articles` 回到列表时，还恢复滚动位置，焦点回到刚才打开的那一篇。
+- Vocabulary：关闭词卡详情或关闭复习回到列表时，恢复搜索、排序、已加载的条数、选中的词和滚动位置，焦点回到刚才打开的那一条或那个模式按钮。用浏览器的返回或别的方式进入时，和点顶栏的 Vocabulary 按钮一样从头开始：清空搜索，Word 升序，只加载第一批，不在选择模式；保留标签和轮次筛选。
 
 ### 输入框
 
@@ -153,7 +156,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 - 一行三个图标控件：Source 筛选（楼房图标加漏斗）、Category 筛选（标签图标加漏斗）、排序（右边，图标显示当前方向）。有筛选生效时，那个筛选控件高亮，可访问名称写明选了哪些，例如 `Filter Source, NASA Technology, NIST News`。
 - 文章卡片，整张卡片可以点，打开阅读页（13）；正在播放时点卡片（包括正在播的那篇）会停止播放、清空播放队列：
   - 第一行是标题，单行，放不下用省略号；
-  - 第二行是正文的第一句，单行省略；
+  - 下面是正文的第一句，最多两行，放不下用省略号；
   - 右侧是播放按钮（三角图标，可访问名称 `Play <标题>`），从这篇开始连续播放；
   - 来源标记（彩色字母，例如蓝色的 NT）、来源名称、分类；
   - `Collected <时间>`；访问过时后面再有 `Last visited <时间>`，没访问过时这一项不显示；
@@ -199,7 +202,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 - 文章头：来源标记和名称、分类；标题；`<字数> words · <分钟> min listening`，字数由正文计算，分钟由整篇音频的时长向上取整，至少 1；顶部播放按钮（主按钮，只有图标）和选词辅助按钮。
 - 正文：每句一行，句首是这一句的播放按钮（三角图标）；段落之间加大间距；正在播的句子高亮。
 - 文末署名（18）：来源标记和名称；配置里的署名文字，有作者时后面加 `By <作者>.`，需要标明许可证的来源再加许可证名称的链接；下一行左边是 `Original` 链接（带外链图标，新窗口打开原文），右边是收集时间（可访问名称 `Collected <时间>`）。
-- 底部固定的播放器：播放/暂停按钮；`<标题> · <第几句>/<总句数>`（单行省略）和进度条；速度按钮（显示当前速度，例如 `1×`）；有播放队列时，最右边多一个下一篇按钮（17）。
+- 底部固定的播放器，是可访问名称为 `Article player` 的区域：播放/暂停按钮；`<标题> · <第几句>/<总句数>`（单行省略）和进度条；速度按钮（显示当前速度，例如 `1×`）；有播放队列时，最右边多一个下一篇按钮（17）。
 - 界面上没有 AI 声音的标注。
 
 ### 播放
@@ -216,8 +219,9 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 
 - 播放中当前句高亮，并自动滚动到可见的位置（14）。
 - Play all 或某篇的播放键开始的连续播放：一篇播完，先回到 Articles 列表（定位到下一篇所在的那批），约 500 毫秒后打开下一篇，从第一句开始播。最后一篇播完回到列表，提示 `Playback finished.`。在后台或锁屏时只换音频，不切换页面。
+- 在阅读页上直接播放（没有队列）：播到文末留在阅读页，回到未播放的状态（13），不提示。
 - 连续播放到已被淘汰的文章：在列表上提示 `This article is no longer available.`（55），约 500 毫秒后打开队列里再下一篇；在后台时直接播再下一篇。
-- 文章音频取不到或播放出错（54）：播放器回到没在播的状态，停在当前句；Retry 重新取播放地址，从当前句接着播。
+- 文章音频取不到或播放出错（54）：播放器回到没在播的状态；还没开始播过时回到未播放的状态，没有高亮，否则停在当前句。Retry 重新取播放地址，从当前句接着播；播放地址返回 404 时只有提示，没有 Retry。
 - 锁屏和通知栏的控制显示文章标题和来源名称，有播放、暂停，有队列时还有下一篇。
 - 点正文里的一个词查这个词；长按并拖动选择手柄选一段，松手后查这一段（20）。打开查词浮窗不暂停文章。
 
@@ -244,6 +248,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 - 文章、浮窗里的例句、词卡详情的例句和复习题面都可以查词。
 - 选词辅助按钮（文字光标图标，可访问名称 `Select words for lookup`）在文章头、每个例句区和复习题面上。点开选词辅助浮层（64）：标题 `Select words` 和关闭按钮 X；有几句可选时先有 `Sentence` 下拉；然后是 `From` 和 `To` 两个下拉，列出这句话的每个词（`To` 不能早于 `From`）；底部主按钮 `Look up`。点按钮本身不调用 AI，点 Look up 才查。在 Spell 题里，`Sentence` 只列出挖空两侧的片段。
 - 选区超过 8 个词或 80 个字符：提示 `Select up to 8 words.`，不打开浮窗（26）。
+- 在文章、词卡详情或复习题面上查词时，新的浮窗替换已经打开的所有浮窗；只有在浮窗的例句里查词才在上面再叠一层（见“嵌套浮窗”）。
 - Spell 题里选区跨过挖空：提示 `Select words on one side of the blank.`。
 
 ### 查词浮窗
@@ -257,17 +262,17 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
   - 例句区：左边小字 `Example`，右边是选词辅助、播放例句（喇叭图标，`Play example`）和刷新（`Refresh this example`）三个按钮，后两个各 44 像素，中间留间隔；下面是例句，只把目标词高亮，其他词不画线但都可以再点来查；最下面是左右箭头（`Previous example`、`Next example`）和 `1 / 2`。第一条时左箭头禁用，最后一条时右箭头禁用，不循环（22）。
 - 在例句区横向滑动也能换例句（手势见文末）。换例句时显示短提示 `Example <n> of <N>`。换例句不写数据，不调用 AI。
 - 刷新例句：刷新按钮转圈，完成后这一条换成新例句（57 是失败时）。
-- 点浮窗外的空白处关闭最上面的一层。
+- 点浮窗外的空白处或按 Escape 关闭最上面的一层。
 
 ### 嵌套浮窗
 
-在浮窗的例句里再查一个词，新开一层浮窗：底边相同，高度随内容；下面的每一层向左错开 8 像素，不能操作；只有最上层能操作（27）。关闭最上层后，下一层恢复可操作。
+在浮窗的例句里再查一个词，新开一层浮窗：底边相同，高度随内容；下面的层不能操作，往下第 n 层向左错开 8×n 像素；只有最上层能操作（27）。关闭最上层后，下一层恢复可操作。
 
 ### 读音
 
 - 点 Play word 或 Play example：暂停正在播的文章，播放读音；读音播完文章不自动恢复。
 - 读音要当场生成时（23），读音按钮的喇叭图标换成转圈，没有文字，可访问名称 `Generating word audio`，不能取消；生成好后自动播放，图标恢复。朗读服务冷启动时可能要十几秒。
-- 读音不可用（24）：词条下面显示错误行，警示图标、`Audio isn't available right now.` 和 `Retry` 按钮。
+- 读音不可用（24）：词条下面显示错误行，警示图标、`Audio isn't available right now.` 和 `Retry` 按钮；Play word 和例句区的 Play example 失败都显示在这一行。
 
 ### 查词的状态
 
@@ -328,7 +333,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 - 长按一张词卡约 500 毫秒进入选择模式，这张卡被选中，提示 `1 word selected.`（38）。点页头的选择模式按钮也能进入。
 - 选择模式（39）：每张卡左边出现复选框，点卡片或复选框切换选中；列表上方出现操作条：`Loaded` 复选框（选中或取消所有已加载的词）、`<N> selected`、删除按钮（`Delete <N> selected words`，没选时禁用）、取消按钮 X（`Cancel selection`）。选择模式中三个模式按钮禁用，左滑不可用，暂停自动加载。
 - 一次最多选 100 个：已选 100 个时再选一个，或者勾 `Loaded` 后合计会超过 100 个，都不选中，提示 `Select up to 100 words at a time.`。
-- 批量删除确认框（40）：标题 `Delete <N> words?`；正文列出最多 3 个词，多出的写 `+<数>`，后面是 `Review progress will also be deleted.`；按钮同上。
+- 批量删除确认框（40）：标题 `Delete <N> words?`；正文列出最多 3 个词，多出的写 `+<数>`，后面是 `Review progress will also be deleted.`；按钮同上。选择模式里只选了一个词时，确认框和删除都和单个删除相同（`Delete word?`）。
 - 删除成功后列表、条数和顶栏数字更新，退出选择模式，提示 `1 word deleted.` 或 `<N> words deleted.`，焦点移到下一条，没有下一条时移到上一条。
 - 删除失败（60）：确认框关闭，仍在选择模式，所选的词保持选中（单个删除时词卡留在列表里），提示 `Couldn't delete. Try again.` 和 Retry。
 
@@ -361,6 +366,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 - 例句区和查词浮窗相同：选词辅助、Play example、Refresh、左右箭头和 `1 / N`，可以横滑切换；刷新中、刷新失败也相同。
 - 三个进度组，和词卡上的一样。
 - 没有删除按钮。读音生成中、读音不可用的显示和查词浮窗相同。
+- 加载中只显示右上角的关闭按钮。
 - 可以在例句里查词，浮窗贴在屏幕底部上方。
 - 加载失败（70）：保留右上角的关闭按钮，内容位置显示 `Couldn't load this word.` 和 Retry。
 
@@ -368,19 +374,20 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 
 ### 复习的共同部分
 
-- 从 Vocabulary 的 Spell 或 Translate 按钮进入，一次一题。进入复习时暂停正在播的文章，结束后不恢复。
+- 从 Vocabulary 的 Spell 或 Translate 按钮进入（`/review/spell`、`/review/translate`），一次一题。进入复习时暂停正在播的文章，结束后不恢复。
 - 顶部一行：左边是模式名的灰色小字（`Spell` 或 `Translate`），右边是关闭按钮 X（`Close review and return to Vocabulary`）。关闭回到 Vocabulary，恢复列表的状态，焦点回到刚才的模式按钮。已提交的成绩保留，没提交的不算答错。
 - 底部一行：左边 `Round <n>`（这道题答对后进入的轮次），右边主按钮 `Submit →`；提交后变成 `Next →`，取下一题。
 - 提交后题面只读，下面显示一行结果：
-  - 答对：`Correct · Next review in <时间>`，到第 7 轮时是 `Correct · Complete`；
+  - 答对：`Correct · Next review in <时间>`，到第 7 轮时是 `Correct · Complete`；时间按新的轮次的间隔写（1、2、4、7、15、30 天），不用设备时钟计算；
   - 答错：`<正确答案> · Try again in 10 mins`，Spell 的正确答案是词条，Translate 的是正确选项的中文。
+- 有了结果（答对、答错或别的设备已经答过）后，计数马上重新读取，这道题不再算到期或新词，顶栏 Vocabulary 和模式按钮上的数字随即减一（44、45、47、50、63 的红色数字是 4，答题前是 5）；断网没有结果时（49）数字不变。
 - 键盘收起时，一道题在一屏之内，不出现滚动条；不靠裁剪内容或禁止缩放做到。Spell 弹出软键盘后允许滚动，保证输入框和 Submit 可见。
 - 例句可以用左右箭头和横滑切换，切换时保留已输入的答案。题面里的例句也可以查词。
 
 ### Spell（43–45）
 
 - 题面从上到下：中文释义（大字）、词性、`Play example` 按钮（喇叭图标和文字，可访问名称 `Play the full example`）和选词辅助按钮、挖空的例句（目标词的位置是一条空白横线，读屏读作 `Hidden word`）、左右箭头和 `1 / N`、`Your answer` 输入框。
-- Play example 播放当前这条例句的完整读音，包括目标词。
+- Play example 播放当前这条例句的完整读音，包括目标词；读音不可用时，错误行显示在例句下面。
 - 输入框关闭自动大写、自动更正和拼写检查。
 - 没填就提交：提示 `Enter your answer.`。
 - 答对（44）：输入框只读，显示 `Correct · Next review in 4 days` 这样的结果，按钮变成 Next。
@@ -394,13 +401,13 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 
 ### 复习的其他状态
 
-| 状态         | 显示                                                                                                                                         | 截图 |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| 没有题       | 顶部一行之下：`No reviews due.`；有以后到期的题时，下面一行灰字 `Next review in <时间>.`                                                     | 48   |
-| 断网         | 答案保留只读，红色结果行 `Not saved. Reconnect to check the result.`；按钮换成 `Retry`，用同一个操作重试                                     | 49   |
-| 别的设备改了 | 黄色结果行 `This word changed on another device.`；按钮是 Next                                                                               | 50   |
-| 题面加载失败 | 保留模式名和关闭按钮，题目位置显示 `Couldn't load the next review.` 和 Retry                                                                 | 71   |
-| 提交失败     | 不是断网（服务端没保存）：答案保留，提示 `Couldn't save your answer.` 和 Retry。Retry 原样重发原来的答案；改了答案再按 Submit 是一次新的提交 | 72   |
+| 状态         | 显示                                                                                                                                                                                       | 截图 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- |
+| 没有题       | 顶部一行之下：`No reviews due.`；有以后到期的题时，下面一行灰字 `Next review in <时间>.`，按设备时钟那个时间已经过了时写 `< 1 min`。页面重新获得焦点时重新查询；显示了题目之后不再重新查询 | 48   |
+| 断网         | 答案保留只读，红色结果行 `Not saved. Reconnect to check the result.`；按钮换成 `Retry`，用同一个操作把原来的答案再发一次                                                                   | 49   |
+| 别的设备改了 | 黄色结果行 `This word changed on another device.`；按钮是 Next                                                                                                                             | 50   |
+| 题面加载失败 | 保留模式名和关闭按钮，题目位置显示 `Couldn't load the next review.` 和 Retry                                                                                                               | 71   |
+| 提交失败     | 不是断网（服务端没保存）：答案保留，提示 `Couldn't save your answer.` 和 Retry。Retry 原样重发原来的答案；改了答案再按 Submit 是一次新的提交                                               | 72   |
 
 ## 账号菜单（51）
 
@@ -429,7 +436,7 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 | 阅读页           | 一篇播完（有队列）                               | Articles，约 500 毫秒后下一篇的阅读页           |
 | 阅读页           | 最后一篇播完                                     | Articles                                        |
 | Vocabulary       | 点词卡                                           | 词卡详情；词卡已删除时留在 Vocabulary           |
-| Vocabulary       | Spell / Translate                                | 复习                                            |
+| Vocabulary       | Spell / Translate                                | 复习（`/review/spell` / `/review/translate`）   |
 | 词卡详情         | X                                                | Vocabulary（恢复列表状态）                      |
 | 复习             | X                                                | Vocabulary（恢复列表状态）                      |
 
@@ -487,4 +494,4 @@ Collected 是文章可以阅读的时间（规则见 `rules.md`）。
 | 例句横滑   | 横向至少 45 像素，并且大于竖直移动的 1.3 倍；正在选文字或竖向滑动时不换                             |
 | 防误点     | 左滑之后 400–600 毫秒内、竖滑之后 350 毫秒内，点卡片不打开词卡详情；例句滑动后 400 毫秒内点词不查词 |
 
-Last changed: #3 (2026-11-22)
+Last changed: #3 (2026-11-23)

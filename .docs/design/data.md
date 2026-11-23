@@ -9,7 +9,19 @@
 - 个人数据的表都有 `owner_id`，指向 `members.id`；每个查询都按当前用户的 `owner_id` 过滤。子表（`examples`、`vocabulary_examples`、`translation_sets`）不存 `owner_id`，读写时连接父行校验所有者。
 - 文字位置用 UTF-16 的左闭右开区间 `[start, end)`，不能切开代理对。
 - 订阅源、分类、来源标记和颜色只在随版本发布的配置里，数据库里没有这些表；文章行只存配置的键。
-- 表定义的位置：`members` 归 `account` 功能（`src/features/account/server/schema.ts`）；`operation_receipts` 在共用的 `src/lib/db/schema.ts`；收集流水线的状态（`seen_items`、`feed_cursors`、`job_leases`、`synthesis_cpu_months`）归收集功能，只在收集任务里用；`audio_assets` 归音频功能，别的功能通过它的 `index.ts` 使用；其余的表归各自的功能。
+- 表定义的位置：每张表归一个功能，别的功能只通过它的 `index.ts` 使用。例外是跨功能共用的 `members` 和 `operation_receipts`，它们在 `src/lib/db/schema.ts`：收集任务会引到的 `articles` 和 `usage` 功能的表（`visits`、`usage_records`）引用 `members`，而 `account` 功能的 `index.ts` 带着只给 Web 应用用的代码（Clerk、页面组件），收集任务不能引用它；Web 应用的代码可以经 `account` 的 `index.ts` 使用 `members`。
+
+  | 表                                                                 | 功能         | 说明                                                                                                                                                                                     |
+  | ------------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `members`、`operation_receipts`                                    | `src/lib/db` | 跨功能共用                                                                                                                                                                               |
+  | `articles`、`article_sentences`、`visits`                          | `articles`   | 收集任务也引用它，所以它的 `index.ts` 只有表和常量；文章的接口、Articles 和阅读页在只给 Web 应用用的 `reading` 功能里，`reading` 通过 `articles` 读写这些表                              |
+  | `seen_items`、`feed_cursors`、`job_leases`、`synthesis_cpu_months` | `collection` | 只在收集任务里用                                                                                                                                                                         |
+  | `audio_assets`                                                     | `audio`      | Web 应用和收集任务都用                                                                                                                                                                   |
+  | `usage_records`                                                    | `usage`      | Web 应用和收集任务都用                                                                                                                                                                   |
+  | `lookup_entries`、`examples`                                       | `lookup`     | `lookup` 不引用 `vocabulary`（`vocabulary` 的表引用 `lookup_entries`）；查词要知道已保存的词卡、读词卡的例句时，接口的路由把 `vocabulary` 的读取函数交给 `lookup`                        |
+  | `vocabulary_cards`、`vocabulary_examples`、`translation_sets`      | `vocabulary` |                                                                                                                                                                                          |
+  | `review_progress`                                                  | `vocabulary` | 复习的三种模式和第 7 轮（完成）也定义在这里：保存词卡要建进度行，列表要按进度筛选和排序。`review` 功能通过 `vocabulary` 的 `index.ts` 读写词卡、选项和进度，`vocabulary` 不引用 `review` |
+
 - 每一列都有规则、界面或接口用到；索引按界面提供的每种排序和搜索建，索引里的 `owner_id` 都在最前面。
 
 ## 成员
@@ -226,7 +238,7 @@ Translate 的四个选项，保存时生成，替换词卡时重新生成。
 
 主键：`(owner_id, card_id, mode)`。索引：`(owner_id, mode, due_at, card_id)`，出题、计数和 Next 排序；`(owner_id, mode, round, card_id)`，Round 排序和轮次筛选。
 
-词卡的状态由三行派生，不存列：三行都是 `round = 0` 且 `due_at` 为空是 New，三行都是 `round = 7` 是 Archived，其余是 Ongoing。
+词卡的状态由三行派生，不存列：三行都是 `round = 0` 且 `due_at` 为空是 New，三行都是 `round = 7` 是 Archived，其余是 Ongoing。#3 不出 Speak 的题，Speak 的行一直是 `round = 0`，所以没有 Archived 的词卡。
 
 Vocabulary 搜索先用 `owner_id` 的索引缩小到一个用户的词卡，再逐行做子串匹配；例句的全文搜索用 `text_fts` 的 GIN 索引。一个用户的词卡不多，不建三元组索引。
 
@@ -297,8 +309,8 @@ CHECK：`state = 'ready'` 时 `byte_size` 和 `duration_ms` 非空。`retiring` 
 | `estimated_cost`  | `numeric(12,6)` | 可空                                                                                                     | 估算金额，美元                          |
 | `price_version`   | `text`          | 可空                                                                                                     | 估算用的价格表版本                      |
 | `owner_id`        | `uuid`          | 可空，外键 `members.id`                                                                                  | 收集任务的调用为空；取消资格时置空      |
-| `resource_type`   | `text`          | 可空                                                                                                     | 调用涉及的资源种类，例如 `article`      |
-| `resource_id`     | `uuid`          | 可空                                                                                                     | 调用涉及的资源                          |
+| `resource_type`   | `text`          | 可空                                                                                                     | `article`、`audio`、`lookup` 或 `card`  |
+| `resource_id`     | `uuid`          | 可空                                                                                                     | 调用涉及的资源，对应关系见 `rules.md`   |
 | `started_at`      | `timestamptz`   |                                                                                                          | 按时间统计用                            |
 | `finished_at`     | `timestamptz`   | 可空                                                                                                     | 和 `started_at` 一起得出调用耗时        |
 | `error_code`      | `text`          | 可空                                                                                                     | 失败的原因                              |
@@ -318,4 +330,4 @@ CHECK：`state = 'ready'` 时 `byte_size` 和 `duration_ms` 非空。`retiring` 
 | 回执超过 24 小时       | 删除这一行                                                                                                                                                                                                    |                                         |
 | 条目超过 180 天        | 删除 `seen_items` 的这一行                                                                                                                                                                                    | 文章本身                                |
 
-Last changed: #3 (2026-11-22)
+Last changed: #3 (2026-11-23)
