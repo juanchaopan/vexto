@@ -64,6 +64,29 @@ describe('chunkText', () => {
     expect(chunkText(sentence, 20)).toEqual(['Short words go', 'there.']);
   });
 
+  it('splits a sentence over the limit after a clause break rather than a later word', () => {
+    expect(chunkText('Before the storm, the crew packed everything.', 30)).toEqual([
+      'Before the storm,',
+      'the crew packed everything.',
+    ]);
+    expect(chunkText('Three rules apply; each one is strict here.', 30)).toEqual([
+      'Three rules apply;',
+      'each one is strict here.',
+    ]);
+    expect(chunkText('They named two rivers: the Rhine and the Elbe.', 30)).toEqual([
+      'They named two rivers:',
+      'the Rhine and the Elbe.',
+    ]);
+  });
+
+  it('takes a comma without whitespace after it, as in 1,000, for no clause break', () => {
+    expect(chunkText('Prices rose to 1,000 dollars in the market today.', 25)).toEqual([
+      'Prices rose to 1,000',
+      'dollars in the market',
+      'today.',
+    ]);
+  });
+
   it('packs the pieces of a split sentence with the sentences around it', () => {
     expect(chunkText('One. Short words go there. Two.', 20)).toEqual([
       'One. Short words go',

@@ -11,9 +11,9 @@
 //   GPU, batch, WAV-writing, timer and file-name helpers are left out;
 // - text is indexed by UTF-16 code unit throughout, and characters the model has no index for
 //   are left out instead of being passed to the model as -1;
-// - a sentence longer than a chunk is split at the last word boundary that fits, or inside a word
-//   that is longer than a chunk, so no single inference reads more than a chunk of text and the
-//   memory one inference takes stays bounded;
+// - a sentence longer than a chunk is split at the last clause break that fits, else at the last
+//   word boundary, else inside a word that is longer than a chunk, so no single inference reads
+//   more than a chunk of text and the memory one inference takes stays bounded;
 // - the samples of a synthesis are cut to the duration the model predicts, as the example
 //   program of the repository does before writing its WAV file;
 // - the sessions use as many threads as the CPUs the process may use, which on Cloud Run is the
@@ -162,25 +162,40 @@ const SENTENCE_BOUNDARY =
 
 const WHITESPACE = /\s/;
 
+/** Punctuation that ends a clause when whitespace follows it. */
+const CLAUSE_END = /[,;:]/;
+
 function isHighSurrogate(code: number) {
   return code >= 0xd800 && code <= 0xdbff;
 }
 
-/**
- * Where to cut text longer than maxLen so the head keeps at most maxLen characters: at the last
- * whitespace that leaves the head within the limit, or, when the head holds no whitespace, at
- * maxLen itself, moved back one code unit so a surrogate pair is not cut in two.
- */
-function cutPosition(text: string, maxLen: number): number {
+/** The last whitespace at or before maxLen that `accepts`, or undefined when there is none. */
+function lastWhitespace(text: string, maxLen: number, accepts: (index: number) => boolean) {
   for (let index = maxLen; index > 0; index -= 1) {
-    if (WHITESPACE.test(text[index])) {
+    if (WHITESPACE.test(text[index]) && accepts(index)) {
       return index;
     }
+  }
+  return undefined;
+}
+
+/**
+ * Where to cut text longer than maxLen so the head keeps at most maxLen characters. Every piece is
+ * read with the intonation of a sentence's end, so the cut goes after the last clause break (a
+ * comma, semicolon or colon followed by whitespace) that leaves the head within the limit; else
+ * at the last whitespace; and when the head holds no whitespace, at maxLen itself, moved back one
+ * code unit so a surrogate pair is not cut in two.
+ */
+function cutPosition(text: string, maxLen: number): number {
+  const clauseBreak = lastWhitespace(text, maxLen, (index) => CLAUSE_END.test(text[index - 1]));
+  const wordBreak = clauseBreak ?? lastWhitespace(text, maxLen, () => true);
+  if (wordBreak !== undefined) {
+    return wordBreak;
   }
   return maxLen > 1 && isHighSurrogate(text.charCodeAt(maxLen - 1)) ? maxLen - 1 : maxLen;
 }
 
-/** A sentence as pieces of at most maxLen characters, cut at word boundaries where it can be. */
+/** A sentence as pieces of at most maxLen characters, cut where cutPosition says. */
 function splitLongSentence(sentence: string, maxLen: number): string[] {
   const pieces: string[] = [];
   let rest = sentence.trim();
@@ -197,7 +212,7 @@ function splitLongSentence(sentence: string, maxLen: number): string[] {
 
 /**
  * Packs a paragraph's sentences into chunks of at most maxLen characters: whole sentences
- * together where they fit, and a sentence longer than maxLen in pieces of its own words.
+ * together where they fit, and a sentence longer than maxLen in pieces of its own.
  */
 function packSentences(sentences: readonly string[], maxLen: number): string[] {
   const chunks: string[] = [];
