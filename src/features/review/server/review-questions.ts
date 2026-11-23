@@ -2,11 +2,12 @@
 // Spell and Translate). A Spell question holds the Chinese meaning, the part of speech and every
 // example with the target cut out: the lemma, the accepted forms and the whole examples never
 // leave the server, and the example audio is asked for by IDs only. Every form the card accepts
-// is hidden wherever it stands in an example, also where the stored target ranges missed it. A
-// Translate question holds the lemma, the part of speech, the examples as they are and the four
-// options in their fixed order, without saying which one is right.
+// is hidden wherever it stands in an example, also where the stored target ranges missed it; a
+// lookup in the example refuses the same ranges. A Translate question holds the lemma, the part
+// of speech, the examples as they are and the four options in their fixed order, without saying
+// which one is right.
 import type { Executor } from '../../../lib/db/client.ts';
-import { findTargetRanges } from '../../lookup/index.ts';
+import { spellHiddenRanges } from '../../lookup/index.ts';
 import { cardExamples, type CardExampleView } from '../../vocabulary/index.ts';
 import { clozeSegments, type ClozeSegment } from '../domain/cloze.ts';
 import type { ReviewableMode } from '../domain/schedule.ts';
@@ -35,7 +36,7 @@ export type TranslateQuestion = QuestionHead & {
 export type Question = SpellQuestion | TranslateQuestion;
 
 function hiddenExample(example: CardExampleView, acceptedForms: readonly string[]) {
-  const hidden = [...example.targetRanges, ...findTargetRanges(example.text, acceptedForms)];
+  const hidden = spellHiddenRanges(example.text, example.targetRanges, acceptedForms);
   return { id: example.id, segments: clozeSegments(example.text, hidden) };
 }
 

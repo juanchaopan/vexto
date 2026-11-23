@@ -10,6 +10,7 @@ export {
   meaningProblems,
   type Example,
 } from './domain/explanation.ts';
+export { spellHiddenRanges } from './domain/hidden-target.ts';
 export {
   lemmaKey,
   MEANING_MAX_LENGTH,

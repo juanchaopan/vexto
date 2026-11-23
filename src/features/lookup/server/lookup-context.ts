@@ -2,18 +2,22 @@
 // the server from the context's IDs; the client never sends text. An article context is the slice
 // of the article's body from its first sentence's start to its last sentence's end, which the
 // reader shows as the same sentences joined by a space or two line feeds. An example context is
-// the whole example of the member's own lookup or card. A Spell example also has the hidden
-// target's ranges, which a selection must stay clear of. Anything missing, not ready or another
-// member's is NOT_FOUND, the same in every case.
+// the whole example of the member's own lookup or card. A Spell example also has the ranges its
+// question hides, which a selection must stay clear of: the same ranges the question cuts out.
+// Anything missing, not ready or another member's is NOT_FOUND, the same in every case.
 import { and, asc, between, eq } from 'drizzle-orm';
 import { ApiError } from '../../../lib/api/errors.ts';
 import type { Executor } from '../../../lib/db/client.ts';
 import { articles, articleSentences } from '../../articles/index.ts';
+import { spellHiddenRanges } from '../domain/hidden-target.ts';
 import type { TargetRange } from '../domain/lookup-entry.ts';
 import type { LookupContextLocator } from './lookup-request.ts';
 import { examples, lookupEntries } from './schema.ts';
 
 export type ExampleText = { text: string; targetRanges: TargetRange[] };
+
+/** An example of a card, with the forms its card accepts, which a Spell question hides too. */
+export type CardExampleText = ExampleText & { acceptedForms: string[] };
 
 /**
  * What lookups need from vocabulary cards, which the vocabulary feature provides: the lookup
@@ -26,14 +30,14 @@ export type CardSources = {
     ownerId: string,
     cardId: string,
     exampleId: string,
-  ): Promise<ExampleText | undefined>;
+  ): Promise<CardExampleText | undefined>;
   /** The member's card saved from this lookup, or null when there is none. */
   savedCardId(executor: Executor, ownerId: string, lookupId: string): Promise<string | null>;
 };
 
 export type LookupContextText = {
   text: string;
-  /** Ranges a selection must not overlap: the hidden word of a Spell question. */
+  /** Ranges a selection must not overlap: the hidden words of a Spell question. */
   hiddenRanges: TargetRange[];
 };
 
@@ -101,7 +105,10 @@ async function exampleContext(
   return (
     example && {
       text: example.text,
-      hiddenRanges: context.kind === 'spell-example' ? example.targetRanges : [],
+      hiddenRanges:
+        context.kind === 'spell-example'
+          ? spellHiddenRanges(example.text, example.targetRanges, example.acceptedForms)
+          : [],
     }
   );
 }

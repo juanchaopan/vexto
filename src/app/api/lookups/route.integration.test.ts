@@ -1,6 +1,7 @@
 // POST /api/lookups against a real PostgreSQL, with MSW standing in for OpenAI: an article lookup
 // asks the AI once and keeps the explanation, a repeated selection is answered from the member's
-// cache (also from another article with the same sentences), an answer that fails the checks is
+// cache (also from another article with the same sentences), a lookup in a Spell question's
+// example keeps clear of every word the question hides, an answer that fails the checks is
 // repaired once, temporary failures are tried once more, and every call has a usage record with
 // its tokens and estimated cost.
 import { randomUUID } from 'node:crypto';
@@ -9,6 +10,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { signInAsMember } from '../../../features/account/testing.ts';
 import {
   examples,
+  findTargetRanges,
   lookupEntries,
   lookupResult,
   modelServices,
@@ -23,7 +25,12 @@ import {
 import { createCard } from '../../../features/media/testing.ts';
 import { insertArticle } from '../../../features/reading/testing.ts';
 import { usageRecords } from '../../../features/usage/index.ts';
-import { cardSources, vocabularyCards } from '../../../features/vocabulary/index.ts';
+import {
+  cardSources,
+  vocabularyCards,
+  vocabularyExamples,
+} from '../../../features/vocabulary/index.ts';
+import { uniqueLemma } from '../../../features/vocabulary/testing.ts';
 import {
   expectApiError,
   expectNotFound,
@@ -288,6 +295,43 @@ describe('POST /api/lookups', () => {
       await lookUp(inContext('spell-example', { start: 0, end: 4 })),
       'HIDDEN_RANGE',
     );
+  });
+
+  it('refuses a Spell selection over an accepted form the stored target ranges missed', async () => {
+    const lemma = uniqueLemma();
+    const text = `They ${lemma} the panels first and ${lemma} the rover after lunch.`;
+    const [card] = await db
+      .insert(vocabularyCards)
+      .values({
+        ownerId: member.id,
+        lemma,
+        lemmaKey: lemma,
+        pos: 'verb',
+        meaningZh: '检修',
+        acceptedForms: [lemma],
+      })
+      .returning({ id: vocabularyCards.id });
+    const [stored, missed] = findTargetRanges(text, [lemma]);
+    const [example] = await db
+      .insert(vocabularyExamples)
+      .values({
+        cardId: card.id,
+        position: 0,
+        text,
+        targetRanges: [stored],
+        contentHash: randomUUID(),
+      })
+      .returning({ id: vocabularyExamples.id });
+    const inSpell = ([start, end]: readonly [number, number]) => ({
+      operationId: randomUUID(),
+      context: { kind: 'spell-example', cardId: card.id, exampleId: example.id },
+      selection: { start, end },
+    });
+
+    await expectApiError(await lookUp(inSpell(stored)), 'HIDDEN_RANGE');
+    await expectApiError(await lookUp(inSpell(missed)), 'HIDDEN_RANGE');
+    await expectApiError(await lookUp(inSpell([missed[0] - 4, missed[0] + 2])), 'HIDDEN_RANGE');
+    expect(openai.requests).toHaveLength(0);
   });
 
   it('says which card was saved from the lookup', async () => {
