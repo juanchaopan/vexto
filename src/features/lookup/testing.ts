@@ -2,7 +2,8 @@
 //
 // - openAiDouble(): MSW in front of the network, answering `POST /v1/responses` at
 //   TEST_OPENAI_BASE_URL like the OpenAI Responses API does. By default it explains the selection
-//   of a lookup and writes a new example for a refresh, from the request's own data; a test can
+//   of a lookup and writes a new example for a refresh, from the request's own data; other
+//   features add default answers for their own tasks by the structured output's name. A test can
 //   queue other answers (any JSON, an error status or a delay) for the next calls. It records
 //   every request. Point the code at it with stubOpenAiEnv() before the first lookup of the file.
 // - fixedExplanation(): the answer the double gives for a selection.
@@ -36,6 +37,9 @@ export type DoubleAnswer =
   | { status: number }
   | { delayMs: number; then?: DoubleAnswer };
 
+/** A default answer of a task, made from the data its request sent. */
+export type DefaultAnswer = (data: Record<string, unknown>) => unknown;
+
 export const TEST_USAGE = { inputTokens: 812, outputTokens: 96 };
 
 /** The explanation the double gives: the selection as its own lemma, in two fixed examples. */
@@ -63,18 +67,16 @@ function userData(body: ResponsesRequest): Record<string, unknown> {
 
 let refreshCount = 0;
 
-/** The answer the double makes from the request itself. */
-export function defaultOutput(body: ResponsesRequest): unknown {
-  const data = userData(body);
-  if (body.text.format.name === 'new_example') {
+const lookupAnswers: Record<string, DefaultAnswer> = {
+  new_example(data) {
     refreshCount += 1;
     const forms = (data.acceptedForms as string[] | undefined) ?? ['word'];
     return {
       example: `Number ${refreshCount} shows how a ${forms[0]} material keeps its shape in the cold.`,
     };
-  }
-  return fixedExplanation(String(data.selection ?? ''));
-}
+  },
+  word_explanation: (data) => fixedExplanation(String(data.selection ?? '')),
+};
 
 function responseBody(
   body: ResponsesRequest,
@@ -105,24 +107,37 @@ function responseBody(
   };
 }
 
-async function respond(body: ResponsesRequest, answer: DoubleAnswer): Promise<Response> {
-  if ('delayMs' in answer) {
-    await delay(answer.delayMs);
-    return respond(body, answer.then ?? { output: defaultOutput(body) });
-  }
-  const headers = { 'x-request-id': `req_${randomUUID()}` };
-  if ('status' in answer) {
-    return HttpResponse.json(
-      { error: { message: 'The test double refused.', type: 'test_error' } },
-      { status: answer.status, headers },
-    );
-  }
-  return HttpResponse.json(responseBody(body, answer), { headers });
-}
+export type OpenAiDoubleOptions = {
+  /** Default answers of other tasks, by the name of their structured output. */
+  defaults?: Record<string, DefaultAnswer>;
+};
 
-export function openAiDouble() {
+export function openAiDouble({ defaults = {} }: OpenAiDoubleOptions = {}) {
   const requests: ResponsesRequest[] = [];
   const queued: DoubleAnswer[] = [];
+  const answers = { ...lookupAnswers, ...defaults };
+
+  /** The answer the double makes from the request itself. */
+  const defaultOutput = (body: ResponsesRequest): unknown => {
+    const answer = answers[body.text.format.name] ?? lookupAnswers.word_explanation;
+    return answer(userData(body));
+  };
+
+  const respond = async (body: ResponsesRequest, answer: DoubleAnswer): Promise<Response> => {
+    if ('delayMs' in answer) {
+      await delay(answer.delayMs);
+      return respond(body, answer.then ?? { output: defaultOutput(body) });
+    }
+    const headers = { 'x-request-id': `req_${randomUUID()}` };
+    if ('status' in answer) {
+      return HttpResponse.json(
+        { error: { message: 'The test double refused.', type: 'test_error' } },
+        { status: answer.status, headers },
+      );
+    }
+    return HttpResponse.json(responseBody(body, answer), { headers });
+  };
+
   const server = setupServer(
     http.post(`${TEST_OPENAI_BASE_URL}/responses`, async ({ request }) => {
       const body = (await request.json()) as ResponsesRequest;

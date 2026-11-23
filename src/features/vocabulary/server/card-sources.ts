@@ -7,6 +7,22 @@ import type { Executor } from '../../../lib/db/client.ts';
 import type { CardSources } from '../../lookup/index.ts';
 import { vocabularyCards, vocabularyExamples } from './schema.ts';
 
+/** The member's card saved, or last replaced, from this lookup, or null when there is none. */
+export async function savedCardIdOf(
+  executor: Executor,
+  ownerId: string,
+  lookupId: string,
+): Promise<string | null> {
+  const [row] = await executor
+    .select({ id: vocabularyCards.id })
+    .from(vocabularyCards)
+    .where(
+      and(eq(vocabularyCards.sourceLookupEntryId, lookupId), eq(vocabularyCards.ownerId, ownerId)),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
 export const cardSources: CardSources = {
   async cardExample(executor, ownerId, cardId, exampleId) {
     const [row] = await executor
@@ -23,17 +39,5 @@ export const cardSources: CardSources = {
     return row;
   },
 
-  async savedCardId(executor: Executor, ownerId: string, lookupId: string) {
-    const [row] = await executor
-      .select({ id: vocabularyCards.id })
-      .from(vocabularyCards)
-      .where(
-        and(
-          eq(vocabularyCards.sourceLookupEntryId, lookupId),
-          eq(vocabularyCards.ownerId, ownerId),
-        ),
-      )
-      .limit(1);
-    return row?.id ?? null;
-  },
+  savedCardId: savedCardIdOf,
 };

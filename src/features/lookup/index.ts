@@ -7,6 +7,7 @@ export {
   exampleOf,
   exampleProblems,
   findTargetRanges,
+  meaningProblems,
   type Example,
 } from './domain/explanation.ts';
 export {
@@ -22,6 +23,7 @@ export {
   type LookupDependencies,
   type RequestMember,
 } from './server/lookup-api.ts';
+export { exampleTask } from './server/explanation-tasks.ts';
 export { lookupExample, type CardSources, type ExampleText } from './server/lookup-context.ts';
 export { lookupRequest, refreshExampleRequest, refreshPath } from './server/lookup-request.ts';
 export {
