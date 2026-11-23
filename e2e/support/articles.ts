@@ -57,6 +57,15 @@ function sentencesOf(article: DemoArticle) {
   return { body, sentences, durationMs: at };
 }
 
+/** Where the audio of the sentence at `index` (counting from 0) starts, in milliseconds. */
+export function sentenceStartMs(article: DemoArticle, index: number): number {
+  const sentence = sentencesOf(article).sentences[index];
+  if (!sentence) {
+    throw new Error(`The demo article ${article.id} has no sentence ${index}.`);
+  }
+  return sentence.startMs;
+}
+
 const objectKey = (article: DemoArticle) => `articles/${article.audioId}.mp3`;
 
 async function uploadAudio(article: DemoArticle, durationMs: number) {

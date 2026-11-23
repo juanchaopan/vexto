@@ -1,20 +1,21 @@
 import { clerkSetup } from '@clerk/testing/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { ensureClerkUser, signInAndOpen, testEmail } from './support/clerk.ts';
 import { acceptedTermsVersion, forgetMember, inviteMember } from './support/members.ts';
 
 // Signing in, the member and terms gates, and the account menu (.docs/design/screens.md, 01–04,
-// 51 and 62), against the Clerk development instance in Clerk's testing mode.
+// 51 and 62), against the Clerk development instance in Clerk's testing mode. What a visitor
+// without a session gets is in sign-in.spec.ts.
 
-// Clerk's sign-in component is loaded from Clerk's servers when the page opens.
-const CLERK_LOAD_TIMEOUT = 20_000;
-
-// Signing in takes a good part of the default 30 seconds, and the Articles screen a member lands
-// on loads its first batch; with every test file running side by side in both browsers, a test
-// that signs in needs more room than the default.
-test.describe.configure({ timeout: 60_000 });
+// Signing in takes a good part of the default 30 seconds, and the first page after signing in
+// asks the server for the member's profile before it shows anything; with every test file
+// running side by side in both browsers, those requests can take several seconds, so the tests
+// have more room than the defaults and run one after another in one worker per browser.
+test.describe.configure({ mode: 'default', timeout: 120_000 });
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 test.beforeAll(async () => {
+  test.setTimeout(120_000);
   await clerkSetup();
 });
 
@@ -32,10 +33,7 @@ test('a member signs in, accepts the terms, and reads them again from the accoun
 
   await signInPage.goto('/');
   await expect(signInPage).toHaveURL(/\/sign-in/);
-  await expect(signInPage.getByRole('heading', { name: 'Sign in to vexto' })).toBeVisible({
-    timeout: CLERK_LOAD_TIMEOUT,
-  });
-  await expect(signInPage.getByText('Welcome! Please sign in to continue.')).toBeVisible();
+  await expect(signInPage.getByRole('heading', { name: 'Sign in to vexto' })).toBeVisible();
   await expect(signInPage.getByRole('button', { name: /Continue with Google/ })).toBeVisible();
 
   const page = await signInAndOpen(signInPage, email, '/');
@@ -88,12 +86,4 @@ test('the license page is public and its close button goes to sign-in', async ({
 
   await page.getByRole('button', { name: 'Close license' }).click();
   await expect(page).toHaveURL(/\/sign-in/);
-});
-
-test('the interface refuses a request without a session', async ({ request }) => {
-  const response = await request.get('/api/me');
-
-  expect(response.status()).toBe(401);
-  expect(response.headers()['cache-control']).toBe('no-store');
-  expect(await response.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
 });

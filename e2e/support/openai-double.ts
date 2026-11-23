@@ -5,8 +5,8 @@
 //   - a lookup gets the prototype's explanation of the word when it has one and a plain made-up
 //     one otherwise;
 //   - a new example request gets a new sentence each time;
-//   - the same-meaning check of a save names the saved meaning written exactly like the new one,
-//     or none;
+//   - the same-meaning check of a save names the saved meaning that is written like the new one
+//     or is one of the prototype's two meanings of `resilient`, or none;
 //   - the Translate options of a save get three fixed wrong meanings.
 // `GET /health` tells Playwright it is up.
 // Usage: node e2e/support/openai-double.ts <port>
@@ -43,6 +43,26 @@ const KNOWN: Record<string, Explanation> = {
     ],
     acceptedForms: ['coating', 'coatings'],
   },
+  adapt: {
+    lemma: 'adapt',
+    pos: 'verb',
+    meaningZh: '使适应；调整',
+    examples: [
+      'Teams often adapt their plans when the weather changes suddenly.',
+      'The cooks had to adapt the recipe for a much smaller oven.',
+    ],
+    acceptedForms: ['adapt', 'adapts', 'adapted', 'adapting'],
+  },
+  dust: {
+    lemma: 'dust',
+    pos: 'noun',
+    meaningZh: '灰尘；尘土',
+    examples: [
+      'A layer of dust covered the old piano in the attic.',
+      'Wind carried red dust across the dry fields all afternoon.',
+    ],
+    acceptedForms: ['dust'],
+  },
   sticky: {
     lemma: 'sticky',
     pos: 'adjective',
@@ -54,6 +74,19 @@ const KNOWN: Record<string, Explanation> = {
     acceptedForms: ['sticky'],
   },
 };
+
+/**
+ * Meanings that count as the same: the saved `resilient` of the demo account and the one its
+ * lookup explains, so saving the lookup offers to replace the saved word (screen 29).
+ */
+const SAME_MEANINGS = [['有适应力的；能迅速恢复的', '有韧性的；经得起损耗的']];
+
+function sameMeaning(saved: string, explained: string | undefined): boolean {
+  return (
+    saved === explained ||
+    SAME_MEANINGS.some((group) => group.includes(saved) && group.includes(explained ?? ''))
+  );
+}
 
 /** The wrong Translate options of every saved word. */
 const DISTRACTORS = ['迅速消失的', '令人厌烦的', '非常昂贵的'];
@@ -93,7 +126,9 @@ const answers: Record<string, (data: Data) => unknown> = {
   meaning_match(data) {
     const word = data.word as { meaningZh?: string } | undefined;
     const saved = (data.savedMeanings as { number: number; meaningZh: string }[] | undefined) ?? [];
-    return { sameMeaning: saved.find((one) => one.meaningZh === word?.meaningZh)?.number ?? 0 };
+    return {
+      sameMeaning: saved.find((one) => sameMeaning(one.meaningZh, word?.meaningZh))?.number ?? 0,
+    };
   },
   translation_options: () => ({ distractors: DISTRACTORS }),
 };

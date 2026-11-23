@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { sharedConfig } from '../../src/lib/config/shared-config.ts';
 
 // The member list of the throwaway database the application under test uses: `task test-e2e`
 // hands its address to the test container as DATABASE_URL.
@@ -59,5 +60,18 @@ export function acceptedTermsVersion(email: string): Promise<number | null> {
     const [row] = await sql<{ terms_version: number | null }[]>`
       SELECT terms_version FROM members WHERE email = ${email}`;
     return row?.terms_version ?? null;
+  });
+}
+
+/**
+ * Records that the member accepted the current terms at `acceptedAt`, or, given null, that the
+ * member has accepted no terms yet.
+ */
+export function setTermsAcceptance(email: string, acceptedAt: Date | null): Promise<void> {
+  const version = acceptedAt ? sharedConfig.terms.version : null;
+  return withDatabase(async (sql) => {
+    await sql`
+      UPDATE members SET terms_version = ${version}, terms_accepted_at = ${acceptedAt}
+      WHERE email = ${email}`;
   });
 }

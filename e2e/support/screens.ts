@@ -1,0 +1,357 @@
+import { clerk, clerkSetup } from '@clerk/testing/playwright';
+import {
+  expect as baseExpect,
+  type Browser,
+  type BrowserContext,
+  type Disposable,
+  type Locator,
+  type Page,
+  type Route,
+  type TestInfo,
+} from '@playwright/test';
+import { seedDemoArticles, seedDemoVisits } from './articles.ts';
+import { ensureClerkUser, signInAndOpen, testEmail } from './clerk.ts';
+import { inviteMember, setTermsAcceptance } from './members.ts';
+import { DEMO_WORDS, seedVocabulary, type ReviewCardSeed } from './review-cards.ts';
+
+// Screenshots of the confirmed screens (.docs/design/README.md, 截图): each state is reached with
+// the demo account's data, at the design's phone size, and compared pixel by pixel with its
+// baseline, which only the pinned Playwright container writes. Like the design's images, a
+// capture shows the whole page: the window grows to the page's height first, so parts fixed to
+// the bottom, such as the player and the explanations, are drawn at the bottom of the page.
+//
+// The page's clock is set only for screens that show times: the demo's day for the article and
+// terms dates, and the moment the vocabulary's due times count from for the word screens. Other
+// screens keep the real time, which Clerk's session in the page relies on.
+
+// With every test file running side by side in both browsers, a page of the built application
+// can take several seconds to answer, and a whole-page screenshot of a long list in WebKit takes
+// seconds of its own.
+const expect = baseExpect.configure({ timeout: 20_000 });
+const SCREENSHOT_TIMEOUT = 30_000;
+const SESSION_TIMEOUT = 20_000;
+
+/** The phone screen of the design, in CSS pixels. */
+export const SCREEN_SIZE = { width: 390, height: 844 };
+
+/** "Now" in the demo data: the collection and visit times of the articles read from it. */
+export const DEMO_NOW = new Date('2026-11-22T10:00:00Z');
+
+/** When the demo account accepted the current terms (62 reads `Accepted Nov 22.`). */
+const DEMO_TERMS_ACCEPTED = new Date('2026-11-22T09:15:00Z');
+
+/** The demo account's name; the avatar shows its initials. */
+const DEMO_PERSON = { firstName: 'Alex', lastName: 'Chen' };
+const DEMO_INITIALS = 'AC';
+
+/** How long a plain notice stays (TOAST_DURATION_MS in src/lib/ui/toast.tsx). */
+const NOTICE_MS = 3500;
+
+type ScreenWindow = Window & {
+  screenAudio?: HTMLMediaElement;
+  refusePlay?: boolean;
+  holdNotices?: boolean;
+  Clerk?: { loaded?: boolean; user?: unknown };
+};
+
+/**
+ * Runs in every screen page before its own scripts, and keeps the states still long enough to
+ * be captured: a list loads its next batch only when Load more is pressed, a plain notice stays
+ * once the test asks for it, and the article audio is reachable from the test, which can hold it
+ * at one moment or have the browser refuse to start it, as autoplay rules do.
+ */
+function steadyScreens(noticeMs: number) {
+  const scope = window as ScreenWindow;
+  Object.defineProperty(window, 'IntersectionObserver', { value: undefined, configurable: true });
+  const setTimer = window.setTimeout.bind(window);
+  window.setTimeout = ((handler: TimerHandler, timeout?: number, ...rest: unknown[]) => {
+    const held = scope.holdNotices === true && timeout === noticeMs;
+    return setTimer(handler, held ? 2 ** 31 - 1 : timeout, ...rest);
+  }) as typeof setTimeout;
+  const play = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function playForScreens(this: HTMLMediaElement) {
+    scope.screenAudio = this;
+    if (scope.refusePlay) {
+      return Promise.reject(new DOMException('Playback needs a tap.', 'NotAllowedError'));
+    }
+    return play.call(this);
+  };
+}
+
+/** A browser context of the test's project at the design's screen size, light and still. */
+async function screenContext(browser: Browser, testInfo: TestInfo): Promise<BrowserContext> {
+  const { userAgent, isMobile, hasTouch, deviceScaleFactor, baseURL, locale, timezoneId } =
+    testInfo.project.use;
+  const context = await browser.newContext({
+    userAgent,
+    isMobile,
+    hasTouch,
+    deviceScaleFactor,
+    baseURL,
+    locale,
+    timezoneId,
+    viewport: SCREEN_SIZE,
+    colorScheme: 'light',
+    reducedMotion: 'reduce',
+  });
+  await context.addInitScript(steadyScreens, NOTICE_MS);
+  return context;
+}
+
+/**
+ * Closes a browser context. Clerk's testing helpers answer Clerk's requests through request
+ * handlers that may still be waiting; they are dropped first, so closing does not wait for them.
+ */
+async function closeContext(context: BrowserContext): Promise<void> {
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
+  await Promise.all(context.pages().map((one) => one.unrouteAll({ behavior: 'ignoreErrors' })));
+  await context.close();
+}
+
+/** Where the page's Clerk stands: the account loaded, sent to sign in, or neither in time. */
+async function sessionOf(page: Page): Promise<'signed-in' | 'signed-out' | 'unknown'> {
+  try {
+    const state = await page.waitForFunction(
+      () => {
+        const loaded = (window as ScreenWindow).Clerk;
+        if (loaded?.loaded && loaded.user) {
+          return 'signed-in';
+        }
+        return window.location.pathname.startsWith('/sign-in') ? 'signed-out' : false;
+      },
+      undefined,
+      { timeout: SESSION_TIMEOUT },
+    );
+    return (await state.jsonValue()) as 'signed-in' | 'signed-out';
+  } catch {
+    return 'unknown';
+  }
+}
+
+type OpenOptions = { waitUntil?: 'load' | 'domcontentloaded' | 'commit' };
+
+export type DemoAccount = {
+  page: Page;
+  email: string;
+  /**
+   * Opens `path` signed in. Clerk's development instance renews the one-minute session token
+   * through its own servers; when a renewal does not get through, the page lands on the sign-in
+   * page or its account never loads. The member then signs in again, or the page is loaded
+   * again, once, before the screen is checked.
+   */
+  open(path: string, options?: OpenOptions): Promise<void>;
+  close(): Promise<void>;
+};
+
+/**
+ * Signs in a member named like the demo account, with the demo articles and visits, who accepted
+ * the terms when the demo account did. Each test file uses a member of its own (`role`), so
+ * files that change the member's data run side by side.
+ */
+export async function demoAccount(
+  browser: Browser,
+  testInfo: TestInfo,
+  role: string,
+): Promise<DemoAccount> {
+  await clerkSetup();
+  await seedDemoArticles();
+  const email = testEmail(`screens-${role}`, testInfo);
+  await ensureClerkUser(email, DEMO_PERSON);
+  await inviteMember(email);
+  await seedDemoVisits(email);
+  await acceptTermsLikeDemo(email);
+  const context = await screenContext(browser, testInfo);
+  const signInPage = await context.newPage();
+  await signInPage.goto('/sign-in');
+  const page = await signInAndOpen(signInPage, email, '/license');
+
+  const open = async (path: string, options: OpenOptions = {}) => {
+    await page.goto(path, options);
+    const session = await sessionOf(page);
+    if (session === 'signed-in') {
+      return;
+    }
+    if (session === 'signed-out') {
+      await clerk.signIn({ page, emailAddress: email });
+    }
+    await page.goto(path, options);
+  };
+
+  return { page, email, open, close: () => closeContext(context) };
+}
+
+/** A page of a signed-out browser at the design's screen size. */
+export async function signedOutPage(browser: Browser, testInfo: TestInfo): Promise<Page> {
+  const context = await screenContext(browser, testInfo);
+  return context.newPage();
+}
+
+/** Records the demo account's acceptance of the current terms for this member. */
+export function acceptTermsLikeDemo(email: string): Promise<void> {
+  return setTermsAcceptance(email, DEMO_TERMS_ACCEPTED);
+}
+
+/**
+ * Gives the member the demo vocabulary again, so the top bar shows the design's counts. Call it
+ * right before opening a screen: the due times count from just ahead of the database's clock.
+ */
+export async function withDemoCounts(email: string): Promise<void> {
+  await seedVocabulary(email, DEMO_WORDS);
+}
+
+/**
+ * Gives the member the demo vocabulary (or `seeds`) and makes the page's clock show the moment
+ * its due times count from, so every due time reads as the design's.
+ */
+export async function withDemoWords(
+  page: Page,
+  email: string,
+  seeds: readonly ReviewCardSeed[] = DEMO_WORDS,
+): Promise<void> {
+  const moment = await seedVocabulary(email, seeds);
+  await page.clock.setFixedTime(moment);
+}
+
+/**
+ * Gives the member the demo vocabulary for the counts and makes the page's clock show the demo's
+ * now, so the article and terms dates read as the design's.
+ */
+export async function withDemoDay(page: Page, email: string): Promise<void> {
+  await withDemoCounts(email);
+  await page.clock.setFixedTime(DEMO_NOW);
+}
+
+/**
+ * Waits for the top bar to be complete: the review counts on the Vocabulary button (none shown
+ * for zero) and the avatar's initials, which come once Clerk has loaded the account.
+ */
+export async function expectShell(page: Page, counts = { due: 5, new: 4 }): Promise<void> {
+  await expect(
+    page.getByRole('link', {
+      name: `Vocabulary, ${counts.due} due reviews, ${counts.new} new reviews`,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveText(DEMO_INITIALS);
+}
+
+const noticeHolds = new WeakMap<Page, Disposable>();
+
+/**
+ * Keeps plain notices on screen until another replaces them, from now on and in the pages this
+ * page opens next, until `settleScreen` is called.
+ */
+export async function holdNotices(page: Page): Promise<void> {
+  const hold = () => {
+    (window as ScreenWindow).holdNotices = true;
+  };
+  noticeHolds.set(page, await page.addInitScript(hold));
+  await page.evaluate(hold);
+}
+
+/** Ends what a screen test set up on the page: its own answers to requests and held notices. */
+export async function settleScreen(page: Page): Promise<void> {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await noticeHolds.get(page)?.dispose();
+  noticeHolds.delete(page);
+}
+
+/**
+ * Captures the page as the design's image `name` (e.g. `05-articles`) and compares it with the
+ * baseline. `mask` covers areas whose content is not the application's own.
+ */
+export async function captureScreen(
+  page: Page,
+  name: string,
+  options: { mask?: Locator[] } = {},
+): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  await page.setViewportSize({
+    width: SCREEN_SIZE.width,
+    height: Math.max(SCREEN_SIZE.height, height),
+  });
+  try {
+    await expect(page).toHaveScreenshot(`${name}.png`, {
+      mask: options.mask,
+      timeout: SCREENSHOT_TIMEOUT,
+    });
+  } finally {
+    await page.setViewportSize(SCREEN_SIZE);
+  }
+}
+
+/** The requests a test answers itself: a URL pattern or a test of the URL. */
+export type RequestMatch = string | ((url: URL) => boolean);
+
+export type ApiFailure = { status: number; code: string; retryable: boolean };
+
+/** An internal error of the server (500), with Retry offered. */
+export const INTERNAL: ApiFailure = { status: 500, code: 'INTERNAL', retryable: true };
+
+/** The service is unavailable (503), with Retry offered. */
+export const UNAVAILABLE: ApiFailure = { status: 503, code: 'UNAVAILABLE', retryable: true };
+
+/** Answers requests matching `url` with an error of the API. */
+export async function failRequests(
+  page: Page,
+  url: RequestMatch,
+  failure: ApiFailure = INTERNAL,
+): Promise<void> {
+  await page.route(url, (route) =>
+    route.fulfill({
+      status: failure.status,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: failure.code,
+          message: 'The screen test answered with an error.',
+          retryable: failure.retryable,
+          requestId: 'req_screens',
+        },
+      }),
+    }),
+  );
+}
+
+/**
+ * Holds requests matching `url` unanswered, so the screen stays in its loading state; the
+ * returned function lets them go on.
+ */
+export async function holdRequests(page: Page, url: RequestMatch): Promise<() => Promise<void>> {
+  const held: Route[] = [];
+  await page.route(url, (route) => {
+    held.push(route);
+  });
+  return async () => {
+    await page.unroute(url);
+    await Promise.all(held.map((route) => route.continue().catch(() => undefined)));
+  };
+}
+
+/** Requests matching `url` never reach the server, as when the phone is offline. */
+export async function dropRequests(page: Page, url: RequestMatch): Promise<void> {
+  await page.route(url, (route) => route.abort('internetdisconnected'));
+}
+
+/**
+ * Holds the article audio at `ms` milliseconds once it plays: it stays playing there without
+ * moving on, so the player shows one moment.
+ */
+export async function holdAudioAt(page: Page, ms: number): Promise<void> {
+  await page.waitForFunction(() => {
+    const audio = (window as ScreenWindow).screenAudio;
+    return audio !== undefined && !audio.paused && audio.currentTime > 0;
+  });
+  await page.evaluate((at) => {
+    const audio = (window as ScreenWindow).screenAudio!;
+    audio.playbackRate = 0;
+    audio.currentTime = at / 1000;
+  }, ms);
+}
+
+/** Makes the browser refuse (or again allow) to start audio without a tap. */
+export async function refuseAutoplay(page: Page, refuse: boolean): Promise<void> {
+  await page.evaluate((value) => {
+    (window as ScreenWindow).refusePlay = value;
+  }, refuse);
+}

@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { clerk } from '@clerk/testing/playwright';
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
@@ -7,6 +8,10 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 // Addresses with the +clerk_test subaddress are Clerk test addresses: no email is ever sent.
 
 const clerkApi = 'https://api.clerk.com/v1';
+
+/** Reading or renaming a user is sent again when the request did not get through. */
+const ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
 
 function secretKey(): string {
   const key = process.env.CLERK_SECRET_KEY;
@@ -19,8 +24,8 @@ function secretKey(): string {
   return key;
 }
 
-async function clerkRequest(path: string, init: RequestInit = {}): Promise<unknown> {
-  const response = await fetch(`${clerkApi}${path}`, {
+function send(path: string, init: RequestInit) {
+  return fetch(`${clerkApi}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${secretKey()}`,
@@ -28,6 +33,25 @@ async function clerkRequest(path: string, init: RequestInit = {}): Promise<unkno
       ...init.headers,
     },
   });
+}
+
+/**
+ * Calls Clerk's Backend API. A GET or PATCH that gets no answer, as when the network drops for a
+ * moment, is sent again; a POST is sent once, since it may have arrived.
+ */
+async function clerkRequest(path: string, init: RequestInit = {}): Promise<unknown> {
+  const repeatable = (init.method ?? 'GET') !== 'POST';
+  let response: Response | undefined;
+  for (let attempt = 1; !response; attempt += 1) {
+    try {
+      response = await send(path, init);
+    } catch (error) {
+      if (!repeatable || attempt >= ATTEMPTS) {
+        throw error;
+      }
+      await delay(RETRY_DELAY_MS);
+    }
+  }
   if (!response.ok) {
     throw new Error(`Clerk's Backend API answered ${path} with ${response.status}.`);
   }
@@ -40,18 +64,30 @@ export function testEmail(role: string, testInfo: TestInfo): string {
   return `vexto-e2e-${role}-${project}+clerk_test@example.com`;
 }
 
-/** Makes sure a Clerk user with this verified address exists. */
-export async function ensureClerkUser(email: string): Promise<void> {
-  const found = (await clerkRequest(
+/** The name on a Clerk account, which the avatar shows as initials. */
+export type PersonName = { firstName: string; lastName: string };
+
+type ClerkUser = { id: string; first_name: string | null; last_name: string | null };
+
+/**
+ * Makes sure a Clerk user with this verified address exists, carrying `name` when one is given;
+ * an existing user with another name is renamed.
+ */
+export async function ensureClerkUser(email: string, name?: PersonName): Promise<void> {
+  const names = name ? { first_name: name.firstName, last_name: name.lastName } : {};
+  const [found] = (await clerkRequest(
     `/users?email_address=${encodeURIComponent(email)}`,
-  )) as unknown[];
-  if (found.length > 0) {
+  )) as ClerkUser[];
+  if (!found) {
+    await clerkRequest('/users', {
+      method: 'POST',
+      body: JSON.stringify({ email_address: [email], skip_password_requirement: true, ...names }),
+    });
     return;
   }
-  await clerkRequest('/users', {
-    method: 'POST',
-    body: JSON.stringify({ email_address: [email], skip_password_requirement: true }),
-  });
+  if (name && (found.first_name !== name.firstName || found.last_name !== name.lastName)) {
+    await clerkRequest(`/users/${found.id}`, { method: 'PATCH', body: JSON.stringify(names) });
+  }
 }
 
 /**
