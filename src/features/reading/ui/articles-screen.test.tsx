@@ -1,9 +1,10 @@
 // The Articles screen (.docs/design/screens.md, Articles) against a stand-in for the article
 // endpoints: the cards and the count, the empty states, the search, the Source and Category
-// filters and the sort with the requests they send, batches with Load more, the failures in place
-// of the list and of Load more, and starting or stopping playback from the list. Loading a batch
-// when Load more comes near the bottom is tested with the footer itself (list-footer.test.tsx);
-// here the button is only pressed, so the observer that would load by itself is stood in for.
+// filters and the sort with the requests they send, batches with Load more, the failures and the
+// requests without a response in place of the list and of Load more, and starting or stopping
+// playback from the list. Loading a batch when Load more comes near the bottom is tested with the
+// footer itself (list-footer.test.tsx); here the button is only pressed, so the observer that
+// would load by itself is stood in for.
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
@@ -24,7 +25,7 @@ vi.mock('next/navigation', () => ({
 const fetchMock = vi.spyOn(window, 'fetch');
 
 type Batch = { items: ArticleListItem[]; nextCursor?: string | null; totalCount?: number };
-type ListAnswer = (params: URLSearchParams) => Response;
+type ListAnswer = (params: URLSearchParams) => Response | Promise<Response>;
 
 const listRequests: URLSearchParams[] = [];
 
@@ -138,6 +139,23 @@ describe('the list', () => {
     expect(playAll()).toBeDisabled();
 
     failing = false;
+    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('1 article')).toBeVisible();
+  });
+
+  it('shows a first batch that got no response in place of the list, and retries it', async () => {
+    let offline = true;
+    answer(() =>
+      offline ? Promise.reject(new TypeError('Failed to fetch')) : batch({ items: items(1, 1) }),
+    );
+
+    await openList();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load articles.Retry");
+    expect(screen.queryByText(/\d+ articles?$/)).toBeNull();
+
+    offline = false;
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('1 article')).toBeVisible();
   });

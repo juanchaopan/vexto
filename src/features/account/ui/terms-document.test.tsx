@@ -154,6 +154,28 @@ describe('AcceptTermsScreen', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
+  it('reloads the page without a notice when the terms shown are no longer current', async () => {
+    // The reload is stopped so that the test runner's page stays.
+    const reloads: string[] = [];
+    const stopReload = (event: NavigateEvent) => {
+      reloads.push(event.navigationType);
+      event.preventDefault();
+    };
+    window.navigation.addEventListener('navigate', stopReload);
+    answer(409, errorBody('CONFLICT', false));
+    renderScreen();
+
+    try {
+      await userEvent.click(screen.getByRole('button', { name: 'I agree' }));
+
+      await vi.waitFor(() => expect(reloads).toEqual(['reload']));
+      expect(screen.queryByText("Couldn't save your answer.")).toBeNull();
+      expect(mocks.replace).not.toHaveBeenCalled();
+    } finally {
+      window.navigation.removeEventListener('navigate', stopReload);
+    }
+  });
+
   it('logs out with Clerk and opens the sign-in page', async () => {
     renderScreen();
 

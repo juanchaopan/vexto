@@ -1,7 +1,8 @@
 // The explanations (.docs/design/screens.md, 查词, screens 20–27 and 56–57) against stand-ins for
 // the lookup and playback endpoints and the audio element: loading, the explanation and its
-// examples, failure with Retry, offline, a selection that is too long, a nested lookup, a new
-// example, word audio being made and unavailable, the saver seam and the Select words helper.
+// examples, failure with Retry, offline, a selection that is too long or crosses a hidden word, a
+// nested lookup, a new example, word audio being made and unavailable, the saver seam and the
+// Select words helper.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -269,6 +270,16 @@ describe('an explanation', () => {
 
     expect(await screen.findByText('Select up to 8 words.')).toBeVisible();
     noLayers();
+  });
+
+  it('closes and says so when the server finds the selection crossing a hidden word', async () => {
+    answer('/api/lookups', () => json(422, errorBody('HIDDEN_RANGE')));
+    renderHost();
+    lookUp();
+
+    expect(await screen.findByText('Select words on one side of the blank.')).toBeVisible();
+    noLayers();
+    expect(screen.queryByText("Couldn't explain this.")).toBeNull();
   });
 
   it('closes with its close button, a press on a blank part of the page, or Escape', async () => {

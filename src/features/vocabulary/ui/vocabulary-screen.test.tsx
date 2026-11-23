@@ -1,9 +1,10 @@
 // The Vocabulary screen (.docs/design/screens.md, Vocabulary, screens 30–41, 60 and 65–68)
 // against stand-ins for the vocabulary and review counts endpoints: the cards with their progress,
 // the count and the mode buttons; the tab, search, round filters and sort with the requests they
-// send; the empty and failed lists; selection mode, a long press, the 100-word limit and batch
-// delete with its confirmation, a changed selection and a failure; a swipe uncovering Delete;
-// opening a card; and coming back to the list or starting it over.
+// send; the empty, failed and unanswered lists; selection mode, a long press, the 100-word limit
+// and batch delete with its confirmation, a changed selection and a failure; a swipe uncovering
+// Delete, and deleting one word that fails or was already gone; opening a card; and coming back to
+// the list or starting it over.
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
@@ -62,7 +63,7 @@ afterEach(() => {
 const isList = (request: SentRequest) =>
   request.method === 'GET' && request.path === '/api/vocabulary';
 
-function listRoute(answer: (request: SentRequest) => Response): Route {
+function listRoute(answer: (request: SentRequest) => Response | Promise<Response>): Route {
   return (request) => (isList(request) ? answer(request) : undefined);
 }
 
@@ -76,6 +77,8 @@ async function openScreen(...routes: Route[]) {
 }
 
 const three = [cardItem(1), cardItem(2), cardItem(3)];
+
+const noResponse = () => Promise.reject(new TypeError('Failed to fetch'));
 
 async function card(lemma: string) {
   const title = await screen.findByRole('button', { name: lemma });
@@ -106,6 +109,13 @@ async function swipe(word: HTMLElement, to: number) {
   pointer(word, 'pointermove', to);
   pointer(word, 'pointerup', to);
   await new Promise((resolve) => setTimeout(resolve, 550));
+}
+
+/** The Retry button of the notice that says deleting failed, once that notice shows. */
+async function deleteFailedRetry() {
+  const notice = await screen.findByText("Couldn't delete. Try again.");
+  const toast = notice.closest('[role="status"]') as HTMLElement;
+  return within(toast).getByRole('button', { name: 'Retry' });
 }
 
 describe('the list', () => {
@@ -192,6 +202,19 @@ describe('the list', () => {
     expect(screen.queryByText(/\d words?$/)).toBeNull();
     fail = false;
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('button', { name: 'word01' })).toBeVisible();
+  });
+
+  it('shows a first batch that got no response with Retry, and loads again', async () => {
+    let offline = true;
+    await openScreen(listRoute(() => (offline ? noResponse() : listAnswer(three))));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load words.Retry");
+    expect(screen.queryByText(/\d words?$/)).toBeNull();
+    offline = false;
+    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByRole('button', { name: 'word01' })).toBeVisible();
   });
@@ -425,6 +448,36 @@ describe('a swipe', () => {
     await userEvent.click(screen.getByRole('button', { name: 'word01' }));
     await waitFor(() => expect(deleteButtonOf(word)).toHaveAttribute('inert'));
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('keeps the word when deleting fails or gets no response, and Retry sends the same operation', async () => {
+    const answers = [() => json(503, errorBody('UNAVAILABLE', true)), noResponse, () => json(204)];
+    const sent = await openScreen(
+      listRoute(() => listAnswer(three)),
+      (request) => (request.method === 'DELETE' ? answers.shift()?.() : undefined),
+    );
+    const deletions = () => sent.filter((request) => request.method === 'DELETE');
+    const word = await card('word02');
+    await swipe(word, 200);
+    await userEvent.click(await within(word).findByRole('button', { name: 'Delete word02' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const retry = await deleteFailedRetry();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'word02' })).toBeVisible();
+    expect(screen.getByText('3 words')).toBeVisible();
+    await userEvent.click(retry);
+
+    await waitFor(() => expect(deletions()).toHaveLength(2));
+    const retryAgain = await deleteFailedRetry();
+    expect(screen.getByRole('button', { name: 'word02' })).toBeVisible();
+    await userEvent.click(retryAgain);
+
+    expect(await screen.findByText('1 word deleted.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'word02' })).toBeNull();
+    expect(deletions()).toHaveLength(3);
+    expect(deletions()[1].body).toEqual(deletions()[0].body);
+    expect(deletions()[2].body).toEqual(deletions()[0].body);
   });
 
   it('treats a word already deleted elsewhere as deleted, without a notice', async () => {

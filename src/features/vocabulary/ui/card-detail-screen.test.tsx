@@ -1,11 +1,13 @@
 // Card details (.docs/design/screens.md, 词卡详情, screens 42 and 70) against stand-ins for the
-// card, refresh and playback endpoints: the lemma, meaning, examples and progress; looking up a
-// word of an example; a new example, a refresh that failed or found the card changed; a card that
-// is gone; a failed load with Retry; and closing back to the list.
+// card, refresh and playback endpoints and the audio element: the lemma, meaning, examples and
+// progress; looking up a word of an example; a new example, a refresh that failed or found the
+// card changed; word audio that is unavailable; a card that is gone, found on loading, refreshing
+// or playing; a failed load with Retry; and closing back to the list.
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { provideLookup, type LookupTarget } from '../../../lib/ui/lookup-bridge.ts';
+import { setSpeechElementFactory } from '../../../lib/ui/speech-audio.ts';
 import { dismissToast } from '../../../lib/ui/toast.tsx';
 import { clearVocabularyReturn, peekVocabularyReturn } from '../../../lib/ui/vocabulary-return.ts';
 import { CardDetailScreen } from './card-detail-screen.tsx';
@@ -38,6 +40,14 @@ beforeEach(() => {
   lookUp.mockReset();
   clearVocabularyReturn();
   removeBridge = provideLookup({ lookUp, openSelectionTool: vi.fn() });
+  // The word and example audio plays through an element that plays nothing.
+  setSpeechElementFactory(() => ({
+    src: '',
+    play: () => Promise.resolve(),
+    pause: () => undefined,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
 });
 
 afterEach(() => {
@@ -53,8 +63,16 @@ const cardRoute =
   (request) =>
     request.method === 'GET' && request.path === '/api/vocabulary/card-1' ? answer() : undefined;
 
+const playbackRoute =
+  (answer: () => Response): Route =>
+  (request) =>
+    request.path === '/api/media/playback' ? answer() : undefined;
+
 const refreshes = (sent: SentRequest[]) =>
   sent.filter((request) => request.path.endsWith('/refresh'));
+
+const playbacks = (sent: SentRequest[]) =>
+  sent.filter((request) => request.path === '/api/media/playback');
 
 async function openCard(...routes: Route[]) {
   const sent = standIn(fetchMock, ...routes);
@@ -66,6 +84,13 @@ async function openCard(...routes: Route[]) {
 function exampleText() {
   return screen.getByRole('group', { name: 'Examples' }).querySelector('[data-lookup-text]')
     ?.textContent;
+}
+
+/** Back on Vocabulary once, with the notice and the list to be read again from its top. */
+async function expectBackOnVocabulary() {
+  expect(await screen.findByText('This word was deleted.')).toBeVisible();
+  expect(router.replace).toHaveBeenCalledExactlyOnceWith('/vocabulary');
+  expect(peekVocabularyReturn()).toEqual({ focus: null });
 }
 
 describe('card details', () => {
@@ -148,12 +173,54 @@ describe('card details', () => {
     );
   });
 
+  it('say the word audio is not available, and Retry asks for the same audio again', async () => {
+    const sent = await openCard(
+      cardRoute(() => json(200, { data: card })),
+      playbackRoute(() => json(503, errorBody('UNAVAILABLE', true))),
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Play word' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Audio isn't available right now.Retry");
+    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(playbacks(sent)).toHaveLength(2));
+    expect(playbacks(sent)[1].body).toEqual({ kind: 'card-word', cardId: 'card-1' });
+    expect(playbacks(sent)[0].body).toEqual(playbacks(sent)[1].body);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it('go back to Vocabulary with a notice when the card is gone', async () => {
     await openCard(cardRoute(() => json(404, errorBody('NOT_FOUND'))));
 
-    expect(await screen.findByText('This word was deleted.')).toBeVisible();
-    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/vocabulary');
-    expect(peekVocabularyReturn()).toEqual({ focus: null });
+    await expectBackOnVocabulary();
+  });
+
+  it('go back to Vocabulary with a notice when refreshing an example finds the card gone', async () => {
+    await openCard(
+      cardRoute(() => json(200, { data: card })),
+      (request) =>
+        request.path.endsWith('/refresh') ? json(404, errorBody('NOT_FOUND')) : undefined,
+    );
+    await screen.findByRole('group', { name: 'Examples' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh this example' }));
+
+    await expectBackOnVocabulary();
+    expect(screen.queryByText("Couldn't get a new example.")).toBeNull();
+  });
+
+  it('go back to Vocabulary with a notice when the word audio finds the card gone', async () => {
+    await openCard(
+      cardRoute(() => json(200, { data: card })),
+      playbackRoute(() => json(404, errorBody('NOT_FOUND'))),
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Play word' }));
+
+    await expectBackOnVocabulary();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('show a failed load with Retry and keep the close button', async () => {
