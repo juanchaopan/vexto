@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example Lab Notes</title>
+    <link>https://lab.example.org/</link>
+    <atom:link href="https://lab.example.org/feed/" rel="self" type="application/rss+xml" />
+    <description>Short notes from an example laboratory.</description>
+    <item>
+      <title>Clouds &amp; Climate: A Quiet Experiment</title>
+      <link>https://lab.example.org/notes/clouds/?utm_source=rss</link>
+      <guid isPermaLink="false">lab-note-41</guid>
+      <pubDate>Thu, 05 Nov 2026 14:30:00 +0000</pubDate>
+      <dc:creator><![CDATA[Ada Example]]></dc:creator>
+      <description>A short summary of the cloud experiment.</description>
+      <content:encoded><![CDATA[<p>The lab grew small clouds in a glass chamber.</p><p>They watched how <em>droplets</em> formed.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Notes Without a Link</title>
+      <guid>https://lab.example.org/notes/guid-only</guid>
+      <pubDate>11/05/2026 - 12:00</pubDate>
+      <description>&lt;p&gt;An entry whose address is its guid.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>An Entry Nobody Can Open</title>
+      <guid isPermaLink="false">no-address</guid>
+      <description>No link and no permalink.</description>
+    </item>
+  </channel>
+</rss>

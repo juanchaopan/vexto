@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Field Journal</title>
+  <link rel="self" href="https://journal.example.org/atom.xml" />
+  <id>tag:journal.example.org,2026:feed</id>
+  <updated>2026-11-06T09:00:00Z</updated>
+  <entry>
+    <title type="html">Mapping the &lt;i&gt;Old&lt;/i&gt; Orchard</title>
+    <link rel="related" href="https://journal.example.org/related" />
+    <link rel="alternate" href="/entries/orchard" />
+    <id>tag:journal.example.org,2026:orchard</id>
+    <published>2026-11-06T08:15:00-05:00</published>
+    <updated>2026-11-06T10:00:00Z</updated>
+    <author><name>Ben Example</name></author>
+    <author><name>Cleo Example</name></author>
+    <summary>A summary that the full content replaces.</summary>
+    <content type="html">&lt;p&gt;Volunteers counted every tree in the orchard.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>Only a Summary</title>
+    <link href="https://journal.example.org/entries/summary" />
+    <id>tag:journal.example.org,2026:summary</id>
+    <updated>2026-11-04T12:00:00Z</updated>
+    <summary type="text">This entry has only a summary.</summary>
+  </entry>
+</feed>

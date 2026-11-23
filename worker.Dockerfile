@@ -38,6 +38,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=dependencies /build/node_modules ./node_modules
 COPY --from=dependencies /build/package.json ./
+# VERSION names the release in the User-Agent of the collection job's fetches.
+COPY VERSION ./
 COPY config ./config
 COPY src ./src
 # The node user of the base image; the files stay owned by root, so the process cannot change them.

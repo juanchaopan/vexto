@@ -1,5 +1,7 @@
 // Starts each entry the way the container image does, as `node src/worker/<entry>.ts`, so the
-// TypeScript and its imports are known to run on Node directly, without a bundler.
+// TypeScript and its imports are known to run on Node directly, without a bundler. The collection
+// job runs against the test database and bucket; with no feed due yet, a run only starts the
+// feeds' cursors and removes expired rows.
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
@@ -40,7 +42,9 @@ afterEach(() => {
 });
 
 describe('the Cloud Run entries under plain Node', () => {
-  it('runs the collection job to a successful exit', async () => {
+  // A fresh Node process strips the types of every module the job loads, which takes seconds
+  // while the other test files run beside it.
+  it('runs the collection job to a successful exit', { timeout: 30_000 }, async () => {
     const child = start('collect.ts');
     const exit = new Promise((resolve) => child.on('exit', resolve));
     const messages: unknown[] = [];
@@ -49,7 +53,9 @@ describe('the Cloud Run entries under plain Node', () => {
     }
 
     expect(await exit).toBe(0);
-    expect(messages).toEqual(['vexto-collect started.', 'vexto-collect finished.']);
+    expect(messages[0]).toBe('vexto-collect started.');
+    expect(messages.at(-1)).toBe('vexto-collect finished.');
+    expect(messages).toContain('Expired rows removed.');
   });
 
   it.each(['tts.ts', 'billing-guard.ts'])('serves the health check of %s', async (entry) => {

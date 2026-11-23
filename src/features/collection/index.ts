@@ -1,6 +1,17 @@
-/**
- * One run of the collection pipeline (.docs/design/rules.md), which the vexto-collect job starts
- * every 15 minutes. The pipeline's steps are not built yet, so a run has nothing to collect and
- * returns at once.
- */
-export async function runCollection(): Promise<void> {}
+export {
+  ArticleSynthesisError,
+  type ArticleSynthesisRequest,
+  type ArticleSynthesizer,
+  type ArticleSynthesizerLoader,
+  type ArticleToStore,
+  type ArticleVoice,
+  type AudioStorageRoom,
+  type SentenceTiming,
+  type SynthesisFailureCode,
+  type SynthesizedArticle,
+} from './server/article-synthesizer.ts';
+export {
+  runCollection,
+  type CollectionDependencies,
+  type CollectionSummary,
+} from './server/collection-run.ts';
